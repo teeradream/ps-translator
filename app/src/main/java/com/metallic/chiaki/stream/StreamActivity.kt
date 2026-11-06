@@ -74,7 +74,7 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 			if (viewModel.session.state.value == StreamStateConnected && !isCapturing) {
 				captureAndProcessSubtitle()
 			}
-			uiVisibilityHandler.postDelayed(this, 800)
+			uiVisibilityHandler.postDelayed(this, 600)
 		}
 	}
 
@@ -200,7 +200,7 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 	private fun updateTextOnlyModeUI() {
 		if (isTextOnlyMode) {
 			binding.pureFullscreenLayout.isVisible = true
-			binding.aspectRatioLayout.visibility = View.INVISIBLE
+			binding.aspectRatioLayout.visibility = View.VISIBLE
 			binding.subtitleOverlayContainer.isVisible = false
 			binding.btnTextOnlyMode.text = "สลับเป็นโหมดสตรีมภาพ"
 		} else {
@@ -219,44 +219,61 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 
 	private fun captureAndProcessSubtitle() {
 		val surfaceView = binding.surfaceView
+		if (surfaceView.holder?.surface?.isValid != true) return
 		if (surfaceView.width <= 100 || surfaceView.height <= 100) return
+		if (isCapturing) return
 
-		val w = surfaceView.width
-		val h = surfaceView.height
-		val cropHeight = (h * 0.22).toInt().coerceAtLeast(60)
-		val cropTop = (h - cropHeight).coerceAtLeast(0)
-		val rect = Rect(0, cropTop, w, h)
-		val bitmap = Bitmap.createBitmap(w, cropHeight, Bitmap.Config.ARGB_8888)
-
+		val fullBitmap = Bitmap.createBitmap(960, 540, Bitmap.Config.ARGB_8888)
 		isCapturing = true
-		PixelCopy.request(surfaceView, rect, bitmap, { copyResult ->
-			isCapturing = false
-			if (copyResult == PixelCopy.SUCCESS) {
-				val image = InputImage.fromBitmap(bitmap, 0)
-				textRecognizer.process(image)
-					.addOnSuccessListener { visionText ->
-						val text = visionText.text.trim().replace("\n", " ")
-						if (text.length >= 3 && text != lastRecognizedEnglish) {
-							lastRecognizedEnglish = text
-							ocrScope.launch {
-								val thai = translateToThai(text)
-								binding.originalSubText.text = text
-								binding.originalSubText.isVisible = true
-								binding.translatedSubText.text = thai
-								if (isSubtitleEnabled && !isTextOnlyMode) {
-									binding.subtitleOverlayContainer.isVisible = true
-								}
-								binding.pureOriginalText.text = text
-								binding.pureOriginalText.isVisible = true
-								binding.pureFullscreenText.text = thai
-								if (isTtsEnabled) {
-									tts?.speak(thai, TextToSpeech.QUEUE_FLUSH, null, "sub_voice")
+
+		try {
+			PixelCopy.request(surfaceView, fullBitmap, { copyResult ->
+				isCapturing = false
+				if (copyResult == PixelCopy.SUCCESS) {
+					try {
+						val cropTop = (540 * 0.62).toInt()
+						val cropHeight = (540 * 0.36).toInt()
+						val subBitmap = Bitmap.createBitmap(fullBitmap, 0, cropTop, 960, cropHeight)
+						val image = InputImage.fromBitmap(subBitmap, 0)
+						textRecognizer.process(image)
+							.addOnSuccessListener { visionText ->
+								val rawText = visionText.text.trim().replace("\n", " ")
+								val text = rawText.replace(Regex("\\s+"), " ").trim()
+								if (text.length >= 3 && text.any { it.isLetter() } && text != lastRecognizedEnglish) {
+									lastRecognizedEnglish = text
+									android.util.Log.d("PSTranslatorOCR", "Detected text: $text")
+									ocrScope.launch {
+										val thai = translateToThai(text)
+										android.util.Log.d("PSTranslatorOCR", "Translated text: $thai")
+										binding.originalSubText.text = text
+										binding.originalSubText.isVisible = true
+										binding.translatedSubText.text = thai
+										if (isSubtitleEnabled && !isTextOnlyMode) {
+											binding.subtitleOverlayContainer.isVisible = true
+										}
+										binding.pureOriginalText.text = text
+										binding.pureOriginalText.isVisible = true
+										binding.pureFullscreenText.text = thai
+										if (isTtsEnabled) {
+											tts?.speak(thai, TextToSpeech.QUEUE_FLUSH, null, "sub_voice")
+										}
+									}
 								}
 							}
-						}
+							.addOnFailureListener { e ->
+								android.util.Log.e("PSTranslatorOCR", "OCR recognition error", e)
+							}
+					} catch (e: Exception) {
+						android.util.Log.e("PSTranslatorOCR", "Bitmap processing error", e)
 					}
-			}
-		}, Handler(Looper.getMainLooper()))
+				} else {
+					android.util.Log.w("PSTranslatorOCR", "PixelCopy failed with status: $copyResult")
+				}
+			}, Handler(Looper.getMainLooper()))
+		} catch (e: Exception) {
+			isCapturing = false
+			android.util.Log.e("PSTranslatorOCR", "PixelCopy request error", e)
+		}
 	}
 
 	private suspend fun translateToThai(englishText: String): String = withContext(Dispatchers.IO) {

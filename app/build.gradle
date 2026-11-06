@@ -23,8 +23,8 @@ android {
         applicationId "com.pstranslator.app"
         minSdkVersion 26
         targetSdkVersion 33
-        versionCode 203
-        versionName "2.0.3"
+        versionCode 204
+        versionName "2.0.4"
         externalNativeBuild {
             cmake {
                 arguments "-DCHIAKI_ENABLE_TESTS=OFF",
@@ -113,6 +113,6 @@ dependencies {
     implementation "androidx.room:room-rxjava2:$room_version"
     implementation "com.squareup.moshi:moshi:1.14.0"
     kapt "com.squareup.moshi:moshi-kotlin-codegen:1.14.0"
-    implementation 'com.google.android.gms:play-services-mlkit-text-recognition:19.0.0'
+    implementation 'com.google.mlkit:text-recognition:16.0.0'
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.6.4'
 }

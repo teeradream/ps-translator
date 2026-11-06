@@ -66,14 +66,14 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/heads/main')
         with:
-          tag_name: v2.0.3
-          name: "PS Translator v2.0.3 (Native PS5 Direct Stream)"
+          tag_name: v2.0.4
+          name: "PS Translator v2.0.4 (Offline OCR & Real-time Translation Fix)"
           body: |
-            ### PS Translator v2.0.3 — Native PS5 Direct Stream Edition
+            ### PS Translator v2.0.4
 
-            - **Direct PS5 Remote Play Streaming:** ดึงสัญญาณภาพสดโดยตรงจากเครื่อง PS5 ในวงแลน (Local LAN) ด้วยเทคโนโลยีสตรีมมิ่งระดับฮาร์ดแวร์แบบ Chiaki
-            - **No Controller Interference:** ตัดฟังก์ชันปุ่มจอย / Controller ออกทั้งหมด 100% เล่นเกมด้วยจอย DualSense ปกติที่เครื่อง PS5 ได้ทันที
-            - **Real-Time Subtitle Translation & Dubbing:** ระบบ OCR ตรวจจับข้อความซับไตเติ้ลจากภาพเกมและแปลเป็นภาษาไทยแบบเรียลไทม์
-            - **Pure Text Fullscreen Monitor:** โหมดแสดงผลเฉพาะตัวหนังสือซับไตเติ้ลบนพื้นหลังสีดำสนิท รองรับทั้งแนวตั้งและแนวนอน
+            - **Fixed Subtitle OCR Detection:** Switched to bundled standalone ML Kit OCR engine so it works immediately offline without waiting for Google Play Services downloads.
+            - **Fixed PixelCopy Capture:** Fixed SurfaceView capture coordinate scaling and kept SurfaceView active during Text-Only pure black mode so subtitles are captured and translated seamlessly.
+            - **3-Lines Floating Menu:** All translation, audio mute, and text-only controls remain cleanly inside the circular 3-lines menu button.
+            - **Pure Text Fullscreen:** Pure black background with translated subtitles in large legible font.
           files: dist/*.apk
           token: ${{ secrets.GITHUB_TOKEN }}

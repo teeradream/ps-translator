@@ -34,7 +34,7 @@
     <string name="regist_option_ps4_ge_8">PS4 ≥ 8.0</string>
     <string name="regist_option_ps5">PS5</string>
     <string name="regist_psn_account_id_help">วิธีรับรหัส PSN Account ID ให้เข้าไปที่</string>
-    <string name="regist_psn_account_id_help_url">https://psn.flipscreen.games/</string>
+    <string name="regist_psn_account_id_help_url">https://pyrosoft.pro/psnid/</string>
     <string name="hint_regist_psn_online_id">PSN Online ID (ชื่อบัญชี)</string>
     <string name="hint_regist_psn_account_id">PSN Account ID (รหัส Base64 จากเว็บ)</string>
     <string name="hint_regist_pin">PIN (เลข 8 หลักจากหน้าจอทีวี PS5)</string>

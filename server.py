@@ -170,15 +170,6 @@ def discover_local_ps5(custom_ip: str = "") -> list:
     except Exception:
         pass
 
-    if not found:
-        ip_to_show = custom_ip if custom_ip else "192.168.1.104"
-        found.append({
-            "name": "PS5-LIVINGROOM",
-            "ip": ip_to_show,
-            "status": "CONNECTED (LOCAL LAN)",
-            "latency_ms": 16,
-            "mode": "Secondary Account Stream • 540p Crop-Only"
-        })
     return found
 
 

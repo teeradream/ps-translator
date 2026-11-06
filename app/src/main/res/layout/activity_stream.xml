@@ -352,6 +352,66 @@
                     </com.google.android.material.button.MaterialButtonToggleGroup>
                 </LinearLayout>
 
+                <!-- Speech Speed Selection (visible when TTS is enabled) -->
+                <LinearLayout
+                    android:id="@+id/speechSpeedContainer"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:visibility="gone"
+                    android:layout_marginBottom="12dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="ความเร็วเสียงพูด:"
+                        android:textColor="#AAAAAA"
+                        android:textSize="13sp"
+                        android:layout_marginBottom="6dp"/>
+
+                    <com.google.android.material.button.MaterialButtonToggleGroup
+                        android:id="@+id/speechSpeedToggleGroup"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        app:singleSelection="true"
+                        app:selectionRequired="true"
+                        app:checkedButton="@id/btnSpeedFast">
+
+                        <com.google.android.material.button.MaterialButton
+                            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                            android:id="@+id/btnSpeedNormal"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="1.0x"
+                            android:textSize="12sp"
+                            android:textColor="#FFFFFF"
+                            app:strokeColor="#55FFFFFF"/>
+
+                        <com.google.android.material.button.MaterialButton
+                            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                            android:id="@+id/btnSpeedFast"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1.2"
+                            android:text="1.25x (แนะนำ)"
+                            android:textSize="12sp"
+                            android:textColor="#FFFFFF"
+                            app:strokeColor="#55FFFFFF"/>
+
+                        <com.google.android.material.button.MaterialButton
+                            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                            android:id="@+id/btnSpeedVeryFast"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="1.5x"
+                            android:textSize="12sp"
+                            android:textColor="#FFFFFF"
+                            app:strokeColor="#55FFFFFF"/>
+                    </com.google.android.material.button.MaterialButtonToggleGroup>
+                </LinearLayout>
+
                 <!-- Filter short UI text toggle -->
                 <com.google.android.material.switchmaterial.SwitchMaterial
                     android:id="@+id/filterShortTextSwitch"

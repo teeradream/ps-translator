@@ -73,6 +73,7 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 	private var lastRecognizedEnglish = ""
 	private lateinit var cropPrefs: SharedPreferences
 	private var isFilterShortTextEnabled = true
+	private var speechSpeedRate = 1.25f
 
 	private val clearSubtitleRunnable = Runnable {
 		if (::binding.isInitialized && !isDestroyed && !isFinishing) {
@@ -158,6 +159,7 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		binding.ttsVoiceSwitch.setOnCheckedChangeListener { _, isChecked ->
 			isTtsEnabled = isChecked
 			binding.voiceGenderContainer.isVisible = isChecked
+			binding.speechSpeedContainer.isVisible = isChecked
 		}
 
 		val savedVoiceMode = cropPrefs.getString("voice_gender_mode", VoiceGenderMode.AUTO_AI.name)
@@ -176,6 +178,25 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 					else -> VoiceGenderMode.AUTO_AI
 				}
 				cropPrefs.edit().putString("voice_gender_mode", voiceGenderMode.name).apply()
+			}
+		}
+
+		// Speech speed selection
+		speechSpeedRate = cropPrefs.getFloat("speech_speed_rate", 1.25f)
+		when {
+			speechSpeedRate <= 1.05f -> binding.speechSpeedToggleGroup.check(R.id.btnSpeedNormal)
+			speechSpeedRate >= 1.45f -> binding.speechSpeedToggleGroup.check(R.id.btnSpeedVeryFast)
+			else -> binding.speechSpeedToggleGroup.check(R.id.btnSpeedFast)
+		}
+
+		binding.speechSpeedToggleGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
+			if (isChecked) {
+				speechSpeedRate = when (checkedId) {
+					R.id.btnSpeedNormal -> 1.0f
+					R.id.btnSpeedVeryFast -> 1.5f
+					else -> 1.25f
+				}
+				cropPrefs.edit().putFloat("speech_speed_rate", speechSpeedRate).apply()
 			}
 		}
 
@@ -256,7 +277,7 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		if (surfaceView.width <= 100 || surfaceView.height <= 100) return
 		if (isCapturing) return
 
-		val fullBitmap = Bitmap.createBitmap(960, 540, Bitmap.Config.ARGB_8888)
+		val fullBitmap = Bitmap.createBitmap(1920, 1080, Bitmap.Config.ARGB_8888)
 		isCapturing = true
 
 		try {
@@ -269,17 +290,19 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 						val cropWidthNorm = cropPrefs.getFloat("crop_width", 0.64f).coerceIn(0.10f, 1f - cropLeftNorm)
 						val cropHeightNorm = cropPrefs.getFloat("crop_height", 0.22f).coerceIn(0.06f, 1f - cropTopNorm)
 
-						val cropX = (960 * cropLeftNorm).toInt().coerceIn(0, 959)
-						val cropY = (540 * cropTopNorm).toInt().coerceIn(0, 539)
-						val cropW = (960 * cropWidthNorm).toInt().coerceIn(40, 960 - cropX)
-						val cropH = (540 * cropHeightNorm).toInt().coerceIn(30, 540 - cropY)
+						val cropX = (1920 * cropLeftNorm).toInt().coerceIn(0, 1919)
+						val cropY = (1080 * cropTopNorm).toInt().coerceIn(0, 1079)
+						val cropW = (1920 * cropWidthNorm).toInt().coerceIn(40, 1920 - cropX)
+						val cropH = (1080 * cropHeightNorm).toInt().coerceIn(30, 1080 - cropY)
 
 						val subBitmap = Bitmap.createBitmap(fullBitmap, cropX, cropY, cropW, cropH)
-						val image = InputImage.fromBitmap(subBitmap, 0)
+						val scaledSub = Bitmap.createScaledBitmap(subBitmap, cropW * 2, cropH * 2, true)
+						val image = InputImage.fromBitmap(scaledSub, 0)
 						textRecognizer.process(image)
 							.addOnSuccessListener { visionText ->
 								val rawText = visionText.text.trim().replace("\n", " ")
-								val text = rawText.replace(Regex("\\s+"), " ").trim()
+								val fixedText = fixOcrText(rawText)
+								val text = fixedText.replace(Regex("\\s+"), " ").trim()
 								if (text.isNotEmpty() && isDialogueSubtitle(text)) {
 									if (!isSimilarText(text, lastRecognizedEnglish)) {
 										lastRecognizedEnglish = text
@@ -568,6 +591,133 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		return femaleScore > maleScore
 	}
 
+	private fun fixOcrText(text: String): String {
+		var result = text
+		val replacements = mapOf(
+			"eould" to "could",
+			"eouldn't" to "couldn't",
+			"ean" to "can",
+			"eannot" to "cannot",
+			"ean't" to "can't",
+			"eome" to "come",
+			"eomes" to "comes",
+			"eoming" to "coming",
+			"eame" to "came",
+			"eall" to "call",
+			"ealled" to "called",
+			"ealling" to "calling",
+			"ealls" to "calls",
+			"eare" to "care",
+			"eareful" to "careful",
+			"earefully" to "carefully",
+			"eatch" to "catch",
+			"eause" to "cause",
+			"eauses" to "causes",
+			"eaused" to "caused",
+			"eertain" to "certain",
+			"eertainly" to "certainly",
+			"ehance" to "chance",
+			"ehoose" to "choose",
+			"ehoice" to "choice",
+			"ehoices" to "choices",
+			"eity" to "city",
+			"elear" to "clear",
+			"elearly" to "clearly",
+			"elose" to "close",
+			"elosed" to "closed",
+			"eold" to "cold",
+			"eontrol" to "control",
+			"eontinue" to "continue",
+			"eorrect" to "correct",
+			"eount" to "count",
+			"eountry" to "country",
+			"eourse" to "course",
+			"eouple" to "couple",
+			"eover" to "cover",
+			"eraft" to "craft",
+			"ereature" to "creature",
+			"erime" to "crime",
+			"ery" to "cry",
+			"eurse" to "curse",
+			"eut" to "cut",
+			"eaptain" to "captain",
+			"eenter" to "center",
+			"ehild" to "child",
+			"ehildren" to "children",
+			"eircle" to "circle",
+			"elimb" to "climb",
+			"eloak" to "cloak",
+			"elothes" to "clothes",
+			"eloud" to "cloud",
+			"eoat" to "coat",
+			"eoin" to "coin",
+			"eolor" to "color",
+			"eommon" to "common",
+			"eompany" to "company",
+			"eomplete" to "complete",
+			"eoncern" to "concern",
+			"eondition" to "condition",
+			"eonnect" to "connect",
+			"eonquer" to "conquer",
+			"eontain" to "contain",
+			"eopy" to "copy",
+			"eorner" to "corner",
+			"eost" to "cost",
+			"erazy" to "crazy",
+			"eross" to "cross",
+			"erowd" to "crowd",
+			"erown" to "crown",
+			"eruel" to "cruel",
+			"eure" to "cure",
+			"eurious" to "curious",
+			"eurrent" to "current",
+			"eustom" to "custom",
+			"beoome" to "become",
+			"beeome" to "become",
+			"beoause" to "because",
+			"beeause" to "because",
+			"espeoially" to "especially",
+			"plaee" to "place",
+			"voiee" to "voice",
+			"faee" to "face",
+			"graee" to "grace",
+			"spaee" to "space",
+			"peaee" to "peace",
+			"pieee" to "piece",
+			"priee" to "price",
+			"notiee" to "notice",
+			"offiee" to "office",
+			"serviee" to "service",
+			"poliee" to "police",
+			"foree" to "force",
+			"choiee" to "choice",
+			"destruetion" to "destruction",
+			"proteet" to "protect",
+			"direet" to "direct",
+			"perfeet" to "perfect",
+			"seeret" to "secret",
+			"seene" to "scene",
+			"aecept" to "accept",
+			"effeet" to "effect",
+			"respeet" to "respect",
+			"expeet" to "expect",
+			"inspeet" to "inspect"
+		)
+
+		for ((typo, fix) in replacements) {
+			val regex = Regex("(?i)\\b$typo\\b")
+			result = regex.replace(result) { matchResult ->
+				val original = matchResult.value
+				if (original.isNotEmpty() && original[0].isUpperCase()) {
+					fix.replaceFirstChar { it.uppercase() }
+				} else {
+					fix
+				}
+			}
+		}
+		return result
+	}
+
 	private fun speakTranslation(englishText: String, thaiText: String) {
 		val ttsEngine = tts ?: return
 
@@ -578,22 +728,27 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		}
 
 		if (isFemale) {
-			ttsEngine.setPitch(1.22f)
-			ttsEngine.setSpeechRate(1.05f)
+			ttsEngine.setPitch(1.20f)
 		} else {
-			ttsEngine.setPitch(0.80f)
-			ttsEngine.setSpeechRate(1.0f)
+			ttsEngine.setPitch(0.68f)
 		}
+		ttsEngine.setSpeechRate(speechSpeedRate)
 
 		try {
 			val voices = ttsEngine.voices
 			if (voices != null) {
-				val thVoices = voices.filter { it.locale.language == "th" }
+				val thVoices = voices.filter { it.locale.language.equals("th", ignoreCase = true) }
 				if (thVoices.isNotEmpty()) {
 					val targetVoice = if (isFemale) {
-						thVoices.firstOrNull { it.name.contains("female", ignoreCase = true) || it.name.contains("cfa", ignoreCase = true) }
+						thVoices.firstOrNull { v ->
+							val name = v.name.lowercase()
+							name.contains("female") || name.contains("woman") || name.contains("tha") || name.contains("thd") || name.contains("cfa") || name.contains("-a-") || name.contains("-d-")
+						} ?: thVoices.first()
 					} else {
-						thVoices.firstOrNull { it.name.contains("male", ignoreCase = true) || it.name.contains("cfn", ignoreCase = true) }
+						thVoices.firstOrNull { v ->
+							val name = v.name.lowercase()
+							name.contains("male") || name.contains("man") || name.contains("thb") || name.contains("thc") || name.contains("cfn") || name.contains("-b-") || name.contains("-c-")
+						} ?: if (thVoices.size > 1) thVoices[1] else thVoices.first()
 					}
 					if (targetVoice != null) {
 						ttsEngine.voice = targetVoice

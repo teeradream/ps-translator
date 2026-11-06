@@ -5,9 +5,10 @@ package com.metallic.chiaki.stream
 import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.app.AlertDialog
+import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.Matrix
 import android.graphics.Rect
+import android.media.AudioManager
 import android.os.*
 import android.speech.tts.TextToSpeech
 import android.view.*
@@ -33,7 +34,6 @@ import org.json.JSONArray
 import java.net.URL
 import java.net.URLEncoder
 import java.util.Locale
-import kotlin.math.min
 
 private sealed class DialogContents
 private object StreamQuitDialog: DialogContents()
@@ -45,11 +45,11 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 	companion object
 	{
 		const val EXTRA_CONNECT_INFO = "connect_info"
-		private const val HIDE_UI_TIMEOUT_MS = 2500L
 	}
 
 	private lateinit var viewModel: StreamViewModel
 	private lateinit var binding: ActivityStreamBinding
+	private lateinit var audioManager: AudioManager
 
 	private val uiVisibilityHandler = Handler(Looper.getMainLooper())
 	private val ocrScope = CoroutineScope(Dispatchers.Main + Job())
@@ -57,8 +57,17 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 
 	private var tts: TextToSpeech? = null
 	private var isTtsEnabled = false
+	private var isSubtitleEnabled = true
+	private var isAudioMuted = false
+	private var isTextOnlyMode = false
 	private var isCapturing = false
 	private var lastRecognizedEnglish = ""
+
+	private val hideMenuButtonRunnable = Runnable {
+		if (::binding.isInitialized && !binding.menuPanelContainer.isVisible) {
+			binding.btnMenuToggle.animate().alpha(0.35f).setDuration(300).start()
+		}
+	}
 
 	private val captureRunnable = object : Runnable {
 		override fun run() {
@@ -90,34 +99,86 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		setContentView(binding.root)
 		window.decorView.setOnSystemUiVisibilityChangeListener(this)
 
+		audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
 		tts = TextToSpeech(this, this)
 
-		// Subtitle overlay & Fullscreen controls
-		binding.subOverlaySwitch.setOnCheckedChangeListener { _, isChecked ->
-			binding.subtitleOverlayContainer.isVisible = isChecked
-			showOverlay()
+		// 3-Lines Circular Menu Button
+		binding.btnMenuToggle.setOnClickListener {
+			val show = !binding.menuPanelContainer.isVisible
+			binding.menuPanelContainer.isVisible = show
+			if (show) {
+				binding.btnMenuToggle.alpha = 1.0f
+				uiVisibilityHandler.removeCallbacks(hideMenuButtonRunnable)
+			} else {
+				resetMenuButtonTimer()
+			}
 		}
 
+		binding.btnCloseMenu.setOnClickListener {
+			binding.menuPanelContainer.isVisible = false
+			resetMenuButtonTimer()
+		}
+
+		binding.menuPanelContainer.setOnClickListener {
+			binding.menuPanelContainer.isVisible = false
+			resetMenuButtonTimer()
+		}
+
+		// Subtitle overlay switch
+		binding.subOverlaySwitch.setOnCheckedChangeListener { _, isChecked ->
+			isSubtitleEnabled = isChecked
+			binding.subtitleOverlayContainer.isVisible = isChecked && !isTextOnlyMode && binding.translatedSubText.text.isNotEmpty()
+		}
+
+		// TTS voice switch
 		binding.ttsVoiceSwitch.setOnCheckedChangeListener { _, isChecked ->
 			isTtsEnabled = isChecked
-			showOverlay()
 		}
 
-		binding.btnTogglePureFullscreen.setOnClickListener {
-			binding.pureFullscreenLayout.isVisible = true
+		// Mute / Unmute audio button
+		binding.btnMuteAudio.setOnClickListener {
+			isAudioMuted = !isAudioMuted
+			if (isAudioMuted) {
+				if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+					audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_MUTE, 0)
+				} else {
+					@Suppress("DEPRECATION")
+					audioManager.setStreamMute(AudioManager.STREAM_MUSIC, true)
+				}
+				binding.btnMuteAudio.text = "เปิดเสียงเกมมือถือ"
+				binding.btnMuteAudio.setIconResource(R.drawable.ic_volume_off)
+			} else {
+				if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+					audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_UNMUTE, 0)
+				} else {
+					@Suppress("DEPRECATION")
+					audioManager.setStreamMute(AudioManager.STREAM_MUSIC, false)
+				}
+				binding.btnMuteAudio.text = "ปิดเสียงเกมจากมือถือ"
+				binding.btnMuteAudio.setIconResource(R.drawable.ic_volume_up)
+			}
 		}
 
-		binding.subtitleOverlayContainer.setOnClickListener {
-			binding.pureFullscreenLayout.isVisible = true
+		// Text-Only Mode button
+		binding.btnTextOnlyMode.setOnClickListener {
+			isTextOnlyMode = !isTextOnlyMode
+			updateTextOnlyModeUI()
+			binding.menuPanelContainer.isVisible = false
+			resetMenuButtonTimer()
 		}
 
 		binding.pureFullscreenLayout.setOnClickListener {
-			binding.pureFullscreenLayout.isVisible = false
+			isTextOnlyMode = false
+			updateTextOnlyModeUI()
+			resetMenuButtonTimer()
+		}
+
+		binding.mainStreamLayout.setOnClickListener {
+			resetMenuButtonTimer()
 		}
 
 		binding.displayModeToggle.addOnButtonCheckedListener { _, _, _ ->
 			adjustStreamViewAspect()
-			showOverlay()
 		}
 
 		// Display streaming directly via SurfaceView
@@ -127,6 +188,27 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 
 		// Start periodic OCR capture loop
 		uiVisibilityHandler.postDelayed(captureRunnable, 1500)
+		resetMenuButtonTimer()
+	}
+
+	private fun resetMenuButtonTimer() {
+		binding.btnMenuToggle.alpha = 1.0f
+		uiVisibilityHandler.removeCallbacks(hideMenuButtonRunnable)
+		uiVisibilityHandler.postDelayed(hideMenuButtonRunnable, 3500)
+	}
+
+	private fun updateTextOnlyModeUI() {
+		if (isTextOnlyMode) {
+			binding.pureFullscreenLayout.isVisible = true
+			binding.aspectRatioLayout.visibility = View.INVISIBLE
+			binding.subtitleOverlayContainer.isVisible = false
+			binding.btnTextOnlyMode.text = "สลับเป็นโหมดสตรีมภาพ"
+		} else {
+			binding.pureFullscreenLayout.isVisible = false
+			binding.aspectRatioLayout.visibility = View.VISIBLE
+			binding.subtitleOverlayContainer.isVisible = isSubtitleEnabled && binding.translatedSubText.text.isNotEmpty()
+			binding.btnTextOnlyMode.text = "โหมดโชว์เฉพาะตัวหนังสือ (จอดำ)"
+		}
 	}
 
 	override fun onInit(status: Int) {
@@ -153,14 +235,19 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 				val image = InputImage.fromBitmap(bitmap, 0)
 				textRecognizer.process(image)
 					.addOnSuccessListener { visionText ->
-						val text = visionText.text.trim().replace("\\n", " ")
+						val text = visionText.text.trim().replace("\n", " ")
 						if (text.length >= 3 && text != lastRecognizedEnglish) {
 							lastRecognizedEnglish = text
-							binding.originalSubText.text = text
-							binding.originalSubText.isVisible = true
 							ocrScope.launch {
 								val thai = translateToThai(text)
+								binding.originalSubText.text = text
+								binding.originalSubText.isVisible = true
 								binding.translatedSubText.text = thai
+								if (isSubtitleEnabled && !isTextOnlyMode) {
+									binding.subtitleOverlayContainer.isVisible = true
+								}
+								binding.pureOriginalText.text = text
+								binding.pureOriginalText.isVisible = true
 								binding.pureFullscreenText.text = thai
 								if (isTtsEnabled) {
 									tts?.speak(thai, TextToSpeech.QUEUE_FLUSH, null, "sub_voice")
@@ -210,9 +297,18 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 	{
 		super.onDestroy()
 		uiVisibilityHandler.removeCallbacks(captureRunnable)
+		uiVisibilityHandler.removeCallbacks(hideMenuButtonRunnable)
 		ocrScope.cancel()
 		tts?.stop()
 		tts?.shutdown()
+		if (isAudioMuted) {
+			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+				audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_UNMUTE, 0)
+			} else {
+				@Suppress("DEPRECATION")
+				audioManager.setStreamMute(AudioManager.STREAM_MUSIC, false)
+			}
+		}
 	}
 
 	private fun reconnect()
@@ -221,43 +317,10 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		viewModel.session.resume()
 	}
 
-	private val hideSystemUIRunnable = Runnable { hideSystemUI() }
-
 	override fun onSystemUiVisibilityChange(visibility: Int)
 	{
 		if(visibility and View.SYSTEM_UI_FLAG_FULLSCREEN == 0)
-			showOverlay()
-		else
-			hideOverlay()
-	}
-
-	private fun showOverlay()
-	{
-		binding.overlay.isVisible = true
-		binding.overlay.animate()
-			.alpha(1.0f)
-			.setListener(object: AnimatorListenerAdapter()
-			{
-				override fun onAnimationEnd(animation: Animator)
-				{
-					binding.overlay.alpha = 1.0f
-				}
-			})
-		uiVisibilityHandler.removeCallbacks(hideSystemUIRunnable)
-		uiVisibilityHandler.postDelayed(hideSystemUIRunnable, HIDE_UI_TIMEOUT_MS)
-	}
-
-	private fun hideOverlay()
-	{
-		binding.overlay.animate()
-			.alpha(0.0f)
-			.setListener(object: AnimatorListenerAdapter()
-			{
-				override fun onAnimationEnd(animation: Animator)
-				{
-					binding.overlay.isGone = true
-				}
-			})
+			resetMenuButtonTimer()
 	}
 
 	override fun onWindowFocusChanged(hasFocus: Boolean)
@@ -295,7 +358,7 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		{
 			is StreamStateConnected ->
 			{
-				binding.translatedSubText.text = "PS Translator — สตรีมภาพสดพร้อมแปลภาษา"
+				binding.subtitleOverlayContainer.isVisible = false
 			}
 
 			is StreamStateQuit ->

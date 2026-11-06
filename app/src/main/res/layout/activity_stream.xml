@@ -7,8 +7,10 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     tools:context=".stream.StreamActivity"
-    android:keepScreenOn="true">
+    android:keepScreenOn="true"
+    android:background="#000000">
 
+    <!-- Game Video Stream -->
     <com.metallic.chiaki.stream.AspectRatioFrameLayout
         android:id="@+id/aspectRatioLayout"
         android:layout_width="match_parent"
@@ -26,22 +28,23 @@
         android:layout_height="wrap_content"
         android:layout_gravity="center"/>
 
-    <!-- Subtitle Translation Overlay -->
+    <!-- Subtitle Translation Overlay (floating over video stream) -->
     <LinearLayout
         android:id="@+id/subtitleOverlayContainer"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|center_horizontal"
-        android:layout_marginBottom="24dp"
+        android:layout_marginBottom="20dp"
         android:layout_marginStart="24dp"
         android:layout_marginEnd="24dp"
         android:orientation="vertical"
         android:gravity="center"
-        android:background="#D002040A"
+        android:background="#D9060810"
         android:paddingStart="16dp"
         android:paddingEnd="16dp"
         android:paddingTop="10dp"
         android:paddingBottom="10dp"
+        android:visibility="gone"
         android:clickable="true"
         android:focusable="false">
 
@@ -66,10 +69,10 @@
             android:shadowDy="2"
             android:shadowRadius="4"
             android:gravity="center"
-            android:text="PS Translator — เชื่อมต่อสำเร็จ พร้อมแปลซับไตเติ้ล"/>
+            android:text=""/>
     </LinearLayout>
 
-    <!-- Pure Text Fullscreen Mode: ONLY text on pure black background -->
+    <!-- Pure Text Only Mode: ONLY text on pure black background without video -->
     <FrameLayout
         android:id="@+id/pureFullscreenLayout"
         android:layout_width="match_parent"
@@ -79,110 +82,206 @@
         android:clickable="true"
         android:focusable="true">
 
-        <TextView
-            android:id="@+id/pureFullscreenText"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:textColor="#FFFFFF"
-            android:textSize="32sp"
-            android:textStyle="bold"
-            android:gravity="center"
-            android:padding="28dp"
-            android:text="PS Translator\n(แตะหน้าจอเพื่อกลับสู่หน้าจอปกติ)"/>
-    </FrameLayout>
-
-    <androidx.constraintlayout.widget.ConstraintLayout
-        android:id="@+id/overlay"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:fitsSystemWindows="true">
-
-        <androidx.constraintlayout.widget.ConstraintLayout
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            app:layout_constraintBottom_toBottomOf="parent"
-            android:background="@color/stream_overlay_background"
-            android:padding="8dp"
-            android:clickable="true"
-            android:focusable="false">
+            android:layout_gravity="center"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:padding="28dp">
 
-            <com.google.android.material.switchmaterial.SwitchMaterial
-                android:id="@+id/subOverlaySwitch"
+            <TextView
+                android:id="@+id/pureOriginalText"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintBottom_toBottomOf="parent"
-                android:text="ซับไตเติ้ล"
-                android:checked="true"
-                app:switchPadding="8dp"
-                android:layout_marginStart="8dp"
-                android:textColor="@color/stream_text"/>
+                android:textColor="#77FFFFFF"
+                android:textSize="16sp"
+                android:gravity="center"
+                android:layout_marginBottom="12dp"
+                android:text=""
+                android:visibility="gone"/>
 
-            <com.google.android.material.switchmaterial.SwitchMaterial
-                android:id="@+id/ttsVoiceSwitch"
+            <TextView
+                android:id="@+id/pureFullscreenText"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="160dp"
-                android:text="เสียงพากย์"
-                android:checked="false"
-                android:textColor="@color/stream_text"
-                app:layout_constraintBottom_toBottomOf="parent"
-                app:layout_constraintStart_toStartOf="parent"
-                app:switchPadding="8dp" />
+                android:textColor="#FFFFFF"
+                android:textSize="32sp"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:text="PS Translator\n(รอรับข้อความซับไตเติ้ลจากเกม...)"/>
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnTogglePureFullscreen"
-                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            <TextView
+                android:id="@+id/pureFullscreenHint"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="300dp"
-                app:layout_constraintBottom_toBottomOf="parent"
-                app:layout_constraintStart_toStartOf="parent"
-                android:text="ขยายเต็มจอ"
-                android:textColor="@color/stream_text"
-                app:strokeColor="@color/stream_text"/>
+                android:textColor="#55FFFFFF"
+                android:textSize="12sp"
+                android:layout_marginTop="24dp"
+                android:text="(แตะที่หน้าจอเพื่อสลับกลับสู่โหมดภาพเกม)"/>
+        </LinearLayout>
+    </FrameLayout>
 
-            <com.google.android.material.button.MaterialButtonToggleGroup
-                android:id="@+id/displayModeToggle"
-                android:layout_width="wrap_content"
+    <!-- Floating Circular Button with 3 lines (Hamburger Menu) -->
+    <ImageButton
+        android:id="@+id/btnMenuToggle"
+        android:layout_width="46dp"
+        android:layout_height="46dp"
+        android:layout_gravity="top|end"
+        android:layout_marginTop="16dp"
+        android:layout_marginEnd="16dp"
+        android:background="@drawable/bg_circle_button"
+        android:src="@drawable/ic_menu_3lines"
+        android:contentDescription="ตั้งค่าการแปลภาษา"
+        android:elevation="10dp"
+        android:clickable="true"
+        android:focusable="true"/>
+
+    <!-- Settings Menu Modal Backdrop & Panel -->
+    <FrameLayout
+        android:id="@+id/menuPanelContainer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#80000000"
+        android:visibility="gone"
+        android:clickable="true"
+        android:focusable="true"
+        android:elevation="20dp">
+
+        <ScrollView
+            android:layout_width="360dp"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:background="@drawable/bg_menu_card"
+            android:padding="20dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginEnd="8dp"
-                app:layout_constraintBottom_toBottomOf="parent"
-                app:layout_constraintEnd_toEndOf="parent"
-                app:singleSelection="true"
-                app:selectionRequired="true"
-                app:checkedButton="@id/display_mode_normal_button">
+                android:orientation="vertical">
 
-                <com.google.android.material.button.MaterialButton
-                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                    android:id="@+id/display_mode_normal_button"
-                    android:layout_width="60dp"
+                <!-- Header -->
+                <LinearLayout
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    app:icon="@drawable/ic_display_normal"
-                    app:iconTint="@color/stream_material_button_icon_tint"
-                    app:strokeColor="@color/stream_text"/>
-                <com.google.android.material.button.MaterialButton
-                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                    android:id="@+id/display_mode_zoom_button"
-                    android:layout_width="60dp"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginBottom="16dp">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="ตั้งค่า PS Translator"
+                        android:textColor="#FFFFFF"
+                        android:textSize="18sp"
+                        android:textStyle="bold"/>
+
+                    <ImageButton
+                        android:id="@+id/btnCloseMenu"
+                        android:layout_width="32dp"
+                        android:layout_height="32dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:src="@drawable/ic_close"
+                        app:tint="#FFFFFF"
+                        android:contentDescription="ปิดเมนู"/>
+                </LinearLayout>
+
+                <!-- Subtitle Toggle -->
+                <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/subOverlaySwitch"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    app:icon="@drawable/ic_display_zoom"
-                    app:iconTint="@color/stream_material_button_icon_tint"
-                    app:strokeColor="@color/stream_text"/>
-                <com.google.android.material.button.MaterialButton
-                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                    android:id="@+id/display_mode_stretch_button"
-                    android:layout_width="60dp"
+                    android:text="แสดงกล่องซับไตเติ้ลบนจอ"
+                    android:textColor="#EEEEEE"
+                    android:textSize="15sp"
+                    android:checked="true"
+                    android:layout_marginBottom="8dp"/>
+
+                <!-- TTS Voice Toggle -->
+                <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/ttsVoiceSwitch"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    app:icon="@drawable/ic_display_stretch"
-                    app:iconTint="@color/stream_material_button_icon_tint"
-                    app:strokeColor="@color/stream_text"/>
+                    android:text="อ่านออกเสียงพากย์ไทย (TTS)"
+                    android:textColor="#EEEEEE"
+                    android:textSize="15sp"
+                    android:checked="false"
+                    android:layout_marginBottom="16dp"/>
 
-        </com.google.android.material.button.MaterialButtonToggleGroup>
+                <!-- Mute Phone Audio Button -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnMuteAudio"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="ปิดเสียงเกมจากมือถือ"
+                    android:textColor="#FFFFFF"
+                    app:icon="@drawable/ic_volume_up"
+                    app:iconTint="#FFFFFF"
+                    app:strokeColor="#55FFFFFF"
+                    android:layout_marginBottom="10dp"/>
 
-    </androidx.constraintlayout.widget.ConstraintLayout>
+                <!-- Text-Only Mode Button -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnTextOnlyMode"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="โหมดโชว์เฉพาะตัวหนังสือ (จอดำ)"
+                    android:textColor="#FFFFFF"
+                    app:strokeColor="#55FFFFFF"
+                    android:layout_marginBottom="16dp"/>
 
-</androidx.constraintlayout.widget.ConstraintLayout>
+                <!-- Display Mode Aspect Ratio -->
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="อัตราส่วนภาพเกม:"
+                    android:textColor="#AAAAAA"
+                    android:textSize="13sp"
+                    android:layout_marginBottom="8dp"/>
+
+                <com.google.android.material.button.MaterialButtonToggleGroup
+                    android:id="@+id/displayModeToggle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    app:singleSelection="true"
+                    app:selectionRequired="true"
+                    app:checkedButton="@id/display_mode_normal_button"
+                    android:layout_marginBottom="12dp">
+
+                    <com.google.android.material.button.MaterialButton
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        android:id="@+id/display_mode_normal_button"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="ปกติ"
+                        android:textColor="#FFFFFF"
+                        app:strokeColor="#55FFFFFF"/>
+                    <com.google.android.material.button.MaterialButton
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        android:id="@+id/display_mode_zoom_button"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="ซูม"
+                        android:textColor="#FFFFFF"
+                        app:strokeColor="#55FFFFFF"/>
+                    <com.google.android.material.button.MaterialButton
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        android:id="@+id/display_mode_stretch_button"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="เต็มจอ"
+                        android:textColor="#FFFFFF"
+                        app:strokeColor="#55FFFFFF"/>
+                </com.google.android.material.button.MaterialButtonToggleGroup>
+
+            </LinearLayout>
+        </ScrollView>
+    </FrameLayout>
 
 </FrameLayout>

@@ -66,10 +66,10 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/heads/main')
         with:
-          tag_name: v2.0.2
-          name: "PS Translator v2.0.2 (Native PS5 Direct Stream)"
+          tag_name: v2.0.3
+          name: "PS Translator v2.0.3 (Native PS5 Direct Stream)"
           body: |
-            ### PS Translator v2.0.2 — Native PS5 Direct Stream Edition
+            ### PS Translator v2.0.3 — Native PS5 Direct Stream Edition
 
             - **Direct PS5 Remote Play Streaming:** ดึงสัญญาณภาพสดโดยตรงจากเครื่อง PS5 ในวงแลน (Local LAN) ด้วยเทคโนโลยีสตรีมมิ่งระดับฮาร์ดแวร์แบบ Chiaki
             - **No Controller Interference:** ตัดฟังก์ชันปุ่มจอย / Controller ออกทั้งหมด 100% เล่นเกมด้วยจอย DualSense ปกติที่เครื่อง PS5 ได้ทันที

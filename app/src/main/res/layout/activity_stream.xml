@@ -122,6 +122,89 @@
         </LinearLayout>
     </FrameLayout>
 
+    <!-- Subtitle Crop Box Editor Overlay -->
+    <FrameLayout
+        android:id="@+id/cropEditorOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone"
+        android:background="#4D000000"
+        android:elevation="12dp">
+
+        <!-- Top Bar for Crop Editor -->
+        <LinearLayout
+            android:id="@+id/cropTopBar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top"
+            android:orientation="horizontal"
+            android:background="#E610141E"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:paddingTop="10dp"
+            android:paddingBottom="10dp"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="ลากกรอบสีเขียวไปวางตรงพื้นที่ซับไตเติ้ลเกม"
+                android:textColor="#FFFFFF"
+                android:textSize="14sp"
+                android:textStyle="bold"/>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnResetCropBox"
+                style="@style/Widget.MaterialComponents.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="รีเซ็ตค่าเริ่มต้น"
+                android:textColor="#64B5F6"/>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnSaveCropBox"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="บันทึกกรอบ"
+                android:textColor="#FFFFFF"
+                app:backgroundTint="#2E7D32"
+                android:layout_marginStart="8dp"/>
+        </LinearLayout>
+
+        <!-- Floating Adjustable Crop Box Frame -->
+        <FrameLayout
+            android:id="@+id/cropBoxFrame"
+            android:layout_width="320dp"
+            android:layout_height="100dp"
+            android:background="@drawable/bg_crop_box"
+            android:clickable="true"
+            android:focusable="true">
+
+            <TextView
+                android:id="@+id/cropBoxGuideText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:text="กรอบอ่านซับ (ลากเพื่อย้าย)"
+                android:textColor="#00E676"
+                android:textSize="12sp"
+                android:textStyle="bold"/>
+
+            <!-- Corner Resize Handle (bottom right) -->
+            <ImageView
+                android:id="@+id/cropResizeHandle"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:layout_gravity="bottom|end"
+                android:src="@drawable/ic_resize_handle"
+                android:contentDescription="ปรับขนาดกรอบ"
+                android:padding="6dp"
+                android:clickable="true"
+                android:focusable="true"/>
+        </FrameLayout>
+    </FrameLayout>
+
     <!-- Floating Circular Button with 3 lines (Hamburger Menu) -->
     <ImageButton
         android:id="@+id/btnMenuToggle"
@@ -207,7 +290,31 @@
                     android:textColor="#EEEEEE"
                     android:textSize="15sp"
                     android:checked="false"
+                    android:layout_marginBottom="12dp"/>
+
+                <!-- Filter short UI text toggle -->
+                <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/filterShortTextSwitch"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="กรองปุ่ม UI สั้นๆ ออก (ให้อ่านเฉพาะบทพูด)"
+                    android:textColor="#EEEEEE"
+                    android:textSize="15sp"
+                    android:checked="true"
                     android:layout_marginBottom="16dp"/>
+
+                <!-- Adjust Subtitle Crop Box Button -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnAdjustCropBox"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="ปรับกรอบพื้นที่ตรวจจับซับไตเติ้ล"
+                    android:textColor="#FFFFFF"
+                    app:icon="@drawable/ic_crop_free"
+                    app:iconTint="#00E676"
+                    app:strokeColor="#00E676"
+                    android:layout_marginBottom="10dp"/>
 
                 <!-- Mute Phone Audio Button -->
                 <com.google.android.material.button.MaterialButton

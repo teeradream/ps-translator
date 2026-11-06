@@ -4,8 +4,10 @@ package com.metallic.chiaki.stream
 
 import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
+import android.annotation.SuppressLint
 import android.app.AlertDialog
 import android.content.Context
+import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.graphics.Rect
 import android.media.AudioManager
@@ -13,6 +15,7 @@ import android.os.*
 import android.speech.tts.TextToSpeech
 import android.view.*
 import android.widget.EditText
+import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isGone
@@ -62,6 +65,17 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 	private var isTextOnlyMode = false
 	private var isCapturing = false
 	private var lastRecognizedEnglish = ""
+	private lateinit var cropPrefs: SharedPreferences
+	private var isFilterShortTextEnabled = true
+
+	private val clearSubtitleRunnable = Runnable {
+		if (::binding.isInitialized && !isDestroyed && !isFinishing) {
+			binding.subtitleOverlayContainer.animate().alpha(0f).setDuration(400).withEndAction {
+				binding.subtitleOverlayContainer.isVisible = false
+				binding.subtitleOverlayContainer.alpha = 1f
+			}.start()
+		}
+	}
 
 	private val hideMenuButtonRunnable = Runnable {
 		if (::binding.isInitialized && !binding.menuPanelContainer.isVisible) {
@@ -101,6 +115,11 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 
 		audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
 		tts = TextToSpeech(this, this)
+
+		cropPrefs = getSharedPreferences("ps_translator_crop", Context.MODE_PRIVATE)
+		isFilterShortTextEnabled = cropPrefs.getBoolean("filter_short_ui", true)
+		binding.filterShortTextSwitch.isChecked = isFilterShortTextEnabled
+		setupCropEditor()
 
 		// 3-Lines Circular Menu Button
 		binding.btnMenuToggle.setOnClickListener {
@@ -231,31 +250,45 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 				isCapturing = false
 				if (copyResult == PixelCopy.SUCCESS) {
 					try {
-						val cropTop = (540 * 0.62).toInt()
-						val cropHeight = (540 * 0.36).toInt()
-						val subBitmap = Bitmap.createBitmap(fullBitmap, 0, cropTop, 960, cropHeight)
+						val cropLeftNorm = cropPrefs.getFloat("crop_left", 0.18f).coerceIn(0f, 0.85f)
+						val cropTopNorm = cropPrefs.getFloat("crop_top", 0.72f).coerceIn(0f, 0.90f)
+						val cropWidthNorm = cropPrefs.getFloat("crop_width", 0.64f).coerceIn(0.10f, 1f - cropLeftNorm)
+						val cropHeightNorm = cropPrefs.getFloat("crop_height", 0.22f).coerceIn(0.06f, 1f - cropTopNorm)
+
+						val cropX = (960 * cropLeftNorm).toInt().coerceIn(0, 959)
+						val cropY = (540 * cropTopNorm).toInt().coerceIn(0, 539)
+						val cropW = (960 * cropWidthNorm).toInt().coerceIn(40, 960 - cropX)
+						val cropH = (540 * cropHeightNorm).toInt().coerceIn(30, 540 - cropY)
+
+						val subBitmap = Bitmap.createBitmap(fullBitmap, cropX, cropY, cropW, cropH)
 						val image = InputImage.fromBitmap(subBitmap, 0)
 						textRecognizer.process(image)
 							.addOnSuccessListener { visionText ->
 								val rawText = visionText.text.trim().replace("\n", " ")
 								val text = rawText.replace(Regex("\\s+"), " ").trim()
-								if (text.length >= 3 && text.any { it.isLetter() } && text != lastRecognizedEnglish) {
-									lastRecognizedEnglish = text
-									android.util.Log.d("PSTranslatorOCR", "Detected text: $text")
-									ocrScope.launch {
-										val thai = translateToThai(text)
-										android.util.Log.d("PSTranslatorOCR", "Translated text: $thai")
-										binding.originalSubText.text = text
-										binding.originalSubText.isVisible = true
-										binding.translatedSubText.text = thai
-										if (isSubtitleEnabled && !isTextOnlyMode) {
-											binding.subtitleOverlayContainer.isVisible = true
-										}
-										binding.pureOriginalText.text = text
-										binding.pureOriginalText.isVisible = true
-										binding.pureFullscreenText.text = thai
-										if (isTtsEnabled) {
-											tts?.speak(thai, TextToSpeech.QUEUE_FLUSH, null, "sub_voice")
+								if (text.isNotEmpty() && isDialogueSubtitle(text)) {
+									if (!isSimilarText(text, lastRecognizedEnglish)) {
+										lastRecognizedEnglish = text
+										android.util.Log.d("PSTranslatorOCR", "Detected dialogue: $text")
+										ocrScope.launch {
+											val thai = translateToThai(text)
+											android.util.Log.d("PSTranslatorOCR", "Translated text: $thai")
+											uiVisibilityHandler.removeCallbacks(clearSubtitleRunnable)
+											binding.originalSubText.text = text
+											binding.originalSubText.isVisible = true
+											binding.translatedSubText.text = thai
+											if (isSubtitleEnabled && !isTextOnlyMode) {
+												binding.subtitleOverlayContainer.isVisible = true
+												binding.subtitleOverlayContainer.alpha = 1f
+											}
+											binding.pureOriginalText.text = text
+											binding.pureOriginalText.isVisible = true
+											binding.pureFullscreenText.text = thai
+											if (isTtsEnabled) {
+												tts?.speak(thai, TextToSpeech.QUEUE_FLUSH, null, "sub_voice")
+											}
+											// Keep subtitle visible stably for 4.5 seconds
+											uiVisibilityHandler.postDelayed(clearSubtitleRunnable, 4500)
 										}
 									}
 								}
@@ -274,6 +307,195 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 			isCapturing = false
 			android.util.Log.e("PSTranslatorOCR", "PixelCopy request error", e)
 		}
+	}
+
+	@SuppressLint("ClickableViewAccessibility")
+	private fun setupCropEditor() {
+		binding.btnAdjustCropBox.setOnClickListener {
+			binding.menuPanelContainer.isVisible = false
+			openCropEditor()
+		}
+
+		binding.btnResetCropBox.setOnClickListener {
+			resetCropBoxToDefault()
+		}
+
+		binding.btnSaveCropBox.setOnClickListener {
+			saveCropBoxSettings()
+		}
+
+		binding.filterShortTextSwitch.setOnCheckedChangeListener { _, isChecked ->
+			isFilterShortTextEnabled = isChecked
+			cropPrefs.edit().putBoolean("filter_short_ui", isChecked).apply()
+		}
+
+		// Dragging the crop frame
+		var dX = 0f
+		var dY = 0f
+		binding.cropBoxFrame.setOnTouchListener { view, event ->
+			when (event.action) {
+				MotionEvent.ACTION_DOWN -> {
+					dX = view.x - event.rawX
+					dY = view.y - event.rawY
+					true
+				}
+				MotionEvent.ACTION_MOVE -> {
+					val overlayW = binding.cropEditorOverlay.width
+					val overlayH = binding.cropEditorOverlay.height
+					val topBarH = binding.cropTopBar.height
+					val newX = (event.rawX + dX).coerceIn(0f, (overlayW - view.width).toFloat().coerceAtLeast(0f))
+					val newY = (event.rawY + dY).coerceIn(topBarH.toFloat(), (overlayH - view.height).toFloat().coerceAtLeast(topBarH.toFloat()))
+					view.x = newX
+					view.y = newY
+					true
+				}
+				else -> true
+			}
+		}
+
+		// Resizing the crop frame via corner handle
+		var initialTouchX = 0f
+		var initialTouchY = 0f
+		var initialWidth = 0
+		var initialHeight = 0
+		binding.cropResizeHandle.setOnTouchListener { _, event ->
+			when (event.action) {
+				MotionEvent.ACTION_DOWN -> {
+					initialTouchX = event.rawX
+					initialTouchY = event.rawY
+					initialWidth = binding.cropBoxFrame.width
+					initialHeight = binding.cropBoxFrame.height
+					true
+				}
+				MotionEvent.ACTION_MOVE -> {
+					val overlayW = binding.cropEditorOverlay.width
+					val overlayH = binding.cropEditorOverlay.height
+					val frameX = binding.cropBoxFrame.x.toInt()
+					val frameY = binding.cropBoxFrame.y.toInt()
+
+					val newW = (initialWidth + (event.rawX - initialTouchX).toInt())
+						.coerceIn(dpToPx(120), (overlayW - frameX).coerceAtLeast(dpToPx(120)))
+					val newH = (initialHeight + (event.rawY - initialTouchY).toInt())
+						.coerceIn(dpToPx(40), (overlayH - frameY).coerceAtLeast(dpToPx(40)))
+
+					val params = binding.cropBoxFrame.layoutParams
+					params.width = newW
+					params.height = newH
+					binding.cropBoxFrame.layoutParams = params
+					true
+				}
+				else -> true
+			}
+		}
+	}
+
+	private fun openCropEditor() {
+		binding.cropEditorOverlay.isVisible = true
+		binding.cropEditorOverlay.post {
+			val overlayW = binding.cropEditorOverlay.width
+			val overlayH = binding.cropEditorOverlay.height
+			val leftNorm = cropPrefs.getFloat("crop_left", 0.18f)
+			val topNorm = cropPrefs.getFloat("crop_top", 0.72f)
+			val widthNorm = cropPrefs.getFloat("crop_width", 0.64f)
+			val heightNorm = cropPrefs.getFloat("crop_height", 0.22f)
+
+			val w = (overlayW * widthNorm).toInt().coerceAtLeast(dpToPx(120))
+			val h = (overlayH * heightNorm).toInt().coerceAtLeast(dpToPx(40))
+			val x = (overlayW * leftNorm).coerceIn(0f, (overlayW - w).toFloat().coerceAtLeast(0f))
+			val y = (overlayH * topNorm).coerceIn(binding.cropTopBar.height.toFloat(), (overlayH - h).toFloat().coerceAtLeast(binding.cropTopBar.height.toFloat()))
+
+			val params = binding.cropBoxFrame.layoutParams
+			params.width = w
+			params.height = h
+			binding.cropBoxFrame.layoutParams = params
+			binding.cropBoxFrame.x = x
+			binding.cropBoxFrame.y = y
+		}
+	}
+
+	private fun resetCropBoxToDefault() {
+		val overlayW = binding.cropEditorOverlay.width
+		val overlayH = binding.cropEditorOverlay.height
+
+		val w = (overlayW * 0.64f).toInt().coerceAtLeast(dpToPx(120))
+		val h = (overlayH * 0.22f).toInt().coerceAtLeast(dpToPx(40))
+		val x = overlayW * 0.18f
+		val y = overlayH * 0.72f
+
+		val params = binding.cropBoxFrame.layoutParams
+		params.width = w
+		params.height = h
+		binding.cropBoxFrame.layoutParams = params
+		binding.cropBoxFrame.x = x
+		binding.cropBoxFrame.y = y
+	}
+
+	private fun saveCropBoxSettings() {
+		val overlayW = binding.cropEditorOverlay.width.toFloat()
+		val overlayH = binding.cropEditorOverlay.height.toFloat()
+
+		val leftNorm = (binding.cropBoxFrame.x / overlayW).coerceIn(0f, 0.85f)
+		val topNorm = (binding.cropBoxFrame.y / overlayH).coerceIn(0f, 0.90f)
+		val widthNorm = (binding.cropBoxFrame.width / overlayW).coerceIn(0.10f, 1f - leftNorm)
+		val heightNorm = (binding.cropBoxFrame.height / overlayH).coerceIn(0.06f, 1f - topNorm)
+
+		cropPrefs.edit()
+			.putFloat("crop_left", leftNorm)
+			.putFloat("crop_top", topNorm)
+			.putFloat("crop_width", widthNorm)
+			.putFloat("crop_height", heightNorm)
+			.apply()
+
+		binding.cropEditorOverlay.isVisible = false
+		resetMenuButtonTimer()
+		Toast.makeText(this, "บันทึกกรอบพื้นที่อ่านซับเรียบร้อยแล้ว", Toast.LENGTH_SHORT).show()
+	}
+
+	private fun levenshteinDistance(s1: String, s2: String): Int {
+		val a = s1.lowercase()
+		val b = s2.lowercase()
+		val costs = IntArray(b.length + 1) { it }
+		for (i in 1..a.length) {
+			costs[0] = i
+			var nw = i - 1
+			for (j in 1..b.length) {
+				val cj = minOf(1 + minOf(costs[j], costs[j - 1]), if (a[i - 1] == b[j - 1]) nw else nw + 1)
+				nw = costs[j]
+				costs[j] = cj
+			}
+		}
+		return costs[b.length]
+	}
+
+	private fun isSimilarText(a: String, b: String): Boolean {
+		if (a.equals(b, ignoreCase = true)) return true
+		val cleanA = a.lowercase().replace(Regex("[^a-z0-9 ]"), "").trim()
+		val cleanB = b.lowercase().replace(Regex("[^a-z0-9 ]"), "").trim()
+		if (cleanA == cleanB) return true
+		val maxLen = maxOf(cleanA.length, cleanB.length)
+		if (maxLen == 0) return true
+		val dist = levenshteinDistance(cleanA, cleanB)
+		return (1.0 - dist.toDouble() / maxLen) >= 0.75
+	}
+
+	private fun isDialogueSubtitle(text: String): Boolean {
+		if (!isFilterShortTextEnabled) return text.length >= 3 && text.any { it.isLetter() }
+
+		val words = text.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
+		// Exclude single word prompts under 8 characters
+		if (words.size < 2 && text.length < 8) return false
+
+		// Exclude common prompt words
+		val lower = text.lowercase()
+		val promptWords = setOf("talk", "skip", "attack", "dodge", "interact", "examine", "open", "back", "next", "continue", "menu", "cancel", "r1", "r2", "l1", "l2", "r3", "l3")
+		if (words.size == 1 && promptWords.contains(lower)) return false
+		if (words.size == 2 && words.any { it.lowercase() in listOf("r1", "r2", "l1", "l2") }) return false
+
+		return text.any { it.isLetter() }
+	}
+
+	private fun dpToPx(dp: Int): Int {
+		return (dp * resources.displayMetrics.density).toInt()
 	}
 
 	private suspend fun translateToThai(englishText: String): String = withContext(Dispatchers.IO) {
@@ -315,6 +537,7 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		super.onDestroy()
 		uiVisibilityHandler.removeCallbacks(captureRunnable)
 		uiVisibilityHandler.removeCallbacks(hideMenuButtonRunnable)
+		uiVisibilityHandler.removeCallbacks(clearSubtitleRunnable)
 		ocrScope.cancel()
 		tts?.stop()
 		tts?.shutdown()

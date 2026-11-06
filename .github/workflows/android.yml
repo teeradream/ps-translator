@@ -66,14 +66,14 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/heads/main')
         with:
-          tag_name: v2.0.4
-          name: "PS Translator v2.0.4 (Offline OCR & Real-time Translation Fix)"
+          tag_name: v2.0.5
+          name: "PS Translator v2.0.5 (Adjustable Subtitle Crop Box & Anti-Flicker Engine)"
           body: |
-            ### PS Translator v2.0.4
+            ### PS Translator v2.0.5
 
-            - **Fixed Subtitle OCR Detection:** Switched to bundled standalone ML Kit OCR engine so it works immediately offline without waiting for Google Play Services downloads.
-            - **Fixed PixelCopy Capture:** Fixed SurfaceView capture coordinate scaling and kept SurfaceView active during Text-Only pure black mode so subtitles are captured and translated seamlessly.
-            - **3-Lines Floating Menu:** All translation, audio mute, and text-only controls remain cleanly inside the circular 3-lines menu button.
-            - **Pure Text Fullscreen:** Pure black background with translated subtitles in large legible font.
+            - **Adjustable Subtitle Detection Box:** เพิ่มฟังก์ชันปรับตำแหน่งและขนาดของกรอบอ่านซับไตเติ้ลบนหน้าจอได้อิสระ ลากหรือย่อขยายกรอบสีเขียวไปยังจุดที่มีซับไตเติ้ลเกมได้ตามต้องการ ไม่จับเมนูปุ่มด้านข้างอีกต่อไป
+            - **Anti-Flicker & Stability Engine:** ระบบลดการกระพริบและความเสถียรของซับไตเติ้ล ด้วยการเปรียบเทียบความคล้ายคลึงของข้อความ (Similarity Check) ไม่แปลซ้ำคำเดิมที่มีเพียงการขยับของตัวอักษรเล็กน้อย
+            - **Filter Short UI Prompts:** กรองปุ่มกดและคำสั่งสั้นๆ (เช่น Talk, Skip, R1, R2, L1, L2) ออก เพื่อเน้นอ่านเฉพาะบทสนทนาของตัวละคร
+            - **Smooth Subtitle Persistence:** แสดงข้อความซับไตเติ้ลค้างไว้ 4.5 วินาทีอย่างนุ่มนวลก่อนค่อยๆ จางหายไป เพื่อให้อ่านได้อย่างสบายตา
           files: dist/*.apk
           token: ${{ secrets.GITHUB_TOKEN }}

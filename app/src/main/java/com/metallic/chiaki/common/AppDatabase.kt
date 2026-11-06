@@ -37,12 +37,26 @@ fun getDatabase(context: Context): AppDatabase
 	val currentDb = database
 	if(currentDb != null)
 		return currentDb
-	val db = Room.databaseBuilder(
-		context.applicationContext,
-		AppDatabase::class.java,
-		"chiaki")
-		.addMigrations(MIGRATION_1_2)
-		.build()
+	val db = try
+	{
+		Room.databaseBuilder(
+			context.applicationContext,
+			AppDatabase::class.java,
+			"chiaki")
+			.addMigrations(MIGRATION_1_2)
+			.fallbackToDestructiveMigration()
+			.build()
+	}
+	catch(t: Throwable)
+	{
+		try { context.deleteDatabase("chiaki") } catch(_: Throwable) {}
+		Room.databaseBuilder(
+			context.applicationContext,
+			AppDatabase::class.java,
+			"chiaki")
+			.fallbackToDestructiveMigration()
+			.build()
+	}
 	database = db
 	return db
 }

@@ -35,51 +35,67 @@ class MainActivity : AppCompatActivity()
 	override fun onCreate(savedInstanceState: Bundle?)
 	{
 		super.onCreate(savedInstanceState)
-		binding = ActivityMainBinding.inflate(layoutInflater)
-		setContentView(binding.root)
-
-		title = ""
-		setSupportActionBar(binding.toolbar)
-
-		binding.floatingActionButton.setOnClickListener {
-			expandFloatingActionButton(!binding.floatingActionButton.isExpanded)
-		}
-		binding.floatingActionButtonDialBackground.setOnClickListener {
-			expandFloatingActionButton(false)
+		Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+			android.util.Log.e("PSTranslator", "Uncaught exception on thread $thread", throwable)
 		}
 
-		binding.addManualButton.setOnClickListener { addManualConsole() }
-		binding.addManualLabelButton.setOnClickListener { addManualConsole() }
+		try
+		{
+			binding = ActivityMainBinding.inflate(layoutInflater)
+			setContentView(binding.root)
 
-		binding.registerButton.setOnClickListener { showRegistration() }
-		binding.registerLabelButton.setOnClickListener { showRegistration() }
+			title = ""
+			setSupportActionBar(binding.toolbar)
 
-		viewModel = ViewModelProvider(this, viewModelFactory { MainViewModel(getDatabase(this), Preferences(this)) })
-			.get(MainViewModel::class.java)
+			binding.floatingActionButton.setOnClickListener {
+				expandFloatingActionButton(!binding.floatingActionButton.isExpanded)
+			}
+			binding.floatingActionButtonDialBackground.setOnClickListener {
+				expandFloatingActionButton(false)
+			}
 
-		val recyclerViewAdapter = DisplayHostRecyclerViewAdapter(this::hostTriggered, this::wakeupHost, this::editHost, this::deleteHost)
-		binding.hostsRecyclerView.adapter = recyclerViewAdapter
-		binding.hostsRecyclerView.layoutManager = LinearLayoutManager(this)
-		viewModel.displayHosts.observe(this, Observer {
-			val top = binding.hostsRecyclerView.computeVerticalScrollOffset() == 0
-			recyclerViewAdapter.hosts = it
-			if(top)
-				binding.hostsRecyclerView.scrollToPosition(0)
-			updateEmptyInfo()
-		})
+			binding.addManualButton.setOnClickListener { addManualConsole() }
+			binding.addManualLabelButton.setOnClickListener { addManualConsole() }
 
-		viewModel.discoveryActive.observe(this, Observer { active ->
-			discoveryMenuItem?.let { updateDiscoveryMenuItem(it, active) }
-			updateEmptyInfo()
-		})
+			binding.registerButton.setOnClickListener { showRegistration() }
+			binding.registerLabelButton.setOnClickListener { showRegistration() }
+
+			viewModel = ViewModelProvider(this, viewModelFactory { MainViewModel(getDatabase(this), Preferences(this)) })
+				.get(MainViewModel::class.java)
+
+			val recyclerViewAdapter = DisplayHostRecyclerViewAdapter(this::hostTriggered, this::wakeupHost, this::editHost, this::deleteHost)
+			binding.hostsRecyclerView.adapter = recyclerViewAdapter
+			binding.hostsRecyclerView.layoutManager = LinearLayoutManager(this)
+			viewModel.displayHosts.observe(this, Observer {
+				val top = binding.hostsRecyclerView.computeVerticalScrollOffset() == 0
+				recyclerViewAdapter.hosts = it
+				if(top)
+					binding.hostsRecyclerView.scrollToPosition(0)
+				updateEmptyInfo()
+			})
+
+			viewModel.discoveryActive.observe(this, Observer { active ->
+				discoveryMenuItem?.let { updateDiscoveryMenuItem(it, active) }
+				updateEmptyInfo()
+			})
+		}
+		catch(e: Throwable)
+		{
+			android.util.Log.e("PSTranslator", "Error in onCreate", e)
+			MaterialAlertDialogBuilder(this)
+				.setTitle("Launch Error")
+				.setMessage("An initialization error occurred:\n${e.message}\n${android.util.Log.getStackTraceString(e)}")
+				.setPositiveButton("OK", null)
+				.show()
+		}
 	}
 
 	private fun updateEmptyInfo()
 	{
-		if(viewModel.displayHosts.value?.isEmpty() ?: true)
+		if(!::viewModel.isInitialized || (viewModel.displayHosts.value?.isEmpty() ?: true))
 		{
 			binding.emptyInfoLayout.visibility = View.VISIBLE
-			val discoveryActive = viewModel.discoveryActive.value ?: false
+			val discoveryActive = if(::viewModel.isInitialized) (viewModel.discoveryActive.value ?: false) else false
 			binding.emptyInfoImageView.setImageResource(if(discoveryActive) R.drawable.ic_discover_on else R.drawable.ic_discover_off)
 			binding.emptyInfoTextView.setText(if(discoveryActive) R.string.display_hosts_empty_discovery_on_info else R.string.display_hosts_empty_discovery_off_info)
 		}
@@ -96,13 +112,15 @@ class MainActivity : AppCompatActivity()
 	override fun onStart()
 	{
 		super.onStart()
-		viewModel.discoveryManager.resume()
+		if(::viewModel.isInitialized)
+			viewModel.discoveryManager.resume()
 	}
 
 	override fun onStop()
 	{
 		super.onStop()
-		viewModel.discoveryManager.pause()
+		if(::viewModel.isInitialized)
+			viewModel.discoveryManager.pause()
 	}
 
 	override fun onBackPressed()
@@ -120,7 +138,7 @@ class MainActivity : AppCompatActivity()
 		menuInflater.inflate(R.menu.main, menu)
 		val discoveryItem = menu.findItem(R.id.action_discover)
 		discoveryMenuItem = discoveryItem
-		val discoveryActive = viewModel.discoveryActive.value ?: false
+		val discoveryActive = if(::viewModel.isInitialized) (viewModel.discoveryActive.value ?: false) else false
 		updateDiscoveryMenuItem(discoveryItem, discoveryActive)
 		return true
 	}

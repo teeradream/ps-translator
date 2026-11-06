@@ -79,7 +79,14 @@ private class ChiakiNative
 	{
 		init
 		{
-			System.loadLibrary("chiaki-jni")
+			try
+			{
+				System.loadLibrary("chiaki-jni")
+			}
+			catch(t: Throwable)
+			{
+				Log.e("ChiakiNative", "Failed to load chiaki-jni library", t)
+			}
 		}
 		@JvmStatic external fun errorCodeToString(value: Int): String
 		@JvmStatic external fun quitReasonToString(value: Int): String

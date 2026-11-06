@@ -113,9 +113,9 @@ class DiscoveryManager
 					HOSTS_MAX, DROP_PINGS, PING_MS, InetSocketAddress("255.255.255.255", PORT)
 				), discoveredHostsSubjectRaw::onNext)
 			}
-			catch(e: CreateError)
+			catch(e: Throwable)
 			{
-				Log.e("DiscoveryManager", "Failed to start Discovery Service: $e")
+				Log.e("DiscoveryManager", "Failed to start Discovery Service", e)
 			}
 		}
 		else if((!active || paused) && discoveryService != null)

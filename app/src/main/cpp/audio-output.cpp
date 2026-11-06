@@ -8,6 +8,7 @@
 #include <chiaki/thread.h>
 
 #include <oboe/Oboe.h>
+#include <atomic>
 
 #define BUFFER_CHUNK_SIZE 1024
 #define BUFFER_CHUNKS_COUNT 32
@@ -34,9 +35,18 @@ struct AudioOutput
 	oboe::ManagedStream stream;
 	AudioOutputCallback stream_callback;
 	AudioBuffer buf;
+	std::atomic<bool> muted{false};
 
 	AudioOutput() : stream_callback(this) {}
 };
+
+extern "C" void android_chiaki_audio_output_set_muted(void *audio_output, bool muted)
+{
+	if(!audio_output)
+		return;
+	auto ao = reinterpret_cast<AudioOutput *>(audio_output);
+	ao->muted.store(muted);
+}
 
 extern "C" void *android_chiaki_audio_output_new(ChiakiLog *log)
 {
@@ -103,6 +113,12 @@ oboe::DataCallbackResult AudioOutputCallback::onAudioReady(oboe::AudioStream *st
 
 	size_t buf_size_delivered = audio_output->buf.Pop(buf, buf_size_requested);
 	//CHIAKI_LOGW(audio_output->log, "Delivered %llu", (unsigned long long)buf_size_delivered);
+
+	if(audio_output->muted.load())
+	{
+		memset(audio_data, 0, buf_size_requested);
+		return oboe::DataCallbackResult::Continue;
+	}
 
 	if(buf_size_delivered < buf_size_requested)
 	{

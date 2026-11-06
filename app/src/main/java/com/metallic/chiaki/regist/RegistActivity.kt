@@ -2,6 +2,7 @@
 
 package com.metallic.chiaki.regist
 
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.util.Base64
@@ -48,6 +49,11 @@ class RegistActivity: AppCompatActivity(), RevealActivity
 
 		binding.hostEditText.setText(intent.getStringExtra(EXTRA_HOST) ?: "255.255.255.255")
 		binding.broadcastCheckBox.isChecked = intent.getBooleanExtra(EXTRA_BROADCAST, true)
+
+		val savedPsnId = getSharedPreferences("ps_translator_prefs", Context.MODE_PRIVATE).getString("saved_psn_id", null)
+		if(!savedPsnId.isNullOrEmpty()) {
+			binding.psnIdEditText.setText(savedPsnId)
+		}
 
 		binding.registButton.setOnClickListener { doRegist() }
 
@@ -120,6 +126,11 @@ class RegistActivity: AppCompatActivity(), RevealActivity
 
 		if(!hostValid || !psnIdValid || !pinValid)
 			return
+
+		getSharedPreferences("ps_translator_prefs", Context.MODE_PRIVATE)
+			.edit()
+			.putString("saved_psn_id", psnId)
+			.apply()
 
 		val target = when(ps4Version)
 		{

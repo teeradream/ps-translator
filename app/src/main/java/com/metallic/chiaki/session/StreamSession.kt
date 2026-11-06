@@ -31,6 +31,12 @@ class StreamSession(val connectInfo: ConnectInfo, val logManager: LogManager, va
 	private var surfaceTexture: SurfaceTexture? = null
 	private var surface: Surface? = null
 
+	var isAudioMuted: Boolean = false
+		set(value) {
+			field = value
+			session?.setAudioMuted(value)
+		}
+
 	init
 	{
 		input.controllerStateChangedCallback = {
@@ -61,6 +67,7 @@ class StreamSession(val connectInfo: ConnectInfo, val logManager: LogManager, va
 			val session = Session(connectInfo, logManager.createNewFile().file.absolutePath, logVerbose)
 			_state.value = StreamStateConnecting
 			session.eventCallback = this::eventCallback
+			session.setAudioMuted(isAudioMuted)
 			session.start()
 			val surface = surface
 			if(surface != null)

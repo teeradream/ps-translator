@@ -461,6 +461,14 @@ JNIEXPORT void JNICALL JNI_FCN(sessionSetLoginPin)(JNIEnv *env, jobject obj, jlo
 	E->ReleaseStringUTFChars(env, pin_java, pin);
 }
 
+JNIEXPORT void JNICALL JNI_FCN(sessionSetAudioMuted)(JNIEnv *env, jobject obj, jlong ptr, jboolean muted)
+{
+	AndroidChiakiSession *session = (AndroidChiakiSession *)ptr;
+	if(!session || !session->audio_output)
+		return;
+	android_chiaki_audio_output_set_muted(session->audio_output, (bool)muted);
+}
+
 typedef struct android_discovery_service_t
 {
 	ChiakiDiscoveryService service;

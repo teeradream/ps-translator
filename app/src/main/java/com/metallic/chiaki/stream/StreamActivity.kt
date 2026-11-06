@@ -52,14 +52,20 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 
 	private lateinit var viewModel: StreamViewModel
 	private lateinit var binding: ActivityStreamBinding
-	private lateinit var audioManager: AudioManager
 
 	private val uiVisibilityHandler = Handler(Looper.getMainLooper())
 	private val ocrScope = CoroutineScope(Dispatchers.Main + Job())
 	private val textRecognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
 
+	enum class VoiceGenderMode {
+		AUTO_AI,
+		FEMALE,
+		MALE
+	}
+
 	private var tts: TextToSpeech? = null
 	private var isTtsEnabled = false
+	private var voiceGenderMode = VoiceGenderMode.AUTO_AI
 	private var isSubtitleEnabled = true
 	private var isAudioMuted = false
 	private var isTextOnlyMode = false
@@ -113,7 +119,6 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		setContentView(binding.root)
 		window.decorView.setOnSystemUiVisibilityChangeListener(this)
 
-		audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
 		tts = TextToSpeech(this, this)
 
 		cropPrefs = getSharedPreferences("ps_translator_crop", Context.MODE_PRIVATE)
@@ -152,27 +157,36 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		// TTS voice switch
 		binding.ttsVoiceSwitch.setOnCheckedChangeListener { _, isChecked ->
 			isTtsEnabled = isChecked
+			binding.voiceGenderContainer.isVisible = isChecked
 		}
 
-		// Mute / Unmute audio button
+		val savedVoiceMode = cropPrefs.getString("voice_gender_mode", VoiceGenderMode.AUTO_AI.name)
+		voiceGenderMode = try { VoiceGenderMode.valueOf(savedVoiceMode ?: VoiceGenderMode.AUTO_AI.name) } catch(_: Exception) { VoiceGenderMode.AUTO_AI }
+		when (voiceGenderMode) {
+			VoiceGenderMode.AUTO_AI -> binding.voiceGenderToggleGroup.check(R.id.btnVoiceAuto)
+			VoiceGenderMode.FEMALE -> binding.voiceGenderToggleGroup.check(R.id.btnVoiceFemale)
+			VoiceGenderMode.MALE -> binding.voiceGenderToggleGroup.check(R.id.btnVoiceMale)
+		}
+
+		binding.voiceGenderToggleGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
+			if (isChecked) {
+				voiceGenderMode = when (checkedId) {
+					R.id.btnVoiceFemale -> VoiceGenderMode.FEMALE
+					R.id.btnVoiceMale -> VoiceGenderMode.MALE
+					else -> VoiceGenderMode.AUTO_AI
+				}
+				cropPrefs.edit().putString("voice_gender_mode", voiceGenderMode.name).apply()
+			}
+		}
+
+		// Mute / Unmute game audio directly in native stream (keeps TTS translation voice loud and clear!)
 		binding.btnMuteAudio.setOnClickListener {
 			isAudioMuted = !isAudioMuted
+			viewModel.session.isAudioMuted = isAudioMuted
 			if (isAudioMuted) {
-				if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-					audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_MUTE, 0)
-				} else {
-					@Suppress("DEPRECATION")
-					audioManager.setStreamMute(AudioManager.STREAM_MUSIC, true)
-				}
 				binding.btnMuteAudio.text = "เปิดเสียงเกมมือถือ"
 				binding.btnMuteAudio.setIconResource(R.drawable.ic_volume_off)
 			} else {
-				if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-					audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_UNMUTE, 0)
-				} else {
-					@Suppress("DEPRECATION")
-					audioManager.setStreamMute(AudioManager.STREAM_MUSIC, false)
-				}
 				binding.btnMuteAudio.text = "ปิดเสียงเกมจากมือถือ"
 				binding.btnMuteAudio.setIconResource(R.drawable.ic_volume_up)
 			}
@@ -285,7 +299,7 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 											binding.pureOriginalText.isVisible = true
 											binding.pureFullscreenText.text = thai
 											if (isTtsEnabled) {
-												tts?.speak(thai, TextToSpeech.QUEUE_FLUSH, null, "sub_voice")
+												speakTranslation(text, thai)
 											}
 											// Keep subtitle visible stably for 4.5 seconds
 											uiVisibilityHandler.postDelayed(clearSubtitleRunnable, 4500)
@@ -519,6 +533,78 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		}
 	}
 
+	private fun isFemaleCharacter(englishText: String, thaiText: String): Boolean {
+		val engLower = englishText.lowercase()
+		val thaiLower = thaiText.lowercase()
+
+		var femaleScore = 0
+		var maleScore = 0
+
+		val femaleWords = listOf(
+			"she", "her", "hers", "lady", "milady", "girl", "woman", "women",
+			"sister", "mother", "queen", "princess", "madam", "miss", "mrs",
+			"daughter", "wife", "aunt", "witch", "goddess", "priestess", "empress"
+		)
+		for (w in femaleWords) {
+			if (Regex("\\b$w\\b").containsMatchIn(engLower)) femaleScore += 2
+		}
+		if (thaiLower.contains("ค่ะ") || thaiLower.contains("คะ") || thaiLower.contains("ดิฉัน") || thaiLower.contains("เจ้าแม่") || thaiLower.contains("นาง")) {
+			femaleScore += 3
+		}
+
+		val maleWords = listOf(
+			"he", "him", "his", "man", "men", "boy", "sir", "lord", "milord",
+			"brother", "father", "king", "prince", "master", "mr", "uncle",
+			"son", "monk", "daoist", "fellow", "lad", "young friend", "old man",
+			"warrior", "emperor"
+		)
+		for (w in maleWords) {
+			if (Regex("\\b$w\\b").containsMatchIn(engLower)) maleScore += 2
+		}
+		if (thaiLower.contains("ครับ") || thaiLower.contains("ผม") || thaiLower.contains("กระผม") || thaiLower.contains("เจ้าหนุ่ม") || thaiLower.contains("ศิษย์น้อง")) {
+			maleScore += 3
+		}
+
+		return femaleScore > maleScore
+	}
+
+	private fun speakTranslation(englishText: String, thaiText: String) {
+		val ttsEngine = tts ?: return
+
+		val isFemale = when (voiceGenderMode) {
+			VoiceGenderMode.AUTO_AI -> isFemaleCharacter(englishText, thaiText)
+			VoiceGenderMode.FEMALE -> true
+			VoiceGenderMode.MALE -> false
+		}
+
+		if (isFemale) {
+			ttsEngine.setPitch(1.22f)
+			ttsEngine.setSpeechRate(1.05f)
+		} else {
+			ttsEngine.setPitch(0.80f)
+			ttsEngine.setSpeechRate(1.0f)
+		}
+
+		try {
+			val voices = ttsEngine.voices
+			if (voices != null) {
+				val thVoices = voices.filter { it.locale.language == "th" }
+				if (thVoices.isNotEmpty()) {
+					val targetVoice = if (isFemale) {
+						thVoices.firstOrNull { it.name.contains("female", ignoreCase = true) || it.name.contains("cfa", ignoreCase = true) }
+					} else {
+						thVoices.firstOrNull { it.name.contains("male", ignoreCase = true) || it.name.contains("cfn", ignoreCase = true) }
+					}
+					if (targetVoice != null) {
+						ttsEngine.voice = targetVoice
+					}
+				}
+			}
+		} catch (_: Exception) {}
+
+		ttsEngine.speak(thaiText, TextToSpeech.QUEUE_FLUSH, null, "sub_voice")
+	}
+
 	override fun onResume()
 	{
 		super.onResume()
@@ -541,14 +627,6 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		ocrScope.cancel()
 		tts?.stop()
 		tts?.shutdown()
-		if (isAudioMuted) {
-			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-				audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_UNMUTE, 0)
-			} else {
-				@Suppress("DEPRECATION")
-				audioManager.setStreamMute(AudioManager.STREAM_MUSIC, false)
-			}
-		}
 	}
 
 	private fun reconnect()

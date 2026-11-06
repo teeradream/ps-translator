@@ -66,14 +66,13 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/heads/main')
         with:
-          tag_name: v2.0.5
-          name: "PS Translator v2.0.5 (Adjustable Subtitle Crop Box & Anti-Flicker Engine)"
+          tag_name: v2.0.6
+          name: "PS Translator v2.0.6 (Auto PSN ID, Native Audio Mute Fix & AI Character Voice)"
           body: |
-            ### PS Translator v2.0.5
+            ### PS Translator v2.0.6
 
-            - **Adjustable Subtitle Detection Box:** เพิ่มฟังก์ชันปรับตำแหน่งและขนาดของกรอบอ่านซับไตเติ้ลบนหน้าจอได้อิสระ ลากหรือย่อขยายกรอบสีเขียวไปยังจุดที่มีซับไตเติ้ลเกมได้ตามต้องการ ไม่จับเมนูปุ่มด้านข้างอีกต่อไป
-            - **Anti-Flicker & Stability Engine:** ระบบลดการกระพริบและความเสถียรของซับไตเติ้ล ด้วยการเปรียบเทียบความคล้ายคลึงของข้อความ (Similarity Check) ไม่แปลซ้ำคำเดิมที่มีเพียงการขยับของตัวอักษรเล็กน้อย
-            - **Filter Short UI Prompts:** กรองปุ่มกดและคำสั่งสั้นๆ (เช่น Talk, Skip, R1, R2, L1, L2) ออก เพื่อเน้นอ่านเฉพาะบทสนทนาของตัวละคร
-            - **Smooth Subtitle Persistence:** แสดงข้อความซับไตเติ้ลค้างไว้ 4.5 วินาทีอย่างนุ่มนวลก่อนค่อยๆ จางหายไป เพื่อให้อ่านได้อย่างสบายตา
+            - **Remember PSN Account ID:** บันทึกและดึงค่า PSN Account ID มากรอกให้อัตโนมัติทุกครั้งที่เข้าหน้าลงทะเบียน ไม่ต้องเสียเวลาค้นหาหรือคัดลอกใหม่
+            - **Fix Mute Audio (No Voice Overlap):** แก้ปัญหากดปิดเสียงในแอปแล้วเสียงแปลไม่ดัง โดยเปลี่ยนไปสั่งปิดเฉพาะสัญญาณเสียงเกมจากสตรีมในระดับฮาร์ดแวร์ Native Stream ตรงๆ ทำให้เสียงเกมเงียบสนิท 100% แต่เสียงพากย์แปลภาษาไทยยังคงดังฟังชัดเจน ไม่มีเสียงเกมดังซ้อนกันอีกต่อไป
+            - **AI Character Voice & Gender Selection:** เพิ่มระบบเลือกน้ำเสียงพากย์ตามเพศตัวละคร พร้อมโหมดวิเคราะห์เพศตัวละครอัจฉริยะ (AI Auto Gender) ที่ตรวจจับรูปประโยคและคำสรรพนามเพื่อสลับเสียงชาย-หญิงให้อัตโนมัติตามผู้พูดในเกม (หรือเลือกบังคับเสียงชาย/หญิงได้ตามชอบ)
           files: dist/*.apk
           token: ${{ secrets.GITHUB_TOKEN }}

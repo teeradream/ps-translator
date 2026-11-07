@@ -6,7 +6,7 @@
 #include <chiaki/session.h>
 #include <chiaki/discoveryservice.h>
 #include <chiaki/regist.h>
-#include <chiaki/opusdecoder.h>
+#include <chiaki/audioreceiver.h>
 #include <chiaki/controller.h>
 
 #include <libavcodec/avcodec.h>
@@ -263,7 +263,6 @@ CW_EXPORT void cw_regist_stop(void *ptr)
 typedef struct cw_session_t
 {
     ChiakiSession session;
-    ChiakiOpusDecoder opus_decoder;
     AVCodecContext *codec_ctx;
     struct SwsContext *sws_ctx;
     AVFrame *av_frame;
@@ -272,29 +271,118 @@ typedef struct cw_session_t
     int bgra_w;
     int bgra_h;
     int bgra_stride;
+
+    AVCodecContext *audio_codec_ctx;
+    AVFrame *audio_frame;
+    AVPacket *audio_pkt;
+    int16_t pcm_buf[8192];
     uint32_t audio_channels;
     uint32_t audio_rate;
+
     CwVideoFrameCallback video_cb;
     CwAudioFrameCallback audio_cb;
     CwSessionEventCallback event_cb;
     ChiakiMutex video_mutex;
+    ChiakiMutex audio_mutex;
 } CwSession;
 
-static void cw_audio_settings_cb(uint32_t channels, uint32_t rate, void *user)
+static void cw_audio_sink_header_cb(ChiakiAudioHeader *header, void *user)
 {
     CwSession *s = (CwSession *)user;
-    if (!s)
+    if (!s || !header)
         return;
-    s->audio_channels = channels;
-    s->audio_rate = rate;
+
+    chiaki_mutex_lock(&s->audio_mutex);
+    s->audio_channels = header->channels > 0 ? header->channels : 2;
+    s->audio_rate = header->rate > 0 ? header->rate : 48000;
+
+    if (s->audio_codec_ctx)
+    {
+        avcodec_free_context(&s->audio_codec_ctx);
+    }
+
+    const AVCodec *acodec = avcodec_find_decoder(AV_CODEC_ID_OPUS);
+    if (acodec)
+    {
+        s->audio_codec_ctx = avcodec_alloc_context3(acodec);
+        if (s->audio_codec_ctx)
+        {
+            s->audio_codec_ctx->sample_rate = (int)s->audio_rate;
+            s->audio_codec_ctx->ch_layout.nb_channels = (int)s->audio_channels;
+            if (avcodec_open2(s->audio_codec_ctx, acodec, NULL) < 0)
+            {
+                avcodec_free_context(&s->audio_codec_ctx);
+            }
+        }
+    }
+    chiaki_mutex_unlock(&s->audio_mutex);
 }
 
-static void cw_audio_frame_cb(int16_t *buf, size_t samples_count, void *user)
+static void cw_audio_sink_frame_cb(uint8_t *buf, size_t buf_size, void *user)
 {
     CwSession *s = (CwSession *)user;
-    if (!s || !s->audio_cb || !buf || samples_count == 0)
+    if (!s || !s->audio_cb || !buf || buf_size == 0)
         return;
-    s->audio_cb(buf, (int)samples_count, (int)(s->audio_channels ? s->audio_channels : 2), (int)(s->audio_rate ? s->audio_rate : 48000));
+
+    chiaki_mutex_lock(&s->audio_mutex);
+    if (!s->audio_codec_ctx)
+    {
+        const AVCodec *acodec = avcodec_find_decoder(AV_CODEC_ID_OPUS);
+        if (acodec)
+        {
+            s->audio_codec_ctx = avcodec_alloc_context3(acodec);
+            if (s->audio_codec_ctx)
+            {
+                s->audio_codec_ctx->sample_rate = 48000;
+                s->audio_codec_ctx->ch_layout.nb_channels = 2;
+                if (avcodec_open2(s->audio_codec_ctx, acodec, NULL) < 0)
+                {
+                    avcodec_free_context(&s->audio_codec_ctx);
+                }
+            }
+        }
+    }
+
+    if (s->audio_codec_ctx && s->audio_pkt && s->audio_frame)
+    {
+        av_packet_unref(s->audio_pkt);
+        s->audio_pkt->data = buf;
+        s->audio_pkt->size = (int)buf_size;
+
+        if (avcodec_send_packet(s->audio_codec_ctx, s->audio_pkt) == 0)
+        {
+            while (avcodec_receive_frame(s->audio_codec_ctx, s->audio_frame) == 0)
+            {
+                int samples = s->audio_frame->nb_samples;
+                int ch = s->audio_frame->ch_layout.nb_channels > 0 ? s->audio_frame->ch_layout.nb_channels : 2;
+                int rate = s->audio_frame->sample_rate > 0 ? s->audio_frame->sample_rate : 48000;
+                if (samples > 0 && samples * ch <= 8192)
+                {
+                    if (s->audio_frame->format == AV_SAMPLE_FMT_FLTP)
+                    {
+                        for (int i = 0; i < samples; i++)
+                        {
+                            for (int c = 0; c < ch; c++)
+                            {
+                                float fv = ((const float *)s->audio_frame->data[c])[i];
+                                int32_t iv = (int32_t)(fv * 32767.0f);
+                                if (iv > 32767) iv = 32767;
+                                else if (iv < -32768) iv = -32768;
+                                s->pcm_buf[i * ch + c] = (int16_t)iv;
+                            }
+                        }
+                        s->audio_cb(s->pcm_buf, samples, ch, rate);
+                    }
+                    else if (s->audio_frame->format == AV_SAMPLE_FMT_S16)
+                    {
+                        s->audio_cb((const int16_t *)s->audio_frame->data[0], samples, ch, rate);
+                    }
+                }
+                av_frame_unref(s->audio_frame);
+            }
+        }
+    }
+    chiaki_mutex_unlock(&s->audio_mutex);
 }
 
 static bool cw_video_sample_cb(uint8_t *buf, size_t buf_size, void *user)
@@ -402,11 +490,13 @@ CW_EXPORT void *cw_session_start(
     s->audio_cb = audio_cb;
     s->event_cb = event_cb;
     chiaki_mutex_init(&s->video_mutex, false);
+    chiaki_mutex_init(&s->audio_mutex, false);
 
     enum AVCodecID codec_id = is_ps5 ? AV_CODEC_ID_HEVC : AV_CODEC_ID_H264;
     const AVCodec *codec = avcodec_find_decoder(codec_id);
     if (!codec)
     {
+        chiaki_mutex_fini(&s->audio_mutex);
         chiaki_mutex_fini(&s->video_mutex);
         free(s);
         return NULL;
@@ -418,6 +508,7 @@ CW_EXPORT void *cw_session_start(
     if (avcodec_open2(s->codec_ctx, codec, NULL) < 0)
     {
         avcodec_free_context(&s->codec_ctx);
+        chiaki_mutex_fini(&s->audio_mutex);
         chiaki_mutex_fini(&s->video_mutex);
         free(s);
         return NULL;
@@ -425,9 +516,8 @@ CW_EXPORT void *cw_session_start(
 
     s->av_frame = av_frame_alloc();
     s->av_pkt = av_packet_alloc();
-
-    chiaki_opus_decoder_init(&s->opus_decoder, &g_cw_log);
-    chiaki_opus_decoder_set_cb(&s->opus_decoder, cw_audio_settings_cb, cw_audio_frame_cb, s);
+    s->audio_frame = av_frame_alloc();
+    s->audio_pkt = av_packet_alloc();
 
     ChiakiConnectInfo connect_info;
     memset(&connect_info, 0, sizeof(connect_info));
@@ -448,10 +538,12 @@ CW_EXPORT void *cw_session_start(
     ChiakiErrorCode err = chiaki_session_init(&s->session, &connect_info, &g_cw_log);
     if (err != CHIAKI_ERR_SUCCESS)
     {
-        chiaki_opus_decoder_fini(&s->opus_decoder);
+        av_packet_free(&s->audio_pkt);
+        av_frame_free(&s->audio_frame);
         av_packet_free(&s->av_pkt);
         av_frame_free(&s->av_frame);
         avcodec_free_context(&s->codec_ctx);
+        chiaki_mutex_fini(&s->audio_mutex);
         chiaki_mutex_fini(&s->video_mutex);
         free(s);
         return NULL;
@@ -461,17 +553,21 @@ CW_EXPORT void *cw_session_start(
     chiaki_session_set_video_sample_cb(&s->session, cw_video_sample_cb, s);
 
     ChiakiAudioSink audio_sink;
-    chiaki_opus_decoder_get_sink(&s->opus_decoder, &audio_sink);
+    audio_sink.user = s;
+    audio_sink.header_cb = cw_audio_sink_header_cb;
+    audio_sink.frame_cb = cw_audio_sink_frame_cb;
     chiaki_session_set_audio_sink(&s->session, &audio_sink);
 
     err = chiaki_session_start(&s->session);
     if (err != CHIAKI_ERR_SUCCESS)
     {
         chiaki_session_fini(&s->session);
-        chiaki_opus_decoder_fini(&s->opus_decoder);
+        av_packet_free(&s->audio_pkt);
+        av_frame_free(&s->audio_frame);
         av_packet_free(&s->av_pkt);
         av_frame_free(&s->av_frame);
         avcodec_free_context(&s->codec_ctx);
+        chiaki_mutex_fini(&s->audio_mutex);
         chiaki_mutex_fini(&s->video_mutex);
         free(s);
         return NULL;
@@ -523,7 +619,6 @@ CW_EXPORT void cw_session_stop(void *ptr)
     chiaki_session_stop(&s->session);
     chiaki_session_join(&s->session);
     chiaki_session_fini(&s->session);
-    chiaki_opus_decoder_fini(&s->opus_decoder);
 
     chiaki_mutex_lock(&s->video_mutex);
     if (s->sws_ctx)
@@ -538,6 +633,16 @@ CW_EXPORT void cw_session_stop(void *ptr)
         avcodec_free_context(&s->codec_ctx);
     chiaki_mutex_unlock(&s->video_mutex);
 
+    chiaki_mutex_lock(&s->audio_mutex);
+    if (s->audio_pkt)
+        av_packet_free(&s->audio_pkt);
+    if (s->audio_frame)
+        av_frame_free(&s->audio_frame);
+    if (s->audio_codec_ctx)
+        avcodec_free_context(&s->audio_codec_ctx);
+    chiaki_mutex_unlock(&s->audio_mutex);
+
+    chiaki_mutex_fini(&s->audio_mutex);
     chiaki_mutex_fini(&s->video_mutex);
     free(s);
 }

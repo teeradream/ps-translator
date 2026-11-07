@@ -3,6 +3,9 @@ name: Build PS Translator Native APK
 on:
   push:
     branches: [ main, native ]
+    paths-ignore:
+      - 'windows-app/**'
+      - '.github/workflows/**'
   workflow_dispatch:
 
 jobs:

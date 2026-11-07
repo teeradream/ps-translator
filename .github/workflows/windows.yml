@@ -18,12 +18,66 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Setup MSYS2 MinGW64 for Native libchiaki Build
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: false
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-openssl
+            mingw-w64-x86_64-opus
+            mingw-w64-x86_64-ffmpeg
+            mingw-w64-x86_64-ntldd
+
+      - name: Compile Native libchiaki Bridge (chiaki_win_bridge.dll) & CollectCodec DLLs
+        shell: msys2 {0}
+        run: |
+          mkdir -p windows-app/native_dlls
+
+          LIB_SRCS=$(ls lib/src/*.c | grep -vE 'ffmpegdecoder\.c|pidecoder\.c')
+          GF_SRCS="third-party/gf-complete/src/gf.c third-party/gf-complete/src/gf_wgen.c third-party/gf-complete/src/gf_w4.c third-party/gf-complete/src/gf_w8.c third-party/gf-complete/src/gf_w16.c third-party/gf-complete/src/gf_w32.c third-party/gf-complete/src/gf_w64.c third-party/gf-complete/src/gf_w128.c third-party/gf-complete/src/gf_rand.c third-party/gf-complete/src/gf_general.c third-party/gf-complete/src/gf_cpu.c"
+          JERASURE_SRCS="third-party/jerasure/src/galois.c third-party/jerasure/src/jerasure.c third-party/jerasure/src/reed_sol.c third-party/jerasure/src/cauchy.c third-party/jerasure/src/liberation.c"
+
+          gcc -shared -O2 \
+            -D_WIN32_WINNT=0x0601 \
+            -DCHIAKI_VERSION=\"2.1.1\" \
+            -DPB_C99_STATIC_ASSERT \
+            -DOPENSSL_SUPPRESS_DEPRECATED \
+            -Iwindows-app/native/include \
+            -Iwindows-app/native \
+            -Ilib/include \
+            -Ithird-party/nanopb \
+            -Ithird-party/gf-complete/include \
+            -Ithird-party/jerasure/include \
+            -I/mingw64/include \
+            windows-app/native/chiaki_win_bridge.c \
+            windows-app/native/takion.pb.c \
+            third-party/nanopb/pb_common.c \
+            third-party/nanopb/pb_decode.c \
+            third-party/nanopb/pb_encode.c \
+            $GF_SRCS \
+            $JERASURE_SRCS \
+            $LIB_SRCS \
+            -o windows-app/native_dlls/chiaki_win_bridge.dll \
+            -L/mingw64/lib \
+            -lavcodec -lswscale -lavutil -lopus -lcrypto -lws2_32 -lwsock32 -lbcrypt -lpthread
+
+          # Copy all dependent mingw64 DLLs so the single-file .exe is 100% self-contained
+          ntldd -R windows-app/native_dlls/chiaki_win_bridge.dll | grep -i '\\mingw64\\bin\\' | awk '{for(i=1;i<=NF;i++) if($i ~ /mingw64\\bin\\.*\.dll/i) print $i}' | tr '\\' '/' | sort -u | while read dll_path; do
+            if [ -f "$dll_path" ]; then
+              cp -f "$dll_path" windows-app/native_dlls/
+            fi
+          done
+
+          ls -lh windows-app/native_dlls/
+
       - name: Setup .NET 8.0
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
 
-      - name: Publish All-in-One PS-Translator-Windows.exe (Single-File Self-Contained x64)
+      - name: Publish Single-File Self-Contained PS-Translator-Windows.exe
         shell: pwsh
         run: |
           dotnet publish windows-app/PSTranslatorWin.csproj `
@@ -32,6 +86,7 @@ jobs:
             --self-contained true `
             -p:PublishSingleFile=true `
             -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:IncludeAllContentForSelfExtract=true `
             -p:EnableCompressionInSingleFile=true `
             -o publish-win
 
@@ -45,20 +100,20 @@ jobs:
           name: PS-Translator-Windows11
           path: dist-win/PS-Translator-Windows.exe
 
-      - name: Attach Windows 11 All-in-One Binary to GitHub Release
+      - name: Attach Windows 11 Native Chiaki Translator to GitHub Release
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/heads/main')
         with:
           tag_name: v2.0.8
-          name: "PS Translator v2.0.8 (All-in-One Windows 11 .EXE & Android .APK)"
+          name: "PS Translator v2.0.8 (Native Chiaki Windows 11 .EXE & Android .APK)"
           body: |
-            ### PS Translator v2.0.8 (All-in-One Windows 11 & Android APK)
+            ### PS Translator v2.0.8 (Native Chiaki Windows 11 & Android APK)
 
             #### 1. สำหรับคอมพิวเตอร์ Windows 11 (`PS-Translator-Windows.exe` ไฟล์เดียวจบ)
-            - **All-in-One Single Window (เหมือนแอปมือถือ APK):** รวมหน้าจอแสดงภาพเกม กรอบเขียวเลือกพื้นที่ซับไตเติ้ล และกล่องแสดงคำแปลภาษาไทยไว้ในหน้าต่างโปรแกรมเดียวกัน ไม่ต้องเปิดหลายโปรแกรม และไม่มีกรอบข้อความลอยเกะกะนอกโปรแกรม
-            - **ปรับขนาดและสีของตัวหนังสือได้อย่างอิสระ:** ปรับขนาดตัวอักษรภาษาไทย (16-72 px) และภาษาอังกฤษ (11-40 px) พร้อมปุ่มเลือกสีตัวหนังสือ (เหลืองทอง, ขาว, เขียว, ฟ้าสว่าง, ชมพู, ส้ม) และปรับความทึบพื้นหลังกล่องซับไตเติ้ลได้ตามต้องการ
-            - **โหมดขยายเต็มจอ (Fullscreen F11) และโหมดเฉพาะตัวหนังสือ (จอดำ):** กดขยายเต็มจอเหมือนมือถือ เลือกอัตราส่วนภาพ (16:9 / Fit / Stretch) หรือสลับเป็นโหมดจอดำแสดงเฉพาะคำแปลได้ทันที
-            - **ปุ่มปิดเสียงเกมแยกอิสระ:** ปิดเฉพาะเสียงเกมเพื่อให้ได้ยินเสียงพากย์ไทย AI (ชาย/หญิง/อัตโนมัติ) ชัดเจนโดยเสียงไม่ตีกัน
+            - **Native Chiaki Converted into Translator (เหมือนแอปมือถือ APK 100%):** แปลงโปรแกรมสตรีม PS5/PS4 (`libchiaki`) ให้มีระบบแปลซับไตเติ้ลและพากย์เสียงไทยในตัว ค้นหาเครื่อง PS5 ในวงแลน ลงทะเบียนด้วย PIN 8 หลัก ปลุกเครื่องจาก Rest Mode และสตรีมภาพ/เสียง/จอยเกม พร้อมแปลซับไตเติ้ลในโปรแกรมเดียว ไม่ต้องเปิดหลายโปรแกรม
+            - **แสดงคำแปลอยู่ในหน้าต่างโปรแกรม (ไม่ลอยนอกหน้าต่าง):** กล่องซับไตเติ้ลและกรอบเขียวเลือกพื้นที่ซับไตเติ้ลอยู่ในหน้าต่างของโปรแกรมโดยตรง พร้อมโหมดขยายเต็มจอ (`F11`) และโหมดจอดำโชว์เฉพาะตัวหนังสือ
+            - **ปรับขนาดและสีตัวหนังสือได้อิสระ:** ปรับขนาดตัวหนังสือภาษาไทย (16-72 px) และภาษาอังกฤษ (11-40 px) เลือกสีตัวหนังสือได้ตามต้องการ (เหลืองทอง, ขาว, เขียว, ฟ้าสว่าง, ชมพู, ส้ม) และปรับความทึบพื้นหลังกล่องซับได้
+            - **ปุ่มปิดเสียงเกมในตัว:** ปิดเฉพาะเสียงเกมจากสตรีม PS5 เพื่อให้ได้ยินเสียงพากย์ไทย AI (ชาย/หญิง/อัตโนมัติ) ชัดเจนโดยเสียงไม่ซ้อนกัน
 
             #### 2. สำหรับมือถือและแท็บเล็ต Android (`PS-Translator.apk`)
             - **Fixed Voice Gender Mapping:** แก้ไขปัญหาการเลือกเสียงชายและหญิงสลับกันให้ตรงตามเพศจริง 100%

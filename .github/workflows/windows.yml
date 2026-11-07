@@ -18,6 +18,15 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Setup MSYS2 MinGW64 GCC & OpenSSL
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: false
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-openssl
+
       - name: Download FFmpeg Shared SDK & Compile Native libchiaki Bridge (chiaki_win_bridge.dll)
         shell: pwsh
         run: |

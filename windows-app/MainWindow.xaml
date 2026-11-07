@@ -1,199 +1,298 @@
 <Window x:Class="PSTranslatorWin.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="PS Translator v2.0.8 - สำหรับ Windows 11"
-        Width="440" Height="640"
+        Title="PS Translator (All-in-One PS5 Stream &amp; Real-Time Thai Translator)"
+        Width="1280" Height="760"
+        MinWidth="860" MinHeight="520"
         WindowStartupLocation="CenterScreen"
-        Background="#121418"
-        Foreground="White"
+        Background="#080A0F"
+        KeyDown="Window_KeyDown"
+        SizeChanged="Window_SizeChanged"
         Closing="Window_Closing">
-    <Window.Resources>
-        <Style x:Key="CardStyle" TargetType="Border">
-            <Setter Property="Background" Value="#1E2229"/>
-            <Setter Property="BorderBrush" Value="#33FFFFFF"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="CornerRadius" Value="10"/>
-            <Setter Property="Padding" Value="14"/>
-            <Setter Property="Margin" Value="0,0,0,12"/>
-        </Style>
 
-        <Style x:Key="ActionBtnStyle" TargetType="Button">
-            <Setter Property="Background" Value="#252A34"/>
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="BorderBrush" Value="#55FFFFFF"/>
-            <Setter Property="BorderThickness" Value="1.5"/>
-            <Setter Property="Padding" Value="10,8"/>
-            <Setter Property="FontWeight" Value="Bold"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="6"
-                                Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-    </Window.Resources>
+    <Grid x:Name="RootGrid" Background="#080A0F">
 
-    <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <StackPanel Margin="16">
-            <!-- Header -->
-            <TextBlock Text="PS Translator v2.0.8 (Windows 11)"
-                       FontSize="20" FontWeight="Bold" Foreground="#00E676"
-                       Margin="0,0,0,4"/>
-            <TextBlock Text="ระบบแปลซับไตเติ้ลเกมแบบเรียลไทม์ + พากย์เสียงภาษาไทยอัตโนมัติ"
-                       FontSize="12" Foreground="#B0BEC5"
-                       Margin="0,0,0,14"/>
+        <!-- 1. MAIN VIDEO / STREAM VIEWPORT (INSIDE THIS WINDOW) -->
+        <Grid x:Name="VideoViewportContainer" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="#05070B" ClipToBounds="True">
+            <Image x:Name="GameVideoImage" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality" />
 
-            <!-- Start / Stop & Crop Box Card -->
-            <Border Style="{StaticResource CardStyle}">
+            <!-- Empty state / Quick guide when no external stream is active yet -->
+            <Border x:Name="EmptyStatePanel" Background="#CC0C1017" Width="580" VerticalAlignment="Center" HorizontalAlignment="Center" CornerRadius="14" BorderBrush="#3300E676" BorderThickness="1" Padding="26" Visibility="Collapsed">
                 <StackPanel>
-                    <Button x:Name="BtnToggleCapture"
-                            Style="{StaticResource ActionBtnStyle}"
-                            Content="เริ่มระบบแปลภาษาอัตโนมัติ (กำลังทำงาน)"
-                            Background="#2E7D32" BorderBrush="#00E676"
-                            FontSize="14" Margin="0,0,0,10"
-                            Click="BtnToggleCapture_Click"/>
+                    <TextBlock Text="PS TRANSLATOR (ALL-IN-ONE WINDOWS 11)" Foreground="#00E676" FontSize="20" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,8"/>
+                    <TextBlock Text="รวมระบบสตรีม PS5 การตรวจจับซับไตเติ้ล และคำแปลภาษาไทยไว้ในหน้าต่างเดียว" Foreground="#CCCCCC" FontSize="14" HorizontalAlignment="Center" Margin="0,0,0,18"/>
+                    <Button x:Name="BtnQuickEmbedPs5" Content="เปิดระบบสตรีม PS5 ในหน้าต่างโปรแกรมนี้ทันที" Click="BtnEmbedChiaki_Click" Height="44" Background="#2E7D32" Foreground="White" BorderBrush="#00E676" BorderThickness="1.5" FontWeight="Bold" FontSize="14" Cursor="Hand" Margin="0,0,0,10"/>
+                    <TextBlock x:Name="TxtEmbedProgress" Text="" Foreground="#FFD54F" FontSize="12" HorizontalAlignment="Center" Visibility="Collapsed" Margin="0,4,0,0"/>
+                </StackPanel>
+            </Border>
 
+            <!-- 2. IN-WINDOW GREEN SUBTITLE CROP BOX (INSIDE THIS WINDOW, NOT FLOATING OUTSIDE) -->
+            <Canvas x:Name="CropOverlayCanvas" Background="#55000000" Visibility="Collapsed"
+                    MouseMove="CropCanvas_MouseMove" MouseLeftButtonUp="CropCanvas_MouseLeftButtonUp">
+                <Border x:Name="InWindowCropBorder"
+                        Canvas.Left="200" Canvas.Top="480" Width="800" Height="150"
+                        Background="#2800E676" BorderBrush="#00E676" BorderThickness="3" CornerRadius="6"
+                        Cursor="SizeAll"
+                        MouseLeftButtonDown="CropBorder_MouseLeftButtonDown">
                     <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="8"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <Button x:Name="BtnShowCropBox"
-                                Grid.Column="0"
-                                Style="{StaticResource ActionBtnStyle}"
-                                Content="ปรับกรอบพื้นที่อ่านซับไตเติ้ล"
-                                BorderBrush="#00E676" Foreground="#00E676"
-                                Click="BtnShowCropBox_Click"/>
-                        <Button x:Name="BtnResetCropBox"
-                                Grid.Column="2"
-                                Style="{StaticResource ActionBtnStyle}"
-                                Content="รีเซ็ตกรอบ"
-                                Click="BtnResetCropBox_Click"/>
+                        <!-- Top Banner inside Crop Box -->
+                        <Border Background="#DD0E131A" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,8,0,0" CornerRadius="6" Padding="12,5" BorderBrush="#00E676" BorderThickness="1">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="ลากกรอบสีเขียวนี้คลุมเฉพาะบรรทัดซับไตเติ้ลเกม (ลากมุมขวาล่างเพื่อปรับขนาด)" Foreground="#00E676" FontWeight="Bold" FontSize="12" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                                <Button Content="ล็อกตำแหน่งกรอบซับนี้" Click="BtnLockCrop_Click" Background="#2E7D32" Foreground="White" BorderBrush="#00E676" BorderThickness="1" FontWeight="Bold" FontSize="12" Padding="10,3" Cursor="Hand"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Bottom-Right Resize Handle -->
+                        <Border x:Name="CropResizeHandle" Width="26" Height="26" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                                Background="#00E676" CornerRadius="4,0,4,0" Cursor="SizeNWSE"
+                                MouseLeftButtonDown="CropResizeHandle_MouseLeftButtonDown">
+                            <TextBlock Text="◢" Foreground="#0B0E14" FontWeight="Bold" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
                     </Grid>
+                </Border>
+            </Canvas>
+        </Grid>
+
+        <!-- 3. IN-WINDOW SUBTITLE DISPLAY BOX (STAYS INSIDE THIS WINDOW, CUSTOMIZABLE SIZE & COLOR) -->
+        <Border x:Name="InWindowSubtitleBox"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Bottom"
+                Margin="40,20,40,32"
+                MaxWidth="1120"
+                MinWidth="520"
+                CornerRadius="12"
+                Background="#D8080A0F"
+                BorderBrush="#5500E676"
+                BorderThickness="1.5"
+                Padding="24,14"
+                Cursor="SizeNS"
+                MouseLeftButtonDown="SubtitleBox_MouseLeftButtonDown"
+                MouseMove="SubtitleBox_MouseMove"
+                MouseLeftButtonUp="SubtitleBox_MouseLeftButtonUp">
+            <StackPanel>
+                <TextBlock x:Name="OriginalSubtitleText"
+                           Text="Waiting for game subtitles..."
+                           Foreground="#CCCCCC"
+                           FontSize="16"
+                           TextAlignment="Center"
+                           TextWrapping="Wrap"
+                           Margin="0,0,0,6">
+                    <TextBlock.Effect>
+                        <DropShadowEffect Color="Black" BlurRadius="4" ShadowDepth="1" Opacity="0.9"/>
+                    </TextBlock.Effect>
+                </TextBlock>
+
+                <TextBlock x:Name="TranslatedSubtitleText"
+                           Text="พร้อมแปลซับไตเติ้ลและพากย์เสียงภาษาไทยในหน้าต่างเดียว (กดปุ่มขีด 3 ขีดมุมขวาบนเพื่อตั้งค่า)"
+                           Foreground="#FFD54F"
+                           FontSize="28"
+                           FontWeight="Bold"
+                           TextAlignment="Center"
+                           TextWrapping="Wrap">
+                    <TextBlock.Effect>
+                        <DropShadowEffect Color="Black" BlurRadius="6" ShadowDepth="2" Opacity="0.95"/>
+                    </TextBlock.Effect>
+                </TextBlock>
+            </StackPanel>
+        </Border>
+
+        <!-- 4. TOP-RIGHT FLOATING CONTROL BAR & CIRCULAR 3-LINE MENU BUTTON (JUST LIKE ANDROID APK) -->
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="16,14,16,0">
+
+            <!-- Target Window / PS5 Stream Selector Badge -->
+            <Border Background="#CC141820" CornerRadius="18" BorderBrush="#44FFFFFF" BorderThickness="1" Padding="10,4" Margin="0,0,8,0" VerticalAlignment="Center">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="แหล่งภาพ:" Foreground="#AAAAAA" FontSize="12" VerticalAlignment="Center" Margin="2,0,6,0"/>
+                    <ComboBox x:Name="CmbCaptureTarget" Width="190" Height="26" FontSize="12" SelectionChanged="CmbCaptureTarget_SelectionChanged" VerticalContentAlignment="Center"/>
+                    <Button Content="รีเฟรช" Click="BtnRefreshTargets_Click" Margin="6,0,0,0" Padding="8,2" Background="#252A34" Foreground="White" BorderBrush="#55FFFFFF" FontSize="11" Cursor="Hand"/>
                 </StackPanel>
             </Border>
 
-            <!-- Display & Subtitle Settings -->
-            <Border Style="{StaticResource CardStyle}">
-                <StackPanel>
-                    <CheckBox x:Name="ChkShowOverlay"
-                              Content="แสดงกล่องซับไตเติ้ลแปลภาษาบนหน้าจอ"
-                              Foreground="White" FontSize="14" FontWeight="Bold"
-                              IsChecked="True" Margin="0,0,0,10"
-                              Checked="ChkShowOverlay_Changed" Unchecked="ChkShowOverlay_Changed"/>
+            <!-- Quick Mute Game Audio Button -->
+            <Button x:Name="BtnQuickMuteGame" Content="ปิดเสียงเกม" Click="BtnMuteGameAudio_Click"
+                    Height="38" Padding="14,0" Margin="0,0,8,0"
+                    Background="#CC1A1F29" Foreground="#EEEEEE" BorderBrush="#55FFFFFF" BorderThickness="1.5"
+                    FontWeight="Bold" FontSize="12" Cursor="Hand"/>
 
-                    <CheckBox x:Name="ChkFilterShort"
-                              Content="กรองปุ่ม UI สั้นๆ ออก (อ่านเฉพาะบทสนทนา)"
-                              Foreground="White" FontSize="13"
-                              IsChecked="True" Margin="0,0,0,12"
-                              Checked="ChkFilterShort_Changed" Unchecked="ChkFilterShort_Changed"/>
+            <!-- Quick Text-Only Black Screen Mode Button -->
+            <Button x:Name="BtnQuickTextOnly" Content="เฉพาะตัวหนังสือ" Click="BtnBlackScreenMode_Click"
+                    Height="38" Padding="14,0" Margin="0,0,8,0"
+                    Background="#CC1A1F29" Foreground="#EEEEEE" BorderBrush="#55FFFFFF" BorderThickness="1.5"
+                    FontWeight="Bold" FontSize="12" Cursor="Hand"/>
 
-                    <Button x:Name="BtnBlackScreenMode"
-                            Style="{StaticResource ActionBtnStyle}"
-                            Content="โหมดโชว์เฉพาะตัวหนังสือ (จอดำเต็มจอ)"
-                            Click="BtnBlackScreenMode_Click"/>
-                </StackPanel>
-            </Border>
+            <!-- Quick Fullscreen Button -->
+            <Button x:Name="BtnQuickFullscreen" Content="ขยายเต็มจอ (F11)" Click="BtnFullscreen_Click"
+                    Height="38" Padding="14,0" Margin="0,0,10,0"
+                    Background="#CC1A1F29" Foreground="#EEEEEE" BorderBrush="#55FFFFFF" BorderThickness="1.5"
+                    FontWeight="Bold" FontSize="12" Cursor="Hand"/>
 
-            <!-- TTS Voice & Speed Settings -->
-            <Border Style="{StaticResource CardStyle}">
-                <StackPanel>
-                    <CheckBox x:Name="ChkTtsEnabled"
-                              Content="อ่านออกเสียงพากย์ไทยอัตโนมัติ (TTS)"
-                              Foreground="White" FontSize="14" FontWeight="Bold"
-                              IsChecked="True" Margin="0,0,0,12"
-                              Checked="ChkTtsEnabled_Changed" Unchecked="ChkTtsEnabled_Changed"/>
-
-                    <TextBlock Text="น้ำเสียงพากย์ (เลือกเพศเสียง):"
-                               Foreground="#B0BEC5" FontSize="12" Margin="0,0,0,6"/>
-                    <UniformGrid Columns="3" Margin="0,0,0,12">
-                        <Button x:Name="BtnVoiceAuto"
-                                Style="{StaticResource ActionBtnStyle}"
-                                Content="AI อัตโนมัติ" Margin="0,0,4,0"
-                                Click="BtnVoiceAuto_Click"/>
-                        <Button x:Name="BtnVoiceFemale"
-                                Style="{StaticResource ActionBtnStyle}"
-                                Content="หญิง" Margin="2,0,2,0"
-                                Click="BtnVoiceFemale_Click"/>
-                        <Button x:Name="BtnVoiceMale"
-                                Style="{StaticResource ActionBtnStyle}"
-                                Content="ชาย" Margin="4,0,0,0"
-                                Click="BtnVoiceMale_Click"/>
-                    </UniformGrid>
-
-                    <TextBlock Text="ความเร็วเสียงพูด:"
-                               Foreground="#B0BEC5" FontSize="12" Margin="0,0,0,6"/>
-                    <UniformGrid Columns="3">
-                        <Button x:Name="BtnSpeedNormal"
-                                Style="{StaticResource ActionBtnStyle}"
-                                Content="1.0x" Margin="0,0,4,0"
-                                Click="BtnSpeedNormal_Click"/>
-                        <Button x:Name="BtnSpeedFast"
-                                Style="{StaticResource ActionBtnStyle}"
-                                Content="1.25x (แนะนำ)" Margin="2,0,2,0"
-                                Click="BtnSpeedFast_Click"/>
-                        <Button x:Name="BtnSpeedVeryFast"
-                                Style="{StaticResource ActionBtnStyle}"
-                                Content="1.5x" Margin="4,0,0,0"
-                                Click="BtnSpeedVeryFast_Click"/>
-                    </UniformGrid>
-                </StackPanel>
-            </Border>
-
-            <!-- Chiaki PS5 Remote Play Helper & PSN ID Memory -->
-            <Border Style="{StaticResource CardStyle}">
-                <StackPanel>
-                    <TextBlock Text="ตั้งค่าเชื่อมต่อ PS5 Remote Play &amp; จำค่า PSN ID"
-                               FontWeight="Bold" Foreground="#00E676" FontSize="13"
-                               Margin="0,0,0,8"/>
-
-                    <TextBlock Text="PSN Account ID (Base64 - บันทึกอัตโนมัติ):"
-                               Foreground="#B0BEC5" FontSize="12" Margin="0,0,0,4"/>
-                    <Grid Margin="0,0,0,10">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="6"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBox x:Name="TxtPsnId"
-                                 Grid.Column="0"
-                                 Background="#121418" Foreground="White"
-                                 BorderBrush="#44FFFFFF" Padding="8,6"
-                                 FontSize="13" VerticalContentAlignment="Center"
-                                 TextChanged="TxtPsnId_TextChanged"/>
-                        <Button Grid.Column="2"
-                                Style="{StaticResource ActionBtnStyle}"
-                                Content="คัดลอก"
-                                Click="BtnCopyPsnId_Click"/>
-                    </Grid>
-
-                    <Button x:Name="BtnLaunchChiaki"
-                            Style="{StaticResource ActionBtnStyle}"
-                            Content="เปิดโปรแกรมสตรีม PS5 (Chiaki สำหรับ Windows)"
-                            Background="#1565C0" BorderBrush="#42A5F5"
-                            Click="BtnLaunchChiaki_Click"/>
-                </StackPanel>
-            </Border>
-
-            <!-- Live Status Preview -->
-            <Border Style="{StaticResource CardStyle}">
-                <StackPanel>
-                    <TextBlock Text="สถานะการตรวจจับล่าสุด:"
-                               Foreground="#B0BEC5" FontSize="12" Margin="0,0,0,4"/>
-                    <TextBlock x:Name="TxtStatusPreview"
-                               Text="กำลังรอตรวจจับซับไตเติ้ลในกรอบ..."
-                               Foreground="#FFEA00" FontSize="13" TextWrapping="Wrap"/>
-                </StackPanel>
-            </Border>
+            <!-- Circular 3-Line Menu Button (☰) -->
+            <Button x:Name="BtnMenuToggle" Content="☰" Click="BtnMenuToggle_Click"
+                    Width="44" Height="44"
+                    Background="#2E7D32" Foreground="White" BorderBrush="#00E676" BorderThickness="2"
+                    FontWeight="Bold" FontSize="20" Cursor="Hand" ToolTip="เปิด/ปิดเมนูตั้งค่าแปลภาษา">
+                <Button.Resources>
+                    <Style TargetType="Border">
+                        <Setter Property="CornerRadius" Value="22"/>
+                    </Style>
+                </Button.Resources>
+            </Button>
         </StackPanel>
-    </ScrollViewer>
+
+        <!-- 5. COLLAPSIBLE IN-WINDOW SETTINGS DRAWER (OPENS FROM 3-LINE BUTTON ☰) -->
+        <Border x:Name="SettingsDrawer"
+                Width="430"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Stretch"
+                Margin="0,66,16,16"
+                Background="#F212161F"
+                BorderBrush="#00E676"
+                BorderThickness="1.5"
+                CornerRadius="12"
+                Visibility="Collapsed">
+            <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="18,14">
+                <StackPanel>
+
+                    <!-- Header -->
+                    <Grid Margin="0,0,0,12">
+                        <TextBlock Text="ตั้งค่าระบบแปลภาษาและหน้าจอ (All-in-One)" Foreground="#00E676" FontSize="16" FontWeight="Bold" VerticalAlignment="Center"/>
+                        <Button Content="ปิดเมนู [X]" Click="BtnMenuToggle_Click" HorizontalAlignment="Right" Padding="10,4" Background="#252A34" Foreground="#CCCCCC" BorderBrush="#55FFFFFF" FontSize="12" Cursor="Hand"/>
+                    </Grid>
+
+                    <!-- Status & Pause/Resume -->
+                    <Button x:Name="BtnToggleCapture" Content="ระบบแปลภาษาทำงานอยู่ (คลิกเพื่อหยุดชั่วคราว)" Click="BtnToggleCapture_Click"
+                            Height="38" Background="#2E7D32" Foreground="White" BorderBrush="#00E676" BorderThickness="1.5" FontWeight="Bold" FontSize="13" Cursor="Hand" Margin="0,0,0,12"/>
+
+                    <!-- SECTION A: FONT SIZE & FONT COLOR CUSTOMIZATION -->
+                    <Border Background="#1A202C" CornerRadius="8" Padding="12" Margin="0,0,0,12" BorderBrush="#33FFFFFF" BorderThickness="1">
+                        <StackPanel>
+                            <TextBlock Text="1. ปรับขนาดและสีของตัวหนังสือแปลภาษา" Foreground="#FFD54F" FontWeight="Bold" FontSize="14" Margin="0,0,0,8"/>
+
+                            <!-- Thai Font Size -->
+                            <Grid Margin="0,0,0,6">
+                                <TextBlock Text="ขนาดตัวหนังสือแปลไทย:" Foreground="#DDDDDD" FontSize="12" VerticalAlignment="Center"/>
+                                <TextBlock x:Name="TxtThaiFontSizeVal" Text="28 px" Foreground="#00E676" FontWeight="Bold" FontSize="12" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                            </Grid>
+                            <Grid Margin="0,0,0,10">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="38"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="38"/>
+                                </Grid.ColumnDefinitions>
+                                <Button Grid.Column="0" Content="-" Click="BtnThaiFontSmaller_Click" Height="28" Background="#252A34" Foreground="White" FontWeight="Bold" Cursor="Hand"/>
+                                <Slider x:Name="SliderThaiFontSize" Grid.Column="1" Minimum="16" Maximum="72" Value="28" Margin="8,0" VerticalAlignment="Center" ValueChanged="SliderThaiFontSize_ValueChanged"/>
+                                <Button Grid.Column="2" Content="+" Click="BtnThaiFontLarger_Click" Height="28" Background="#252A34" Foreground="White" FontWeight="Bold" Cursor="Hand"/>
+                            </Grid>
+
+                            <!-- Thai Text Color Selector -->
+                            <TextBlock Text="สีตัวหนังสือแปลไทย:" Foreground="#DDDDDD" FontSize="12" Margin="0,0,0,6"/>
+                            <UniformGrid Columns="3" Margin="0,0,0,10">
+                                <Button x:Name="BtnColorGold" Content="เหลืองทอง" Click="BtnColorGold_Click" Height="32" Margin="0,0,4,4" FontWeight="Bold" FontSize="12" Cursor="Hand"/>
+                                <Button x:Name="BtnColorWhite" Content="สีขาว" Click="BtnColorWhite_Click" Height="32" Margin="2,0,2,4" FontWeight="Bold" FontSize="12" Cursor="Hand"/>
+                                <Button x:Name="BtnColorGreen" Content="สีเขียว" Click="BtnColorGreen_Click" Height="32" Margin="4,0,0,4" FontWeight="Bold" FontSize="12" Cursor="Hand"/>
+                                <Button x:Name="BtnColorCyan" Content="สีฟ้าสว่าง" Click="BtnColorCyan_Click" Height="32" Margin="0,0,4,0" FontWeight="Bold" FontSize="12" Cursor="Hand"/>
+                                <Button x:Name="BtnColorPink" Content="สีชมพู" Click="BtnColorPink_Click" Height="32" Margin="2,0,2,0" FontWeight="Bold" FontSize="12" Cursor="Hand"/>
+                                <Button x:Name="BtnColorOrange" Content="สีส้ม" Click="BtnColorOrange_Click" Height="32" Margin="4,0,0,0" FontWeight="Bold" FontSize="12" Cursor="Hand"/>
+                            </UniformGrid>
+
+                            <!-- English Original Text Toggle & Font Size -->
+                            <CheckBox x:Name="ChkShowEnglish" Content="แสดงประโยคภาษาอังกฤษต้นฉบับคู่กับภาษาไทย" Foreground="#DDDDDD" IsChecked="True" Checked="ChkShowEnglish_Changed" Unchecked="ChkShowEnglish_Changed" Margin="0,2,0,6"/>
+
+                            <Grid Margin="0,0,0,6">
+                                <TextBlock Text="ขนาดตัวหนังสือภาษาอังกฤษ:" Foreground="#BBBBBB" FontSize="12" VerticalAlignment="Center"/>
+                                <TextBlock x:Name="TxtEngFontSizeVal" Text="16 px" Foreground="#00E676" FontWeight="Bold" FontSize="12" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                            </Grid>
+                            <Slider x:Name="SliderEngFontSize" Minimum="11" Maximum="40" Value="16" Margin="0,0,0,8" ValueChanged="SliderEngFontSize_ValueChanged"/>
+
+                            <TextBlock Text="สีตัวหนังสือภาษาอังกฤษต้นฉบับ:" Foreground="#BBBBBB" FontSize="12" Margin="0,0,0,5"/>
+                            <UniformGrid Columns="4" Margin="0,0,0,10">
+                                <Button x:Name="BtnEngColorGray" Content="เทาอ่อน" Click="BtnEngColorGray_Click" Height="28" Margin="0,0,3,0" FontSize="11" Cursor="Hand"/>
+                                <Button x:Name="BtnEngColorWhite" Content="สีขาว" Click="BtnEngColorWhite_Click" Height="28" Margin="2,0,2,0" FontSize="11" Cursor="Hand"/>
+                                <Button x:Name="BtnEngColorBlue" Content="ฟ้าอ่อน" Click="BtnEngColorBlue_Click" Height="28" Margin="2,0,2,0" FontSize="11" Cursor="Hand"/>
+                                <Button x:Name="BtnEngColorYellow" Content="เหลืองอ่อน" Click="BtnEngColorYellow_Click" Height="28" Margin="3,0,0,0" FontSize="11" Cursor="Hand"/>
+                            </UniformGrid>
+
+                            <!-- Subtitle Box Background Opacity -->
+                            <Grid Margin="0,0,0,4">
+                                <TextBlock Text="ความเข้มพื้นหลังกล่องซับไตเติ้ล:" Foreground="#BBBBBB" FontSize="12" VerticalAlignment="Center"/>
+                                <TextBlock x:Name="TxtBgOpacityVal" Text="85%" Foreground="#00E676" FontWeight="Bold" FontSize="12" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                            </Grid>
+                            <Slider x:Name="SliderBgOpacity" Minimum="0" Maximum="100" Value="85" ValueChanged="SliderBgOpacity_ValueChanged"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- SECTION B: VOICE GENDER & SPEECH SPEED -->
+                    <Border Background="#1A202C" CornerRadius="8" Padding="12" Margin="0,0,0,12" BorderBrush="#33FFFFFF" BorderThickness="1">
+                        <StackPanel>
+                            <TextBlock Text="2. เสียงพากย์ไทย AI และความเร็วการพูด" Foreground="#FFD54F" FontWeight="Bold" FontSize="14" Margin="0,0,0,8"/>
+
+                            <CheckBox x:Name="ChkTtsEnabled" Content="เปิดเสียงพากย์ภาษาไทยอัตโนมัติ" Foreground="#DDDDDD" IsChecked="True" Checked="ChkTtsEnabled_Changed" Unchecked="ChkTtsEnabled_Changed" Margin="0,0,0,8"/>
+
+                            <TextBlock Text="โหมดน้ำเสียงพากย์ (แสดงไฮไลท์สีเขียวเมื่อเลือก):" Foreground="#BBBBBB" FontSize="12" Margin="0,0,0,5"/>
+                            <UniformGrid Columns="3" Margin="0,0,0,10">
+                                <Button x:Name="BtnVoiceAuto" Content="AI อัตโนมัติ" Click="BtnVoiceAuto_Click" Height="34" Margin="0,0,4,0" FontWeight="Bold" FontSize="12" Cursor="Hand"/>
+                                <Button x:Name="BtnVoiceFemale" Content="เสียงผู้หญิง" Click="BtnVoiceFemale_Click" Height="34" Margin="2,0,2,0" FontWeight="Bold" FontSize="12" Cursor="Hand"/>
+                                <Button x:Name="BtnVoiceMale" Content="เสียงผู้ชาย" Click="BtnVoiceMale_Click" Height="34" Margin="4,0,0,0" FontWeight="Bold" FontSize="12" Cursor="Hand"/>
+                            </UniformGrid>
+
+                            <TextBlock Text="ความเร็วการพูด:" Foreground="#BBBBBB" FontSize="12" Margin="0,0,0,5"/>
+                            <UniformGrid Columns="3">
+                                <Button x:Name="BtnSpeedNormal" Content="ปกติ (1.0x)" Click="BtnSpeedNormal_Click" Height="34" Margin="0,0,4,0" FontWeight="Bold" FontSize="12" Cursor="Hand"/>
+                                <Button x:Name="BtnSpeedFast" Content="เร็ว (1.25x)" Click="BtnSpeedFast_Click" Height="34" Margin="2,0,2,0" FontWeight="Bold" FontSize="12" Cursor="Hand"/>
+                                <Button x:Name="BtnSpeedVeryFast" Content="เร็วมาก (1.5x)" Click="BtnSpeedVeryFast_Click" Height="34" Margin="4,0,0,0" FontWeight="Bold" FontSize="12" Cursor="Hand"/>
+                            </UniformGrid>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- SECTION C: SUBTITLE CROP BOX & SCREEN DISPLAY MODES -->
+                    <Border Background="#1A202C" CornerRadius="8" Padding="12" Margin="0,0,0,12" BorderBrush="#33FFFFFF" BorderThickness="1">
+                        <StackPanel>
+                            <TextBlock Text="3. กรอบตรวจจับซับไตเติ้ล และโหมดหน้าจอ" Foreground="#FFD54F" FontWeight="Bold" FontSize="14" Margin="0,0,0,8"/>
+
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="2*"/>
+                                    <ColumnDefinition Width="1*"/>
+                                </Grid.ColumnDefinitions>
+                                <Button x:Name="BtnShowCropBox" Grid.Column="0" Content="ปรับกรอบซับไตเติ้ล (กรอบเขียว)" Click="BtnShowCropBox_Click" Height="36" Margin="0,0,6,0" Background="#252A34" Foreground="#00E676" BorderBrush="#00E676" BorderThickness="1.5" FontWeight="Bold" FontSize="12" Cursor="Hand"/>
+                                <Button Grid.Column="1" Content="รีเซ็ตกรอบ" Click="BtnResetCropBox_Click" Height="36" Background="#252A34" Foreground="White" BorderBrush="#55FFFFFF" BorderThickness="1" FontSize="12" Cursor="Hand"/>
+                            </Grid>
+
+                            <CheckBox x:Name="ChkFilterShort" Content="กรองคำสั้นและปุ่มเมนูเกม (แปลเฉพาะบทพูด)" Foreground="#DDDDDD" IsChecked="True" Checked="ChkFilterShort_Changed" Unchecked="ChkFilterShort_Changed" Margin="0,0,0,10"/>
+
+                            <TextBlock Text="อัตราส่วนภาพในหน้าต่างโปรแกรม:" Foreground="#BBBBBB" FontSize="12" Margin="0,0,0,5"/>
+                            <UniformGrid Columns="3" Margin="0,0,0,8">
+                                <Button x:Name="BtnAspect169" Content="16:9" Click="BtnAspect169_Click" Height="32" Margin="0,0,4,0" FontWeight="Bold" FontSize="12" Cursor="Hand"/>
+                                <Button x:Name="BtnAspectFit" Content="พอดีจอ (Fit)" Click="BtnAspectFit_Click" Height="32" Margin="2,0,2,0" FontWeight="Bold" FontSize="12" Cursor="Hand"/>
+                                <Button x:Name="BtnAspectStretch" Content="ยืดเต็มจอ" Click="BtnAspectStretch_Click" Height="32" Margin="4,0,0,0" FontWeight="Bold" FontSize="12" Cursor="Hand"/>
+                            </UniformGrid>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- SECTION D: ALL-IN-ONE PS5 REMOTE PLAY & PSN ID MEMORY -->
+                    <Border Background="#1A202C" CornerRadius="8" Padding="12" BorderBrush="#33FFFFFF" BorderThickness="1">
+                        <StackPanel>
+                            <TextBlock Text="4. ระบบสตรีม PS5 ในโปรแกรมเดียว &amp; จำค่า PSN ID" Foreground="#FFD54F" FontWeight="Bold" FontSize="14" Margin="0,0,0,8"/>
+
+                            <Button x:Name="BtnEmbedChiaki" Content="เปิดระบบสตรีม PS5 ในหน้าต่างนี้ (All-in-One)" Click="BtnEmbedChiaki_Click"
+                                    Height="38" Background="#1565C0" Foreground="White" BorderBrush="#40C4FF" BorderThickness="1.5" FontWeight="Bold" FontSize="12" Cursor="Hand" Margin="0,0,0,10"/>
+
+                            <TextBlock Text="PSN Account ID (Base64 - บันทึกอัตโนมัติ):" Foreground="#BBBBBB" FontSize="12" Margin="0,0,0,4"/>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="80"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBox x:Name="TxtPsnId" Grid.Column="0" Height="30" Background="#0F131A" Foreground="White" BorderBrush="#55FFFFFF" Padding="6,4" TextChanged="TxtPsnId_TextChanged"/>
+                                <Button Grid.Column="1" Content="คัดลอก" Click="BtnCopyPsnId_Click" Height="30" Margin="6,0,0,0" Background="#252A34" Foreground="White" BorderBrush="#55FFFFFF" FontSize="12" Cursor="Hand"/>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+
+    </Grid>
 </Window>

@@ -1,12 +1,20 @@
 using System.Diagnostics;
 using System.IO;
+using System.IO.Compression;
 using System.Net.Http;
+using System.Runtime.InteropServices;
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Web;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using NAudio.CoreAudioApi;
 using Windows.Globalization;
 using Windows.Graphics.Imaging;
 using Windows.Media.Ocr;
@@ -15,26 +23,86 @@ namespace PSTranslatorWin
 {
     public class AppConfig
     {
-        public double CropLeft { get; set; } = 320;
-        public double CropTop { get; set; } = 740;
-        public double CropWidth { get; set; } = 860;
-        public double CropHeight { get; set; } = 160;
-        public double OverlayLeft { get; set; } = 280;
-        public double OverlayTop { get; set; } = 60;
+        // Normalized crop coordinates (0.0 to 1.0) inside the video viewport
+        public double CropLeftRatio { get; set; } = 0.16;
+        public double CropTopRatio { get; set; } = 0.74;
+        public double CropWidthRatio { get; set; } = 0.68;
+        public double CropHeightRatio { get; set; } = 0.18;
+
+        // Subtitle appearance inside window
+        public double ThaiFontSize { get; set; } = 28;
+        public double EngFontSize { get; set; } = 16;
+        public string ThaiTextColorHex { get; set; } = "#FFD54F";
+        public string EngTextColorHex { get; set; } = "#CCCCCC";
+        public bool ShowEnglishText { get; set; } = true;
+        public double SubtitleBgOpacityPercent { get; set; } = 85;
+        public double SubtitleBottomMargin { get; set; } = 32;
+
+        // Display & Aspect Ratio
+        public string AspectMode { get; set; } = "FIT"; // "16_9", "FIT", "STRETCH"
+
+        // Voice & OCR Settings
         public string VoiceGenderMode { get; set; } = "AUTO_AI";
         public float SpeechSpeedRate { get; set; } = 1.25f;
         public bool IsTtsEnabled { get; set; } = true;
-        public bool IsOverlayEnabled { get; set; } = true;
         public bool FilterShortUi { get; set; } = true;
         public string SavedPsnId { get; set; } = "";
     }
 
+    public class CaptureTargetItem
+    {
+        public string Title { get; set; } = "";
+        public IntPtr Hwnd { get; set; } = IntPtr.Zero;
+        public uint ProcessId { get; set; } = 0;
+        public bool IsDesktopFallback => Hwnd == IntPtr.Zero;
+        public override string ToString() => Title;
+    }
+
     public partial class MainWindow : Window
     {
-        private readonly CropBoxWindow _cropWindow;
-        private readonly SubtitleOverlayWindow _overlayWindow;
+        #region Win32 Interop
+        private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+        [DllImport("user32.dll")]
+        private static extern bool EnumWindows(EnumWindowsProc enumProc, IntPtr lParam);
+
+        [DllImport("user32.dll")]
+        private static extern bool IsWindowVisible(IntPtr hWnd);
+
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        private static extern int GetWindowText(IntPtr hWnd, StringBuilder strText, int maxCount);
+
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        private static extern int GetWindowTextLength(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+
+        [DllImport("user32.dll")]
+        private static extern bool GetClientRect(IntPtr hWnd, out RECT lpRect);
+
+        [DllImport("user32.dll")]
+        private static extern bool PrintWindow(IntPtr hWnd, IntPtr hdcBlt, uint nFlags);
+
+        [DllImport("user32.dll")]
+        private static extern bool SetWindowDisplayAffinity(IntPtr hWnd, uint dwAffinity);
+
+        private const uint WDA_NONE = 0x00000000;
+        private const uint WDA_EXCLUDEFROMCAPTURE = 0x00000011;
+        private const uint PW_RENDERFULLCONTENT = 0x00000002;
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct RECT
+        {
+            public int Left;
+            public int Top;
+            public int Right;
+            public int Bottom;
+        }
+        #endregion
+
+        private readonly DispatcherTimer _videoRenderTimer;
         private readonly DispatcherTimer _ocrTimer;
-        private readonly DispatcherTimer _hideSubtitleTimer;
         private readonly HttpClient _http = new HttpClient();
         private OcrEngine? _ocrEngine;
         private AppConfig _config = new AppConfig();
@@ -43,7 +111,23 @@ namespace PSTranslatorWin
         private bool _isRunning = true;
         private bool _isBusyOcr = false;
         private bool _isBlackScreenMode = false;
+        private bool _isFullscreen = false;
+        private bool _isGameAudioMuted = false;
         private string _lastRecognizedEnglish = "";
+
+        private System.Drawing.Bitmap? _latestCapturedFrame;
+        private readonly object _frameLock = new object();
+
+        // In-Window Crop Box Drag/Resize State
+        private bool _isDraggingCrop = false;
+        private bool _isResizingCrop = false;
+        private System.Windows.Point _cropDragStartMouse;
+        private double _cropStartLeft, _cropStartTop, _cropStartW, _cropStartH;
+
+        // In-Window Subtitle Vertical Drag State
+        private bool _isDraggingSubtitle = false;
+        private System.Windows.Point _subDragStartMouse;
+        private double _subStartBottomMargin;
 
         public MainWindow()
         {
@@ -51,44 +135,47 @@ namespace PSTranslatorWin
 
             _configPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ps_translator_config.json");
             LoadConfig();
-
-            _cropWindow = new CropBoxWindow();
-            _cropWindow.Left = _config.CropLeft;
-            _cropWindow.Top = _config.CropTop;
-            _cropWindow.Width = _config.CropWidth;
-            _cropWindow.Height = _config.CropHeight;
-            _cropWindow.OnCropSaved += SaveCurrentPositions;
-
-            _overlayWindow = new SubtitleOverlayWindow();
-            _overlayWindow.Left = _config.OverlayLeft;
-            _overlayWindow.Top = _config.OverlayTop;
-            if (_config.IsOverlayEnabled)
-            {
-                _overlayWindow.Show();
-            }
-
             InitializeWindowsOcr();
             ApplyConfigToUi();
 
-            _hideSubtitleTimer = new DispatcherTimer
+            Loaded += (_, _) =>
             {
-                Interval = TimeSpan.FromMilliseconds(4500)
-            };
-            _hideSubtitleTimer.Tick += (_, _) =>
-            {
-                _hideSubtitleTimer.Stop();
-                if (!_isBlackScreenMode)
-                {
-                    _overlayWindow.Opacity = 0.0;
-                }
+                RefreshCaptureTargets(autoSelectPs5: true);
+                SyncCropBoxPixelsFromRatios();
+                UpdateDisplayAffinity();
             };
 
+            // 30 FPS smooth live viewport timer inside our single window
+            _videoRenderTimer = new DispatcherTimer
+            {
+                Interval = TimeSpan.FromMilliseconds(35)
+            };
+            _videoRenderTimer.Tick += (_, _) => RenderLiveViewportFrame();
+            _videoRenderTimer.Start();
+
+            // Real-time OCR timer (every 480ms)
             _ocrTimer = new DispatcherTimer
             {
-                Interval = TimeSpan.FromMilliseconds(550)
+                Interval = TimeSpan.FromMilliseconds(480)
             };
-            _ocrTimer.Tick += async (_, _) => await CaptureAndProcessSubtitleAsync();
+            _ocrTimer.Tick += async (_, _) => await ProcessOcrFromLatestFrameAsync();
             _ocrTimer.Start();
+        }
+
+        private void UpdateDisplayAffinity()
+        {
+            try
+            {
+                IntPtr myHwnd = new WindowInteropHelper(this).Handle;
+                if (myHwnd != IntPtr.Zero)
+                {
+                    var selected = CmbCaptureTarget.SelectedItem as CaptureTargetItem;
+                    // When capturing whole desktop fallback, exclude our own window so it never mirrors itself
+                    uint affinity = (selected == null || selected.IsDesktopFallback) ? WDA_EXCLUDEFROMCAPTURE : WDA_NONE;
+                    SetWindowDisplayAffinity(myHwnd, affinity);
+                }
+            }
+            catch { }
         }
 
         private void InitializeWindowsOcr()
@@ -118,36 +205,14 @@ namespace PSTranslatorWin
                     var loaded = JsonSerializer.Deserialize<AppConfig>(json);
                     if (loaded != null) _config = loaded;
                 }
-                else
-                {
-                    // Center default positions based on primary screen
-                    double sw = SystemParameters.PrimaryScreenWidth;
-                    double sh = SystemParameters.PrimaryScreenHeight;
-                    _config.CropWidth = Math.Round(sw * 0.62);
-                    _config.CropHeight = Math.Round(sh * 0.18);
-                    _config.CropLeft = Math.Round((sw - _config.CropWidth) / 2.0);
-                    _config.CropTop = Math.Round(sh * 0.74);
-
-                    _config.OverlayLeft = Math.Round((sw - 960) / 2.0);
-                    _config.OverlayTop = Math.Round(sh * 0.05);
-                }
             }
             catch { }
         }
 
-        private void SaveCurrentPositions()
+        private void SaveConfig()
         {
             try
             {
-                _config.CropLeft = _cropWindow.Left;
-                _config.CropTop = _cropWindow.Top;
-                _config.CropWidth = _cropWindow.Width;
-                _config.CropHeight = _cropWindow.Height;
-                if (!_isBlackScreenMode)
-                {
-                    _config.OverlayLeft = _overlayWindow.Left;
-                    _config.OverlayTop = _overlayWindow.Top;
-                }
                 string json = JsonSerializer.Serialize(_config, new JsonSerializerOptions { WriteIndented = true });
                 File.WriteAllText(_configPath, json);
             }
@@ -156,29 +221,97 @@ namespace PSTranslatorWin
 
         private void ApplyConfigToUi()
         {
-            ChkShowOverlay.IsChecked = _config.IsOverlayEnabled;
+            SliderThaiFontSize.Value = _config.ThaiFontSize;
+            SliderEngFontSize.Value = _config.EngFontSize;
+            ChkShowEnglish.IsChecked = _config.ShowEnglishText;
+            SliderBgOpacity.Value = _config.SubtitleBgOpacityPercent;
             ChkTtsEnabled.IsChecked = _config.IsTtsEnabled;
             ChkFilterShort.IsChecked = _config.FilterShortUi;
             TxtPsnId.Text = _config.SavedPsnId;
 
+            InWindowSubtitleBox.Margin = new Thickness(40, 20, 40, _config.SubtitleBottomMargin);
+
+            ApplySubtitleStyling();
+            ApplyAspectRatioMode();
             UpdateVoiceButtonsHighlight();
             UpdateSpeedButtonsHighlight();
         }
 
-        private void SetButtonHighlight(System.Windows.Controls.Button btn, bool active)
+        private void ApplySubtitleStyling()
         {
+            if (TranslatedSubtitleText == null || OriginalSubtitleText == null || InWindowSubtitleBox == null) return;
+
+            TranslatedSubtitleText.FontSize = _config.ThaiFontSize;
+            OriginalSubtitleText.FontSize = _config.EngFontSize;
+            OriginalSubtitleText.Visibility = _config.ShowEnglishText ? Visibility.Visible : Visibility.Collapsed;
+
+            if (TxtThaiFontSizeVal != null) TxtThaiFontSizeVal.Text = $"{(int)_config.ThaiFontSize} px";
+            if (TxtEngFontSizeVal != null) TxtEngFontSizeVal.Text = $"{(int)_config.EngFontSize} px";
+            if (TxtBgOpacityVal != null) TxtBgOpacityVal.Text = $"{(int)_config.SubtitleBgOpacityPercent}%";
+
+            try
+            {
+                var color = (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(_config.ThaiTextColorHex);
+                TranslatedSubtitleText.Foreground = new SolidColorBrush(color);
+            }
+            catch
+            {
+                TranslatedSubtitleText.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(255, 213, 79));
+            }
+
+            try
+            {
+                var engColor = (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(_config.EngTextColorHex);
+                OriginalSubtitleText.Foreground = new SolidColorBrush(engColor);
+            }
+            catch
+            {
+                OriginalSubtitleText.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(204, 204, 204));
+            }
+
+            byte alpha = (byte)Math.Clamp((int)Math.Round(_config.SubtitleBgOpacityPercent * 2.55), 0, 255);
+            InWindowSubtitleBox.Background = new SolidColorBrush(System.Windows.Media.Color.FromArgb(alpha, 8, 10, 15));
+            InWindowSubtitleBox.BorderBrush = alpha < 15
+                ? System.Windows.Media.Brushes.Transparent
+                : new SolidColorBrush(System.Windows.Media.Color.FromArgb(110, 0, 230, 118));
+
+            UpdateColorButtonsHighlight();
+        }
+
+        private void SetButtonHighlight(Button btn, bool active)
+        {
+            if (btn == null) return;
             if (active)
             {
                 btn.Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(46, 125, 50)); // #2E7D32
                 btn.BorderBrush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0, 230, 118)); // #00E676
+                btn.BorderThickness = new Thickness(2);
                 btn.Foreground = System.Windows.Media.Brushes.White;
             }
             else
             {
                 btn.Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(37, 42, 52)); // #252A34
                 btn.BorderBrush = new SolidColorBrush(System.Windows.Media.Color.FromArgb(85, 255, 255, 255));
-                btn.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(187, 187, 187));
+                btn.BorderThickness = new Thickness(1);
+                btn.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(190, 190, 190));
             }
+        }
+
+        private void UpdateColorButtonsHighlight()
+        {
+            string c = _config.ThaiTextColorHex.ToUpperInvariant();
+            SetButtonHighlight(BtnColorGold, c == "#FFD54F");
+            SetButtonHighlight(BtnColorWhite, c == "#FFFFFF");
+            SetButtonHighlight(BtnColorGreen, c == "#00E676");
+            SetButtonHighlight(BtnColorCyan, c == "#40C4FF");
+            SetButtonHighlight(BtnColorPink, c == "#FF80AB");
+            SetButtonHighlight(BtnColorOrange, c == "#FFAB40");
+
+            string ec = _config.EngTextColorHex.ToUpperInvariant();
+            SetButtonHighlight(BtnEngColorGray, ec == "#CCCCCC");
+            SetButtonHighlight(BtnEngColorWhite, ec == "#FFFFFF");
+            SetButtonHighlight(BtnEngColorBlue, ec == "#80D8FF");
+            SetButtonHighlight(BtnEngColorYellow, ec == "#FFF59D");
         }
 
         private void UpdateVoiceButtonsHighlight()
@@ -195,89 +328,263 @@ namespace PSTranslatorWin
             SetButtonHighlight(BtnSpeedVeryFast, _config.SpeechSpeedRate >= 1.45f);
         }
 
-        private async Task CaptureAndProcessSubtitleAsync()
+        private void ApplyAspectRatioMode()
+        {
+            if (GameVideoImage == null) return;
+            switch (_config.AspectMode)
+            {
+                case "STRETCH":
+                    GameVideoImage.Stretch = Stretch.Fill;
+                    VideoViewportContainer.ClearValue(FrameworkElement.MaxWidthProperty);
+                    VideoViewportContainer.ClearValue(FrameworkElement.MaxHeightProperty);
+                    break;
+                case "16_9":
+                    GameVideoImage.Stretch = Stretch.Uniform;
+                    break;
+                default: // FIT
+                    GameVideoImage.Stretch = Stretch.Uniform;
+                    break;
+            }
+            SetButtonHighlight(BtnAspect169, _config.AspectMode == "16_9");
+            SetButtonHighlight(BtnAspectFit, _config.AspectMode == "FIT");
+            SetButtonHighlight(BtnAspectStretch, _config.AspectMode == "STRETCH");
+        }
+
+        #region Capture Target Discovery & Live In-Window Stream Rendering
+        private void RefreshCaptureTargets(bool autoSelectPs5)
+        {
+            IntPtr myHwnd = new WindowInteropHelper(this).Handle;
+            var items = new List<CaptureTargetItem>();
+
+            EnumWindows((hWnd, _) =>
+            {
+                if (hWnd == myHwnd || !IsWindowVisible(hWnd)) return true;
+                int len = GetWindowTextLength(hWnd);
+                if (len <= 0) return true;
+
+                var sb = new StringBuilder(len + 1);
+                GetWindowText(hWnd, sb, sb.Capacity);
+                string title = sb.ToString().Trim();
+                if (string.IsNullOrEmpty(title) || title == "Program Manager" || title == "Settings") return true;
+
+                GetClientRect(hWnd, out RECT rc);
+                if ((rc.Right - rc.Left) < 240 || (rc.Bottom - rc.Top) < 160) return true;
+
+                GetWindowThreadProcessId(hWnd, out uint pid);
+                items.Add(new CaptureTargetItem
+                {
+                    Title = title,
+                    Hwnd = hWnd,
+                    ProcessId = pid
+                });
+                return true;
+            }, IntPtr.Zero);
+
+            items.Add(new CaptureTargetItem
+            {
+                Title = "หน้าจอหลัก (Desktop Screen)",
+                Hwnd = IntPtr.Zero,
+                ProcessId = 0
+            });
+
+            CmbCaptureTarget.ItemsSource = items;
+
+            if (autoSelectPs5)
+            {
+                var ps5Win = items.FirstOrDefault(i =>
+                    i.Title.Contains("Chiaki", StringComparison.OrdinalIgnoreCase) ||
+                    i.Title.Contains("Remote Play", StringComparison.OrdinalIgnoreCase) ||
+                    i.Title.Contains("PS5", StringComparison.OrdinalIgnoreCase) ||
+                    i.Title.Contains("PlayStation", StringComparison.OrdinalIgnoreCase));
+
+                if (ps5Win != null)
+                {
+                    CmbCaptureTarget.SelectedItem = ps5Win;
+                    return;
+                }
+            }
+
+            if (CmbCaptureTarget.SelectedIndex < 0 && items.Count > 0)
+            {
+                CmbCaptureTarget.SelectedIndex = items.Count - 1; // Default to Desktop Screen
+            }
+        }
+
+        private void CmbCaptureTarget_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            UpdateDisplayAffinity();
+        }
+
+        private void BtnRefreshTargets_Click(object sender, RoutedEventArgs e)
+        {
+            RefreshCaptureTargets(autoSelectPs5: true);
+        }
+
+        private void RenderLiveViewportFrame()
+        {
+            if (!_isRunning) return;
+
+            try
+            {
+                var target = CmbCaptureTarget.SelectedItem as CaptureTargetItem;
+                System.Drawing.Bitmap? frame = null;
+
+                if (target != null && !target.IsDesktopFallback && IsWindowVisible(target.Hwnd))
+                {
+                    GetClientRect(target.Hwnd, out RECT rc);
+                    int w = Math.Max(320, rc.Right - rc.Left);
+                    int h = Math.Max(180, rc.Bottom - rc.Top);
+                    frame = new System.Drawing.Bitmap(w, h, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                    using (var g = System.Drawing.Graphics.FromImage(frame))
+                    {
+                        IntPtr hdc = g.GetHdc();
+                        PrintWindow(target.Hwnd, hdc, PW_RENDERFULLCONTENT);
+                        g.ReleaseHdc(hdc);
+                    }
+                }
+                else
+                {
+                    var source = PresentationSource.FromVisual(this);
+                    double scaleX = source?.CompositionTarget?.TransformToDevice.M11 ?? 1.0;
+                    double scaleY = source?.CompositionTarget?.TransformToDevice.M22 ?? 1.0;
+                    int sw = Math.Max(640, (int)Math.Round(SystemParameters.PrimaryScreenWidth * scaleX));
+                    int sh = Math.Max(360, (int)Math.Round(SystemParameters.PrimaryScreenHeight * scaleY));
+
+                    frame = new System.Drawing.Bitmap(sw, sh, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                    using (var g = System.Drawing.Graphics.FromImage(frame))
+                    {
+                        g.CopyFromScreen(0, 0, 0, 0, new System.Drawing.Size(sw, sh), System.Drawing.CopyPixelOperation.SourceCopy);
+                    }
+                }
+
+                if (frame != null)
+                {
+                    if (!_isBlackScreenMode)
+                    {
+                        GameVideoImage.Source = ConvertBitmapToBitmapSource(frame);
+                        GameVideoImage.Visibility = Visibility.Visible;
+                    }
+                    else
+                    {
+                        GameVideoImage.Visibility = Visibility.Collapsed;
+                    }
+
+                    lock (_frameLock)
+                    {
+                        _latestCapturedFrame?.Dispose();
+                        _latestCapturedFrame = frame;
+                    }
+                }
+            }
+            catch { }
+        }
+
+        private static BitmapSource ConvertBitmapToBitmapSource(System.Drawing.Bitmap bitmap)
+        {
+            var rect = new System.Drawing.Rectangle(0, 0, bitmap.Width, bitmap.Height);
+            var bmpData = bitmap.LockBits(rect, System.Drawing.Imaging.ImageLockMode.ReadOnly, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+            try
+            {
+                var source = BitmapSource.Create(
+                    bmpData.Width,
+                    bmpData.Height,
+                    96,
+                    96,
+                    PixelFormats.Bgra32,
+                    null,
+                    bmpData.Scan0,
+                    bmpData.Stride * bmpData.Height,
+                    bmpData.Stride);
+                source.Freeze();
+                return source;
+            }
+            finally
+            {
+                bitmap.UnlockBits(bmpData);
+            }
+        }
+        #endregion
+
+        #region Real-Time 2x Bicubic OCR & Smart c/e Correction
+        private async Task ProcessOcrFromLatestFrameAsync()
         {
             if (!_isRunning || _isBusyOcr || _ocrEngine == null) return;
+
+            System.Drawing.Bitmap? croppedRaw = null;
+            lock (_frameLock)
+            {
+                if (_latestCapturedFrame == null) return;
+                int fw = _latestCapturedFrame.Width;
+                int fh = _latestCapturedFrame.Height;
+
+                int cx = Math.Clamp((int)Math.Round(_config.CropLeftRatio * fw), 0, fw - 40);
+                int cy = Math.Clamp((int)Math.Round(_config.CropTopRatio * fh), 0, fh - 20);
+                int cw = Math.Clamp((int)Math.Round(_config.CropWidthRatio * fw), 40, fw - cx);
+                int ch = Math.Clamp((int)Math.Round(_config.CropHeightRatio * fh), 20, fh - cy);
+
+                croppedRaw = new System.Drawing.Bitmap(cw, ch, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                using (var g = System.Drawing.Graphics.FromImage(croppedRaw))
+                {
+                    g.DrawImage(_latestCapturedFrame,
+                        new System.Drawing.Rectangle(0, 0, cw, ch),
+                        new System.Drawing.Rectangle(cx, cy, cw, ch),
+                        System.Drawing.GraphicsUnit.Pixel);
+                }
+            }
+
+            if (croppedRaw == null) return;
             _isBusyOcr = true;
 
             try
             {
-                // Ensure we have valid crop coordinates even when CropWindow is hidden
-                var source = PresentationSource.FromVisual(this);
-                double scaleX = 1.0, scaleY = 1.0;
-                if (source?.CompositionTarget != null)
+                using (croppedRaw)
                 {
-                    System.Windows.Media.Matrix m = source.CompositionTarget.TransformToDevice;
-                    scaleX = m.M11;
-                    scaleY = m.M22;
-                }
+                    int w = croppedRaw.Width;
+                    int h = croppedRaw.Height;
 
-                double cLeft = _cropWindow.IsVisible ? _cropWindow.Left : _config.CropLeft;
-                double cTop = _cropWindow.IsVisible ? _cropWindow.Top : _config.CropTop;
-                double cWidth = _cropWindow.IsVisible ? _cropWindow.ActualWidth : _config.CropWidth;
-                double cHeight = _cropWindow.IsVisible ? _cropWindow.ActualHeight : _config.CropHeight;
-
-                int x = Math.Max(0, (int)Math.Round(cLeft * scaleX));
-                int y = Math.Max(0, (int)Math.Round(cTop * scaleY));
-                int w = Math.Max(120, (int)Math.Round(cWidth * scaleX));
-                int h = Math.Max(45, (int)Math.Round(cHeight * scaleY));
-
-                using var rawBmp = new System.Drawing.Bitmap(w, h, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
-                using (var g = System.Drawing.Graphics.FromImage(rawBmp))
-                {
-                    g.CopyFromScreen(x, y, 0, 0, new System.Drawing.Size(w, h), System.Drawing.CopyPixelOperation.SourceCopy);
-                }
-
-                // 2x High-Quality Bicubic Upscaling so small subtitle characters ('c' vs 'e') are ultra-sharp
-                using var scaledBmp = new System.Drawing.Bitmap(w * 2, h * 2, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
-                using (var g2 = System.Drawing.Graphics.FromImage(scaledBmp))
-                {
-                    g2.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
-                    g2.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.HighQuality;
-                    g2.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
-                    g2.DrawImage(rawBmp, new System.Drawing.Rectangle(0, 0, w * 2, h * 2));
-                }
-
-                using var ms = new MemoryStream();
-                scaledBmp.Save(ms, System.Drawing.Imaging.ImageFormat.Bmp);
-                ms.Position = 0;
-
-                var winrtStream = ms.AsRandomAccessStream();
-                var decoder = await BitmapDecoder.CreateAsync(winrtStream);
-                using var softwareBmp = await decoder.GetSoftwareBitmapAsync(BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied);
-
-                var ocrResult = await _ocrEngine.RecognizeAsync(softwareBmp);
-                string rawText = ocrResult?.Text?.Trim().Replace("\r", " ").Replace("\n", " ") ?? "";
-                string fixedText = FixOcrText(rawText);
-                string cleanText = Regex.Replace(fixedText, @"\s+", " ").Trim();
-
-                if (!string.IsNullOrEmpty(cleanText) && IsDialogueSubtitle(cleanText))
-                {
-                    if (!IsSimilarText(cleanText, _lastRecognizedEnglish))
+                    // 2x High-Quality Bicubic Upscaling for ultra-sharp small font recognition ('c' vs 'e')
+                    using var scaledBmp = new System.Drawing.Bitmap(w * 2, h * 2, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                    using (var g2 = System.Drawing.Graphics.FromImage(scaledBmp))
                     {
-                        _lastRecognizedEnglish = cleanText;
-                        string thai = await TranslateToThaiAsync(cleanText);
+                        g2.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                        g2.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.HighQuality;
+                        g2.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
+                        g2.DrawImage(croppedRaw, new System.Drawing.Rectangle(0, 0, w * 2, h * 2));
+                    }
 
-                        TxtStatusPreview.Text = $"{cleanText}\n-> {thai}";
-                        _overlayWindow.SetSubtitle(cleanText, thai);
+                    using var ms = new MemoryStream();
+                    scaledBmp.Save(ms, System.Drawing.Imaging.ImageFormat.Bmp);
+                    ms.Position = 0;
 
-                        if (_config.IsOverlayEnabled)
+                    var winrtStream = ms.AsRandomAccessStream();
+                    var decoder = await Windows.Graphics.Imaging.BitmapDecoder.CreateAsync(winrtStream);
+                    using var softwareBmp = await decoder.GetSoftwareBitmapAsync(BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied);
+
+                    var ocrResult = await _ocrEngine.RecognizeAsync(softwareBmp);
+                    string rawText = ocrResult?.Text?.Trim().Replace("\r", " ").Replace("\n", " ") ?? "";
+                    string fixedText = FixOcrText(rawText);
+                    string cleanText = Regex.Replace(fixedText, @"\s+", " ").Trim();
+
+                    if (!string.IsNullOrEmpty(cleanText) && IsDialogueSubtitle(cleanText))
+                    {
+                        if (!IsSimilarText(cleanText, _lastRecognizedEnglish))
                         {
-                            if (!_overlayWindow.IsVisible) _overlayWindow.Show();
-                            _overlayWindow.Opacity = 1.0;
-                            _hideSubtitleTimer.Stop();
-                            _hideSubtitleTimer.Start();
-                        }
+                            _lastRecognizedEnglish = cleanText;
+                            string thai = await TranslateToThaiAsync(cleanText);
 
-                        if (_config.IsTtsEnabled)
-                        {
-                            bool isFemale = _config.VoiceGenderMode switch
+                            OriginalSubtitleText.Text = cleanText;
+                            TranslatedSubtitleText.Text = thai;
+
+                            if (_config.IsTtsEnabled)
                             {
-                                "FEMALE" => true,
-                                "MALE" => false,
-                                _ => IsFemaleCharacter(cleanText, thai)
-                            };
-                            _ = AudioTtsHelper.SpeakThaiAsync(thai, isFemale, _config.SpeechSpeedRate);
+                                bool isFemale = _config.VoiceGenderMode switch
+                                {
+                                    "FEMALE" => true,
+                                    "MALE" => false,
+                                    _ => IsFemaleCharacter(cleanText, thai)
+                                };
+                                _ = AudioTtsHelper.SpeakThaiAsync(thai, isFemale, _config.SpeechSpeedRate);
+                            }
                         }
                     }
                 }
@@ -299,7 +606,7 @@ namespace PSTranslatorWin
                 string res = await _http.GetStringAsync(url);
                 using var doc = JsonDocument.Parse(res);
                 var sentences = doc.RootElement[0];
-                var sb = new System.Text.StringBuilder();
+                var sb = new StringBuilder();
                 foreach (var item in sentences.EnumerateArray())
                 {
                     if (item.GetArrayLength() > 0 && item[0].ValueKind == JsonValueKind.String)
@@ -420,93 +727,405 @@ namespace PSTranslatorWin
             }
             return result;
         }
+        #endregion
 
-        private void BtnToggleCapture_Click(object sender, RoutedEventArgs e)
+        #region In-Window Green Crop Box Interaction
+        private void Window_SizeChanged(object sender, SizeChangedEventArgs e)
         {
-            _isRunning = !_isRunning;
-            if (_isRunning)
+            SyncCropBoxPixelsFromRatios();
+        }
+
+        private void SyncCropBoxPixelsFromRatios()
+        {
+            double vw = Math.Max(300, VideoViewportContainer.ActualWidth);
+            double vh = Math.Max(200, VideoViewportContainer.ActualHeight);
+
+            Canvas.SetLeft(InWindowCropBorder, _config.CropLeftRatio * vw);
+            Canvas.SetTop(InWindowCropBorder, _config.CropTopRatio * vh);
+            InWindowCropBorder.Width = Math.Max(120, _config.CropWidthRatio * vw);
+            InWindowCropBorder.Height = Math.Max(45, _config.CropHeightRatio * vh);
+        }
+
+        private void SyncRatiosFromCropBoxPixels()
+        {
+            double vw = Math.Max(300, VideoViewportContainer.ActualWidth);
+            double vh = Math.Max(200, VideoViewportContainer.ActualHeight);
+
+            _config.CropLeftRatio = Math.Clamp(Canvas.GetLeft(InWindowCropBorder) / vw, 0.0, 0.90);
+            _config.CropTopRatio = Math.Clamp(Canvas.GetTop(InWindowCropBorder) / vh, 0.0, 0.90);
+            _config.CropWidthRatio = Math.Clamp(InWindowCropBorder.Width / vw, 0.08, 1.0 - _config.CropLeftRatio);
+            _config.CropHeightRatio = Math.Clamp(InWindowCropBorder.Height / vh, 0.05, 1.0 - _config.CropTopRatio);
+            SaveConfig();
+        }
+
+        private void CropBorder_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (e.Source == CropResizeHandle) return;
+            _isDraggingCrop = true;
+            _cropDragStartMouse = e.GetPosition(CropOverlayCanvas);
+            _cropStartLeft = Canvas.GetLeft(InWindowCropBorder);
+            _cropStartTop = Canvas.GetTop(InWindowCropBorder);
+            InWindowCropBorder.CaptureMouse();
+            e.Handled = true;
+        }
+
+        private void CropResizeHandle_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            _isResizingCrop = true;
+            _cropDragStartMouse = e.GetPosition(CropOverlayCanvas);
+            _cropStartW = InWindowCropBorder.Width;
+            _cropStartH = InWindowCropBorder.Height;
+            CropResizeHandle.CaptureMouse();
+            e.Handled = true;
+        }
+
+        private void CropCanvas_MouseMove(object sender, MouseEventArgs e)
+        {
+            if (!_isDraggingCrop && !_isResizingCrop) return;
+            var pos = e.GetPosition(CropOverlayCanvas);
+            double dx = pos.X - _cropDragStartMouse.X;
+            double dy = pos.Y - _cropDragStartMouse.Y;
+            double vw = VideoViewportContainer.ActualWidth;
+            double vh = VideoViewportContainer.ActualHeight;
+
+            if (_isDraggingCrop)
             {
-                BtnToggleCapture.Content = "เริ่มระบบแปลภาษาอัตโนมัติ (กำลังทำงาน)";
-                BtnToggleCapture.Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(46, 125, 50));
-                BtnToggleCapture.BorderBrush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0, 230, 118));
+                double newLeft = Math.Clamp(_cropStartLeft + dx, 0, Math.Max(0, vw - InWindowCropBorder.Width));
+                double newTop = Math.Clamp(_cropStartTop + dy, 0, Math.Max(0, vh - InWindowCropBorder.Height));
+                Canvas.SetLeft(InWindowCropBorder, newLeft);
+                Canvas.SetTop(InWindowCropBorder, newTop);
             }
-            else
+            else if (_isResizingCrop)
             {
-                BtnToggleCapture.Content = "หยุดพักการแปลภาษาชั่วคราว (คลิกเพื่อเริ่มต่อ)";
-                BtnToggleCapture.Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(183, 28, 28));
-                BtnToggleCapture.BorderBrush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(255, 82, 82));
+                double left = Canvas.GetLeft(InWindowCropBorder);
+                double top = Canvas.GetTop(InWindowCropBorder);
+                double newW = Math.Clamp(_cropStartW + dx, 140, Math.Max(140, vw - left));
+                double newH = Math.Clamp(_cropStartH + dy, 50, Math.Max(50, vh - top));
+                InWindowCropBorder.Width = newW;
+                InWindowCropBorder.Height = newH;
+            }
+        }
+
+        private void CropCanvas_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            if (_isDraggingCrop || _isResizingCrop)
+            {
+                _isDraggingCrop = false;
+                _isResizingCrop = false;
+                InWindowCropBorder.ReleaseMouseCapture();
+                CropResizeHandle.ReleaseMouseCapture();
+                SyncRatiosFromCropBoxPixels();
             }
         }
 
         private void BtnShowCropBox_Click(object sender, RoutedEventArgs e)
         {
-            if (_cropWindow.IsVisible)
+            if (CropOverlayCanvas.Visibility == Visibility.Visible)
             {
-                SaveCurrentPositions();
-                _cropWindow.Hide();
+                SyncRatiosFromCropBoxPixels();
+                CropOverlayCanvas.Visibility = Visibility.Collapsed;
             }
             else
             {
-                _cropWindow.Show();
-                _cropWindow.Activate();
+                SyncCropBoxPixelsFromRatios();
+                CropOverlayCanvas.Visibility = Visibility.Visible;
             }
+        }
+
+        private void BtnLockCrop_Click(object sender, RoutedEventArgs e)
+        {
+            SyncRatiosFromCropBoxPixels();
+            CropOverlayCanvas.Visibility = Visibility.Collapsed;
         }
 
         private void BtnResetCropBox_Click(object sender, RoutedEventArgs e)
         {
-            double sw = SystemParameters.PrimaryScreenWidth;
-            double sh = SystemParameters.PrimaryScreenHeight;
-            _cropWindow.Width = Math.Round(sw * 0.62);
-            _cropWindow.Height = Math.Round(sh * 0.18);
-            _cropWindow.Left = Math.Round((sw - _cropWindow.Width) / 2.0);
-            _cropWindow.Top = Math.Round(sh * 0.74);
-            _cropWindow.Show();
-            SaveCurrentPositions();
+            _config.CropLeftRatio = 0.16;
+            _config.CropTopRatio = 0.74;
+            _config.CropWidthRatio = 0.68;
+            _config.CropHeightRatio = 0.18;
+            SyncCropBoxPixelsFromRatios();
+            CropOverlayCanvas.Visibility = Visibility.Visible;
+            SaveConfig();
+        }
+        #endregion
+
+        #region In-Window Subtitle Vertical Dragging
+        private void SubtitleBox_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (_isBlackScreenMode) return;
+            _isDraggingSubtitle = true;
+            _subDragStartMouse = e.GetPosition(RootGrid);
+            _subStartBottomMargin = InWindowSubtitleBox.Margin.Bottom;
+            InWindowSubtitleBox.CaptureMouse();
         }
 
-        private void ChkShowOverlay_Changed(object sender, RoutedEventArgs e)
+        private void SubtitleBox_MouseMove(object sender, MouseEventArgs e)
+        {
+            if (!_isDraggingSubtitle) return;
+            var pos = e.GetPosition(RootGrid);
+            double dy = _subDragStartMouse.Y - pos.Y;
+            double newBottom = Math.Clamp(_subStartBottomMargin + dy, 12, Math.Max(100, RootGrid.ActualHeight - 180));
+            InWindowSubtitleBox.Margin = new Thickness(40, 20, 40, newBottom);
+            _config.SubtitleBottomMargin = newBottom;
+        }
+
+        private void SubtitleBox_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            if (_isDraggingSubtitle)
+            {
+                _isDraggingSubtitle = false;
+                InWindowSubtitleBox.ReleaseMouseCapture();
+                SaveConfig();
+            }
+        }
+        #endregion
+
+        #region Font Size, Font Color & Opacity Handlers
+        private void SliderThaiFontSize_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
         {
             if (!IsInitialized) return;
-            _config.IsOverlayEnabled = ChkShowOverlay.IsChecked == true;
-            if (_config.IsOverlayEnabled)
+            _config.ThaiFontSize = Math.Round(SliderThaiFontSize.Value);
+            ApplySubtitleStyling();
+            SaveConfig();
+        }
+
+        private void BtnThaiFontSmaller_Click(object sender, RoutedEventArgs e)
+        {
+            SliderThaiFontSize.Value = Math.Max(16, SliderThaiFontSize.Value - 2);
+        }
+
+        private void BtnThaiFontLarger_Click(object sender, RoutedEventArgs e)
+        {
+            SliderThaiFontSize.Value = Math.Min(72, SliderThaiFontSize.Value + 2);
+        }
+
+        private void SliderEngFontSize_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (!IsInitialized) return;
+            _config.EngFontSize = Math.Round(SliderEngFontSize.Value);
+            ApplySubtitleStyling();
+            SaveConfig();
+        }
+
+        private void ChkShowEnglish_Changed(object sender, RoutedEventArgs e)
+        {
+            if (!IsInitialized) return;
+            _config.ShowEnglishText = ChkShowEnglish.IsChecked == true;
+            ApplySubtitleStyling();
+            SaveConfig();
+        }
+
+        private void SliderBgOpacity_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (!IsInitialized) return;
+            _config.SubtitleBgOpacityPercent = Math.Round(SliderBgOpacity.Value);
+            ApplySubtitleStyling();
+            SaveConfig();
+        }
+
+        private void SetThaiColor(string hex)
+        {
+            _config.ThaiTextColorHex = hex;
+            ApplySubtitleStyling();
+            SaveConfig();
+        }
+
+        private void BtnColorGold_Click(object sender, RoutedEventArgs e) => SetThaiColor("#FFD54F");
+        private void BtnColorWhite_Click(object sender, RoutedEventArgs e) => SetThaiColor("#FFFFFF");
+        private void BtnColorGreen_Click(object sender, RoutedEventArgs e) => SetThaiColor("#00E676");
+        private void BtnColorCyan_Click(object sender, RoutedEventArgs e) => SetThaiColor("#40C4FF");
+        private void BtnColorPink_Click(object sender, RoutedEventArgs e) => SetThaiColor("#FF80AB");
+        private void BtnColorOrange_Click(object sender, RoutedEventArgs e) => SetThaiColor("#FFAB40");
+
+        private void SetEngColor(string hex)
+        {
+            _config.EngTextColorHex = hex;
+            ApplySubtitleStyling();
+            SaveConfig();
+        }
+
+        private void BtnEngColorGray_Click(object sender, RoutedEventArgs e) => SetEngColor("#CCCCCC");
+        private void BtnEngColorWhite_Click(object sender, RoutedEventArgs e) => SetEngColor("#FFFFFF");
+        private void BtnEngColorBlue_Click(object sender, RoutedEventArgs e) => SetEngColor("#80D8FF");
+        private void BtnEngColorYellow_Click(object sender, RoutedEventArgs e) => SetEngColor("#FFF59D");
+        #endregion
+
+        #region Fullscreen, Black-Screen Text-Only Mode, Aspect Ratio & Menu Drawer
+        private void BtnMenuToggle_Click(object sender, RoutedEventArgs e)
+        {
+            SettingsDrawer.Visibility = SettingsDrawer.Visibility == Visibility.Visible
+                ? Visibility.Collapsed
+                : Visibility.Visible;
+        }
+
+        private void BtnFullscreen_Click(object sender, RoutedEventArgs e)
+        {
+            ToggleFullscreen();
+        }
+
+        private void Window_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.F11)
             {
-                _overlayWindow.Show();
-                _overlayWindow.Opacity = 1.0;
+                ToggleFullscreen();
+            }
+            else if (e.Key == Key.Escape && _isFullscreen)
+            {
+                ToggleFullscreen();
+            }
+        }
+
+        private void ToggleFullscreen()
+        {
+            _isFullscreen = !_isFullscreen;
+            if (_isFullscreen)
+            {
+                WindowStyle = WindowStyle.None;
+                WindowState = WindowState.Maximized;
+                BtnQuickFullscreen.Content = "ย่อหน้าต่าง (ESC)";
+                SetButtonHighlight(BtnQuickFullscreen, true);
             }
             else
             {
-                _overlayWindow.Hide();
+                WindowStyle = WindowStyle.SingleBorderWindow;
+                WindowState = WindowState.Normal;
+                BtnQuickFullscreen.Content = "ขยายเต็มจอ (F11)";
+                SetButtonHighlight(BtnQuickFullscreen, false);
             }
-            SaveCurrentPositions();
+        }
+
+        private void BtnBlackScreenMode_Click(object sender, RoutedEventArgs e)
+        {
+            _isBlackScreenMode = !_isBlackScreenMode;
+            if (_isBlackScreenMode)
+            {
+                GameVideoImage.Visibility = Visibility.Collapsed;
+                InWindowSubtitleBox.VerticalAlignment = VerticalAlignment.Center;
+                InWindowSubtitleBox.Margin = new Thickness(40);
+                BtnQuickTextOnly.Content = "แสดงภาพเกม";
+                SetButtonHighlight(BtnQuickTextOnly, true);
+            }
+            else
+            {
+                GameVideoImage.Visibility = Visibility.Visible;
+                InWindowSubtitleBox.VerticalAlignment = VerticalAlignment.Bottom;
+                InWindowSubtitleBox.Margin = new Thickness(40, 20, 40, _config.SubtitleBottomMargin);
+                BtnQuickTextOnly.Content = "เฉพาะตัวหนังสือ";
+                SetButtonHighlight(BtnQuickTextOnly, false);
+            }
+        }
+
+        private void BtnAspect169_Click(object sender, RoutedEventArgs e)
+        {
+            _config.AspectMode = "16_9";
+            ApplyAspectRatioMode();
+            SaveConfig();
+        }
+
+        private void BtnAspectFit_Click(object sender, RoutedEventArgs e)
+        {
+            _config.AspectMode = "FIT";
+            ApplyAspectRatioMode();
+            SaveConfig();
+        }
+
+        private void BtnAspectStretch_Click(object sender, RoutedEventArgs e)
+        {
+            _config.AspectMode = "STRETCH";
+            ApplyAspectRatioMode();
+            SaveConfig();
+        }
+        #endregion
+
+        #region Game Audio Mute (Mutes Game Stream Only so Thai TTS Plays Clearly)
+        private void BtnMuteGameAudio_Click(object sender, RoutedEventArgs e)
+        {
+            _isGameAudioMuted = !_isGameAudioMuted;
+            ApplyGameAudioMute(_isGameAudioMuted);
+
+            if (_isGameAudioMuted)
+            {
+                BtnQuickMuteGame.Content = "เปิดเสียงเกม";
+                SetButtonHighlight(BtnQuickMuteGame, true);
+            }
+            else
+            {
+                BtnQuickMuteGame.Content = "ปิดเสียงเกม";
+                SetButtonHighlight(BtnQuickMuteGame, false);
+            }
+        }
+
+        private void ApplyGameAudioMute(bool mute)
+        {
+            try
+            {
+                int myPid = Environment.ProcessId;
+                var target = CmbCaptureTarget.SelectedItem as CaptureTargetItem;
+                uint targetPid = target?.ProcessId ?? 0;
+
+                using var enumerator = new MMDeviceEnumerator();
+                var device = enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
+                var sessions = device.AudioSessionManager.Sessions;
+
+                for (int i = 0; i < sessions.Count; i++)
+                {
+                    var session = sessions[i];
+                    uint pid = session.GetProcessID;
+                    if (pid == 0 || pid == (uint)myPid) continue; // Never mute our own Thai TTS voice!
+
+                    bool shouldMuteThis = false;
+                    if (targetPid != 0 && pid == targetPid)
+                    {
+                        shouldMuteThis = true;
+                    }
+                    else
+                    {
+                        try
+                        {
+                            using var proc = Process.GetProcessById((int)pid);
+                            string pname = proc.ProcessName.ToLowerInvariant();
+                            if (pname.Contains("chiaki") || pname.Contains("remoteplay") || pname.Contains("ps5"))
+                            {
+                                shouldMuteThis = true;
+                            }
+                        }
+                        catch { }
+                    }
+
+                    if (shouldMuteThis)
+                    {
+                        session.SimpleAudioVolume.Mute = mute;
+                    }
+                }
+            }
+            catch { }
+        }
+        #endregion
+
+        #region Voice, Speed, Pause & All-in-One PS5 Embedded Streamer
+        private void BtnToggleCapture_Click(object sender, RoutedEventArgs e)
+        {
+            _isRunning = !_isRunning;
+            if (_isRunning)
+            {
+                BtnToggleCapture.Content = "ระบบแปลภาษาทำงานอยู่ (คลิกเพื่อหยุดชั่วคราว)";
+                BtnToggleCapture.Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(46, 125, 50));
+                BtnToggleCapture.BorderBrush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0, 230, 118));
+            }
+            else
+            {
+                BtnToggleCapture.Content = "หยุดแปลภาษาชั่วคราว (คลิกเพื่อเริ่มทำงานต่อ)";
+                BtnToggleCapture.Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(183, 28, 28));
+                BtnToggleCapture.BorderBrush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(255, 82, 82));
+            }
         }
 
         private void ChkFilterShort_Changed(object sender, RoutedEventArgs e)
         {
             if (!IsInitialized) return;
             _config.FilterShortUi = ChkFilterShort.IsChecked == true;
-            SaveCurrentPositions();
-        }
-
-        private void BtnBlackScreenMode_Click(object sender, RoutedEventArgs e)
-        {
-            _isBlackScreenMode = !_isBlackScreenMode;
-            _overlayWindow.SetBlackScreenMode(_isBlackScreenMode);
-            if (_isBlackScreenMode)
-            {
-                _overlayWindow.Show();
-                _overlayWindow.Opacity = 1.0;
-                BtnBlackScreenMode.Content = "ออกจากโหมดจอดำ (กลับสู่โหมดกรอบซับลอย)";
-                BtnBlackScreenMode.Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(46, 125, 50));
-                BtnBlackScreenMode.BorderBrush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0, 230, 118));
-            }
-            else
-            {
-                _overlayWindow.Left = _config.OverlayLeft;
-                _overlayWindow.Top = _config.OverlayTop;
-                BtnBlackScreenMode.Content = "โหมดโชว์เฉพาะตัวหนังสือ (จอดำเต็มจอ)";
-                BtnBlackScreenMode.Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(37, 42, 52));
-                BtnBlackScreenMode.BorderBrush = new SolidColorBrush(System.Windows.Media.Color.FromArgb(85, 255, 255, 255));
-            }
+            SaveConfig();
         }
 
         private void ChkTtsEnabled_Changed(object sender, RoutedEventArgs e)
@@ -514,21 +1133,21 @@ namespace PSTranslatorWin
             if (!IsInitialized) return;
             _config.IsTtsEnabled = ChkTtsEnabled.IsChecked == true;
             if (!_config.IsTtsEnabled) AudioTtsHelper.StopCurrentPlayback();
-            SaveCurrentPositions();
+            SaveConfig();
         }
 
         private void BtnVoiceAuto_Click(object sender, RoutedEventArgs e)
         {
             _config.VoiceGenderMode = "AUTO_AI";
             UpdateVoiceButtonsHighlight();
-            SaveCurrentPositions();
+            SaveConfig();
         }
 
         private void BtnVoiceFemale_Click(object sender, RoutedEventArgs e)
         {
             _config.VoiceGenderMode = "FEMALE";
             UpdateVoiceButtonsHighlight();
-            SaveCurrentPositions();
+            SaveConfig();
             _ = AudioTtsHelper.SpeakThaiAsync("เลือกเสียงพากย์ผู้หญิงเรียบร้อยแล้วค่ะ", true, _config.SpeechSpeedRate);
         }
 
@@ -536,7 +1155,7 @@ namespace PSTranslatorWin
         {
             _config.VoiceGenderMode = "MALE";
             UpdateVoiceButtonsHighlight();
-            SaveCurrentPositions();
+            SaveConfig();
             _ = AudioTtsHelper.SpeakThaiAsync("เลือกเสียงพากย์ผู้ชายเรียบร้อยแล้วครับ", false, _config.SpeechSpeedRate);
         }
 
@@ -544,53 +1163,83 @@ namespace PSTranslatorWin
         {
             _config.SpeechSpeedRate = 1.0f;
             UpdateSpeedButtonsHighlight();
-            SaveCurrentPositions();
+            SaveConfig();
         }
 
         private void BtnSpeedFast_Click(object sender, RoutedEventArgs e)
         {
             _config.SpeechSpeedRate = 1.25f;
             UpdateSpeedButtonsHighlight();
-            SaveCurrentPositions();
+            SaveConfig();
         }
 
         private void BtnSpeedVeryFast_Click(object sender, RoutedEventArgs e)
         {
             _config.SpeechSpeedRate = 1.5f;
             UpdateSpeedButtonsHighlight();
-            SaveCurrentPositions();
+            SaveConfig();
         }
 
-        private void TxtPsnId_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
+        private void TxtPsnId_TextChanged(object sender, TextChangedEventArgs e)
         {
             if (!IsInitialized) return;
             _config.SavedPsnId = TxtPsnId.Text.Trim();
-            SaveCurrentPositions();
+            SaveConfig();
         }
 
         private void BtnCopyPsnId_Click(object sender, RoutedEventArgs e)
         {
             if (!string.IsNullOrWhiteSpace(TxtPsnId.Text))
             {
-                System.Windows.Clipboard.SetText(TxtPsnId.Text.Trim());
-                System.Windows.MessageBox.Show("คัดลอก PSN Account ID เรียบร้อยแล้ว สามารถนำไปวางในหน้าลงทะเบียน Chiaki ได้เลยครับ", "PS Translator", MessageBoxButton.OK, MessageBoxImage.Information);
+                Clipboard.SetText(TxtPsnId.Text.Trim());
+                MessageBox.Show("คัดลอก PSN Account ID เรียบร้อยแล้วครับ", "PS Translator", MessageBoxButton.OK, MessageBoxImage.Information);
             }
         }
 
-        private void BtnLaunchChiaki_Click(object sender, RoutedEventArgs e)
+        private async void BtnEmbedChiaki_Click(object sender, RoutedEventArgs e)
         {
             try
             {
-                string baseDir = AppDomain.CurrentDomain.BaseDirectory;
-                string[] possiblePaths =
-                {
-                    Path.Combine(baseDir, "Chiaki", "chiaki.exe"),
-                    Path.Combine(baseDir, "Chiaki", "chiaki-ng.exe"),
-                    Path.Combine(baseDir, "chiaki.exe"),
-                    Path.Combine(baseDir, "chiaki-ng.exe")
-                };
+                BtnEmbedChiaki.IsEnabled = false;
+                BtnEmbedChiaki.Content = "กำลังเตรียมระบบสตรีม PS5 ในโปรแกรม...";
 
-                string? foundExe = possiblePaths.FirstOrDefault(File.Exists);
+                string localAppDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PSTranslator", "Chiaki");
+                string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+
+                string? foundExe = FindChiakiExecutable(baseDir) ?? FindChiakiExecutable(localAppDir);
+
+                if (foundExe == null)
+                {
+                    BtnEmbedChiaki.Content = "กำลังติดตั้งโมดูล PS5 อัตโนมัติ (ครั้งแรกครั้งเดียว)...";
+                    Directory.CreateDirectory(localAppDir);
+
+                    _http.DefaultRequestHeaders.Remove("User-Agent");
+                    _http.DefaultRequestHeaders.UserAgent.ParseAdd("PS-Translator-Windows");
+                    string apiJson = await _http.GetStringAsync("https://api.github.com/repos/chiaki-ng/chiaki-ng/releases/latest");
+                    using var doc = JsonDocument.Parse(apiJson);
+                    string? downloadUrl = null;
+
+                    foreach (var asset in doc.RootElement.GetProperty("assets").EnumerateArray())
+                    {
+                        string name = asset.GetProperty("name").GetString() ?? "";
+                        if (name.Contains("win", StringComparison.OrdinalIgnoreCase) && name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+                        {
+                            downloadUrl = asset.GetProperty("browser_download_url").GetString();
+                            break;
+                        }
+                    }
+
+                    if (!string.IsNullOrEmpty(downloadUrl))
+                    {
+                        string zipPath = Path.Combine(localAppDir, "chiaki-module.zip");
+                        byte[] zipBytes = await _http.GetByteArrayAsync(downloadUrl);
+                        await File.WriteAllBytesAsync(zipPath, zipBytes);
+                        ZipFile.ExtractToDirectory(zipPath, localAppDir, overwriteFiles: true);
+                        try { File.Delete(zipPath); } catch { }
+                        foundExe = FindChiakiExecutable(localAppDir);
+                    }
+                }
+
                 if (foundExe != null)
                 {
                     Process.Start(new ProcessStartInfo
@@ -598,26 +1247,48 @@ namespace PSTranslatorWin
                         FileName = foundExe,
                         WorkingDirectory = Path.GetDirectoryName(foundExe)
                     });
+
+                    await Task.Delay(1800);
+                    RefreshCaptureTargets(autoSelectPs5: true);
+                    BtnEmbedChiaki.Content = "เชื่อมต่อหน้าจอ PS5 เข้ากับหน้าต่างนี้แล้ว";
                 }
                 else
                 {
-                    Process.Start(new ProcessStartInfo
-                    {
-                        FileName = "https://github.com/chiaki-ng/chiaki-ng/releases/latest",
-                        UseShellExecute = true
-                    });
+                    BtnEmbedChiaki.Content = "เปิดระบบสตรีม PS5 ในหน้าต่างนี้ (All-in-One)";
                 }
             }
-            catch { }
+            catch
+            {
+                BtnEmbedChiaki.Content = "เปิดระบบสตรีม PS5 ในหน้าต่างนี้ (All-in-One)";
+            }
+            finally
+            {
+                BtnEmbedChiaki.IsEnabled = true;
+            }
         }
+
+        private static string? FindChiakiExecutable(string rootFolder)
+        {
+            if (!Directory.Exists(rootFolder)) return null;
+            try
+            {
+                var files = Directory.GetFiles(rootFolder, "chiaki*.exe", SearchOption.AllDirectories);
+                return files.FirstOrDefault();
+            }
+            catch
+            {
+                return null;
+            }
+        }
+        #endregion
 
         private void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
         {
-            SaveCurrentPositions();
+            SaveConfig();
+            _videoRenderTimer.Stop();
             _ocrTimer.Stop();
+            if (_isGameAudioMuted) ApplyGameAudioMute(false);
             AudioTtsHelper.StopCurrentPlayback();
-            _cropWindow.Close();
-            _overlayWindow.Close();
         }
     }
 }

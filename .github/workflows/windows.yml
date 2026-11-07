@@ -23,7 +23,7 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      - name: Publish PS-Translator-Windows (Single-File Self-Contained x64)
+      - name: Publish All-in-One PS-Translator-Windows.exe (Single-File Self-Contained x64)
         shell: pwsh
         run: |
           dotnet publish windows-app/PSTranslatorWin.csproj `
@@ -37,49 +37,28 @@ jobs:
 
           New-Item -ItemType Directory -Force -Path dist-win | Out-Null
           Copy-Item "publish-win/PS-Translator-Windows.exe" "dist-win/PS-Translator-Windows.exe"
-
-      - name: Bundle Chiaki for Windows 11 & Create Portable Zip
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path bundle-win | Out-Null
-          Copy-Item "publish-win/PS-Translator-Windows.exe" "bundle-win/PS-Translator-Windows.exe"
-
-          try {
-            $headers = @{ "User-Agent" = "PS-Translator-Builder" }
-            $release = Invoke-RestMethod -Uri "https://api.github.com/repos/chiaki-ng/chiaki-ng/releases/latest" -Headers $headers
-            $asset = $release.assets | Where-Object { $_.name -match "win_x64.*portable.*\.zip$" -or $_.name -match "win.*x64.*\.zip$" } | Select-Object -First 1
-            if ($null -ne $asset) {
-              Write-Host "Downloading Chiaki Windows from $($asset.browser_download_url)"
-              Invoke-WebRequest -Uri $asset.browser_download_url -OutFile "chiaki-win.zip"
-              New-Item -ItemType Directory -Force -Path "bundle-win/Chiaki" | Out-Null
-              Expand-Archive -Path "chiaki-win.zip" -DestinationPath "bundle-win/Chiaki" -Force
-            }
-          } catch {
-            Write-Host "Optional Chiaki bundle step skipped: $_"
-          }
-
-          Compress-Archive -Path "bundle-win/*" -DestinationPath "dist-win/PS-Translator-Windows11-Portable.zip" -Force
           Get-ChildItem dist-win
 
       - name: Upload Windows Artifact
         uses: actions/upload-artifact@v4
         with:
           name: PS-Translator-Windows11
-          path: dist-win/*
+          path: dist-win/PS-Translator-Windows.exe
 
-      - name: Attach Windows 11 Binaries to GitHub Release
+      - name: Attach Windows 11 All-in-One Binary to GitHub Release
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/heads/main')
         with:
           tag_name: v2.0.8
-          name: "PS Translator v2.0.8 (Android APK + Windows 11 Native App)"
+          name: "PS Translator v2.0.8 (All-in-One Windows 11 .EXE & Android .APK)"
           body: |
-            ### PS Translator v2.0.8 (Android & Windows 11)
+            ### PS Translator v2.0.8 (All-in-One Windows 11 & Android APK)
 
-            #### 1. สำหรับคอมพิวเตอร์ Windows 11 (ใหม่ล่าสุด)
-            - **PS-Translator-Windows.exe:** โปรแกรมแปลซับไตเติ้ลและพากย์เสียงภาษาไทยแบบเรียลไทม์สำหรับ Windows 11 (ไฟล์เดียวเปิดใช้งานได้ทันที ไม่ต้องติดตั้ง .NET เพิ่ม)
-            - **PS-Translator-Windows11-Portable.zip:** ชุดรวมครบวงจร มีทั้งโปรแกรม `PS-Translator-Windows.exe` และโปรแกรมสตรีม `Chiaki` สำหรับ Windows 11 อยู่ในโฟลเดอร์เดียวกัน
-            - **ฟีเจอร์ครบเหมือนเวอร์ชันมือถือ:** กรอบเขียวปรับขนาดและลากคลุมเฉพาะส่วนซับไตเติ้ล, ระบบขยายภาพ 2x Bicubic OCR พร้อมแก้คำผิด c/e อัตโนมัติ, แยกเสียงพากย์ชาย/หญิงด้วย AI + ปรับความเร็วเสียงพูด (1.0x / 1.25x / 1.5x), ปุ่มไฮไลท์สีเขียวชัดเจน, โหมดจอดำโชว์เฉพาะตัวหนังสือ และระบบจำค่า PSN Account ID
+            #### 1. สำหรับคอมพิวเตอร์ Windows 11 (`PS-Translator-Windows.exe` ไฟล์เดียวจบ)
+            - **All-in-One Single Window (เหมือนแอปมือถือ APK):** รวมหน้าจอแสดงภาพเกม กรอบเขียวเลือกพื้นที่ซับไตเติ้ล และกล่องแสดงคำแปลภาษาไทยไว้ในหน้าต่างโปรแกรมเดียวกัน ไม่ต้องเปิดหลายโปรแกรม และไม่มีกรอบข้อความลอยเกะกะนอกโปรแกรม
+            - **ปรับขนาดและสีของตัวหนังสือได้อย่างอิสระ:** ปรับขนาดตัวอักษรภาษาไทย (16-72 px) และภาษาอังกฤษ (11-40 px) พร้อมปุ่มเลือกสีตัวหนังสือ (เหลืองทอง, ขาว, เขียว, ฟ้าสว่าง, ชมพู, ส้ม) และปรับความทึบพื้นหลังกล่องซับไตเติ้ลได้ตามต้องการ
+            - **โหมดขยายเต็มจอ (Fullscreen F11) และโหมดเฉพาะตัวหนังสือ (จอดำ):** กดขยายเต็มจอเหมือนมือถือ เลือกอัตราส่วนภาพ (16:9 / Fit / Stretch) หรือสลับเป็นโหมดจอดำแสดงเฉพาะคำแปลได้ทันที
+            - **ปุ่มปิดเสียงเกมแยกอิสระ:** ปิดเฉพาะเสียงเกมเพื่อให้ได้ยินเสียงพากย์ไทย AI (ชาย/หญิง/อัตโนมัติ) ชัดเจนโดยเสียงไม่ตีกัน
 
             #### 2. สำหรับมือถือและแท็บเล็ต Android (`PS-Translator.apk`)
             - **Fixed Voice Gender Mapping:** แก้ไขปัญหาการเลือกเสียงชายและหญิงสลับกันให้ตรงตามเพศจริง 100%
@@ -87,5 +66,4 @@ jobs:
             - **1080p Ultra-Clear OCR & Smart Corrector:** รองรับการตรวจจับซับไตเติ้ลความละเอียดสูง 1080p พร้อมขยายสเกล 2 เท่า และระบบแก้คำผิด c/e อัตโนมัติ
           files: |
             dist-win/PS-Translator-Windows.exe
-            dist-win/PS-Translator-Windows11-Portable.zip
           token: ${{ secrets.GITHUB_TOKEN }}

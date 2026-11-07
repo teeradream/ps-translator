@@ -325,8 +325,11 @@
                             android:layout_weight="1.2"
                             android:text="AI อัตโนมัติ"
                             android:textSize="12sp"
-                            android:textColor="#FFFFFF"
-                            app:strokeColor="#55FFFFFF"/>
+                            android:textStyle="bold"
+                            android:textColor="@color/toggle_btn_text_color"
+                            app:backgroundTint="@color/toggle_btn_bg_tint"
+                            app:strokeColor="@color/toggle_btn_stroke_color"
+                            app:strokeWidth="1.5dp"/>
 
                         <com.google.android.material.button.MaterialButton
                             style="@style/Widget.MaterialComponents.Button.OutlinedButton"
@@ -336,8 +339,11 @@
                             android:layout_weight="1"
                             android:text="หญิง"
                             android:textSize="12sp"
-                            android:textColor="#FFFFFF"
-                            app:strokeColor="#55FFFFFF"/>
+                            android:textStyle="bold"
+                            android:textColor="@color/toggle_btn_text_color"
+                            app:backgroundTint="@color/toggle_btn_bg_tint"
+                            app:strokeColor="@color/toggle_btn_stroke_color"
+                            app:strokeWidth="1.5dp"/>
 
                         <com.google.android.material.button.MaterialButton
                             style="@style/Widget.MaterialComponents.Button.OutlinedButton"
@@ -347,8 +353,11 @@
                             android:layout_weight="1"
                             android:text="ชาย"
                             android:textSize="12sp"
-                            android:textColor="#FFFFFF"
-                            app:strokeColor="#55FFFFFF"/>
+                            android:textStyle="bold"
+                            android:textColor="@color/toggle_btn_text_color"
+                            app:backgroundTint="@color/toggle_btn_bg_tint"
+                            app:strokeColor="@color/toggle_btn_stroke_color"
+                            app:strokeWidth="1.5dp"/>
                     </com.google.android.material.button.MaterialButtonToggleGroup>
                 </LinearLayout>
 
@@ -385,8 +394,11 @@
                             android:layout_weight="1"
                             android:text="1.0x"
                             android:textSize="12sp"
-                            android:textColor="#FFFFFF"
-                            app:strokeColor="#55FFFFFF"/>
+                            android:textStyle="bold"
+                            android:textColor="@color/toggle_btn_text_color"
+                            app:backgroundTint="@color/toggle_btn_bg_tint"
+                            app:strokeColor="@color/toggle_btn_stroke_color"
+                            app:strokeWidth="1.5dp"/>
 
                         <com.google.android.material.button.MaterialButton
                             style="@style/Widget.MaterialComponents.Button.OutlinedButton"
@@ -396,8 +408,11 @@
                             android:layout_weight="1.2"
                             android:text="1.25x (แนะนำ)"
                             android:textSize="12sp"
-                            android:textColor="#FFFFFF"
-                            app:strokeColor="#55FFFFFF"/>
+                            android:textStyle="bold"
+                            android:textColor="@color/toggle_btn_text_color"
+                            app:backgroundTint="@color/toggle_btn_bg_tint"
+                            app:strokeColor="@color/toggle_btn_stroke_color"
+                            app:strokeWidth="1.5dp"/>
 
                         <com.google.android.material.button.MaterialButton
                             style="@style/Widget.MaterialComponents.Button.OutlinedButton"
@@ -407,8 +422,11 @@
                             android:layout_weight="1"
                             android:text="1.5x"
                             android:textSize="12sp"
-                            android:textColor="#FFFFFF"
-                            app:strokeColor="#55FFFFFF"/>
+                            android:textStyle="bold"
+                            android:textColor="@color/toggle_btn_text_color"
+                            app:backgroundTint="@color/toggle_btn_bg_tint"
+                            app:strokeColor="@color/toggle_btn_stroke_color"
+                            app:strokeWidth="1.5dp"/>
                     </com.google.android.material.button.MaterialButtonToggleGroup>
                 </LinearLayout>
 
@@ -485,8 +503,11 @@
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:text="ปกติ"
-                        android:textColor="#FFFFFF"
-                        app:strokeColor="#55FFFFFF"/>
+                        android:textStyle="bold"
+                        android:textColor="@color/toggle_btn_text_color"
+                        app:backgroundTint="@color/toggle_btn_bg_tint"
+                        app:strokeColor="@color/toggle_btn_stroke_color"
+                        app:strokeWidth="1.5dp"/>
                     <com.google.android.material.button.MaterialButton
                         style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                         android:id="@+id/display_mode_zoom_button"
@@ -494,8 +515,11 @@
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:text="ซูม"
-                        android:textColor="#FFFFFF"
-                        app:strokeColor="#55FFFFFF"/>
+                        android:textStyle="bold"
+                        android:textColor="@color/toggle_btn_text_color"
+                        app:backgroundTint="@color/toggle_btn_bg_tint"
+                        app:strokeColor="@color/toggle_btn_stroke_color"
+                        app:strokeWidth="1.5dp"/>
                     <com.google.android.material.button.MaterialButton
                         style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                         android:id="@+id/display_mode_stretch_button"
@@ -503,8 +527,11 @@
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:text="เต็มจอ"
-                        android:textColor="#FFFFFF"
-                        app:strokeColor="#55FFFFFF"/>
+                        android:textStyle="bold"
+                        android:textColor="@color/toggle_btn_text_color"
+                        app:backgroundTint="@color/toggle_btn_bg_tint"
+                        app:strokeColor="@color/toggle_btn_stroke_color"
+                        app:strokeWidth="1.5dp"/>
                 </com.google.android.material.button.MaterialButtonToggleGroup>
 
             </LinearLayout>

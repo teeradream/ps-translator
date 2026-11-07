@@ -727,13 +727,6 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 			VoiceGenderMode.MALE -> false
 		}
 
-		if (isFemale) {
-			ttsEngine.setPitch(1.20f)
-		} else {
-			ttsEngine.setPitch(0.68f)
-		}
-		ttsEngine.setSpeechRate(speechSpeedRate)
-
 		try {
 			val voices = ttsEngine.voices
 			if (voices != null) {
@@ -742,13 +735,13 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 					val targetVoice = if (isFemale) {
 						thVoices.firstOrNull { v ->
 							val name = v.name.lowercase()
-							name.contains("female") || name.contains("woman") || name.contains("tha") || name.contains("thd") || name.contains("cfa") || name.contains("-a-") || name.contains("-d-")
-						} ?: thVoices.first()
+							(name.contains("female") || name.contains("woman") || name.contains("thb") || name.contains("thc") || name.contains("cfn") || name.contains("-b-") || name.contains("-c-"))
+						} ?: if (thVoices.size > 1) thVoices[1] else thVoices.first()
 					} else {
 						thVoices.firstOrNull { v ->
 							val name = v.name.lowercase()
-							name.contains("male") || name.contains("man") || name.contains("thb") || name.contains("thc") || name.contains("cfn") || name.contains("-b-") || name.contains("-c-")
-						} ?: if (thVoices.size > 1) thVoices[1] else thVoices.first()
+							(!name.contains("female") && (name.contains("male") || name.contains("man"))) || name.contains("tha") || name.contains("thd") || name.contains("cfa") || name.contains("-a-") || name.contains("-d-")
+						} ?: thVoices.first()
 					}
 					if (targetVoice != null) {
 						ttsEngine.voice = targetVoice
@@ -756,6 +749,13 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 				}
 			}
 		} catch (_: Exception) {}
+
+		if (isFemale) {
+			ttsEngine.setPitch(1.15f)
+		} else {
+			ttsEngine.setPitch(0.75f)
+		}
+		ttsEngine.setSpeechRate(speechSpeedRate)
 
 		ttsEngine.speak(thaiText, TextToSpeech.QUEUE_FLUSH, null, "sub_voice")
 	}

@@ -77,6 +77,9 @@ jobs:
 
           Write-Host "Compiling chiaki_win_bridge.dll with MinGW64 gcc..."
           & "$mingwDir\bin\gcc.exe" -shared -O2 `
+            -Wno-int-conversion `
+            -Wno-incompatible-pointer-types `
+            -Wno-pointer-to-int-cast `
             -D_WIN32_WINNT=0x0601 `
             '-DCHIAKI_VERSION="2.1.1"' `
             -DPB_C99_STATIC_ASSERT `

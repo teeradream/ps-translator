@@ -39,7 +39,9 @@ jobs:
           $ffDir = Get-ChildItem -Path ffmpeg-sdk -Directory | Select-Object -First 1
           Write-Host "FFmpeg SDK extracted to: $($ffDir.FullName)"
 
-          $env:PATH = "C:\msys64\mingw64\bin;$env:PATH"
+          $mingwDir = if (Test-Path "$env:RUNNER_TEMP\msys64\mingw64\bin\gcc.exe") { "$env:RUNNER_TEMP\msys64\mingw64" } else { "C:\msys64\mingw64" }
+          Write-Host "Using MinGW64 directory: $mingwDir"
+          $env:PATH = "$mingwDir\bin;$env:PATH"
 
           $libSrcs = Get-ChildItem "lib/src/*.c" | Where-Object { $_.Name -notmatch "^(ffmpegdecoder|pidecoder|opusdecoder)\.c$" } | ForEach-Object { $_.FullName }
           $gfSrcs = @(
@@ -74,7 +76,7 @@ jobs:
           ) + $nanopbSrcs + $gfSrcs + $jerasureSrcs + $libSrcs
 
           Write-Host "Compiling chiaki_win_bridge.dll with MinGW64 gcc..."
-          & "C:\msys64\mingw64\bin\gcc.exe" -shared -O2 `
+          & "$mingwDir\bin\gcc.exe" -shared -O2 `
             -D_WIN32_WINNT=0x0601 `
             '-DCHIAKI_VERSION="2.1.1"' `
             -DPB_C99_STATIC_ASSERT `
@@ -86,11 +88,11 @@ jobs:
             -Ithird-party/gf-complete/include `
             -Ithird-party/jerasure/include `
             "-I$($ffDir.FullName)/include" `
-            -IC:/msys64/mingw64/include `
+            "-I$mingwDir/include" `
             @allSrcs `
             -o "windows-app/native_dlls/chiaki_win_bridge.dll" `
             "-L$($ffDir.FullName)/lib" `
-            -LC:/msys64/mingw64/lib `
+            "-L$mingwDir/lib" `
             -lavcodec -lswscale -lavutil -lcrypto -lws2_32 -lwsock32 -lbcrypt -lpthread
 
           if (-not (Test-Path "windows-app/native_dlls/chiaki_win_bridge.dll")) {
@@ -103,9 +105,10 @@ jobs:
           Copy-Item "$($ffDir.FullName)/bin/swscale-*.dll" "windows-app/native_dlls/" -Force
           Copy-Item "$($ffDir.FullName)/bin/swresample-*.dll" "windows-app/native_dlls/" -Force -ErrorAction SilentlyContinue
 
-          Copy-Item "C:\msys64\mingw64\bin\libcrypto-*.dll" "windows-app/native_dlls/" -Force
-          Copy-Item "C:\msys64\mingw64\bin\libwinpthread-1.dll" "windows-app/native_dlls/" -Force -ErrorAction SilentlyContinue
-          Copy-Item "C:\msys64\mingw64\bin\libgcc_s_seh-1.dll" "windows-app/native_dlls/" -Force -ErrorAction SilentlyContinue
+          Copy-Item "$mingwDir\bin\libcrypto-*.dll" "windows-app/native_dlls/" -Force
+          Copy-Item "$mingwDir\bin\libwinpthread-1.dll" "windows-app/native_dlls/" -Force -ErrorAction SilentlyContinue
+          Copy-Item "$mingwDir\bin\libgcc_s_seh-1.dll" "windows-app/native_dlls/" -Force -ErrorAction SilentlyContinue
+          Copy-Item "$mingwDir\bin\zlib1.dll" "windows-app/native_dlls/" -Force -ErrorAction SilentlyContinue
 
           Get-ChildItem "windows-app/native_dlls"
 

@@ -8,6 +8,7 @@ import android.annotation.SuppressLint
 import android.app.AlertDialog
 import android.content.Context
 import android.content.SharedPreferences
+import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Rect
 import android.media.AudioManager
@@ -760,6 +761,12 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		ttsEngine.speak(thaiText, TextToSpeech.QUEUE_FLUSH, null, "sub_voice")
 	}
 
+	override fun onStart()
+	{
+		super.onStart()
+		viewModel.session.resume()
+	}
+
 	override fun onResume()
 	{
 		super.onResume()
@@ -770,7 +777,26 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 	override fun onPause()
 	{
 		super.onPause()
-		viewModel.session.pause()
+		if (!isInMultiWindowMode && !isChangingConfigurations) {
+			viewModel.session.pause()
+		}
+	}
+
+	override fun onStop()
+	{
+		super.onStop()
+		if (!isChangingConfigurations) {
+			viewModel.session.pause()
+		}
+	}
+
+	override fun onConfigurationChanged(newConfig: Configuration)
+	{
+		super.onConfigurationChanged(newConfig)
+		adjustStreamViewAspect()
+		if (::binding.isInitialized && binding.cropEditorOverlay.isVisible) {
+			openCropEditor()
+		}
 	}
 
 	override fun onDestroy()

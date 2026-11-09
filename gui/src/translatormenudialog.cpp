@@ -71,7 +71,7 @@ TranslatorMenuDialog::TranslatorMenuDialog(Translator *translator,
 	gemini_key_edit->setStyleSheet("background-color: #1e1e24; color: #00E676; padding: 6px; border: 1px solid #444; border-radius: 4px;");
 
 	connect(gemini_key_edit, &QLineEdit::textChanged, this, [this](const QString &text) {
-		translator->SetGeminiApiKey(text.trimmed());
+		this->translator->SetGeminiApiKey(text.trimmed());
 	});
 
 	geminiLayout->addWidget(keyLabel);
@@ -80,8 +80,8 @@ TranslatorMenuDialog::TranslatorMenuDialog(Translator *translator,
 
 	connect(engine_group, QOverload<int>::of(&QButtonGroup::buttonClicked), this, [this](int id) {
 		TranslationEngine eng = (id == 1) ? TranslationEngine::GEMINI_FLASH : TranslationEngine::GOOGLE_FREE;
-		translator->SetTranslationEngine(eng);
-		gemini_container->setVisible(eng == TranslationEngine::GEMINI_FLASH);
+		this->translator->SetTranslationEngine(eng);
+		this->gemini_container->setVisible(eng == TranslationEngine::GEMINI_FLASH);
 	});
 
 	engineLayout->addWidget(engine_google_radio);

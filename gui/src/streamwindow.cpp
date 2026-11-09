@@ -84,6 +84,8 @@ void StreamWindow::Init()
 			menu.addSeparator();
 			menu.addAction(stretch_action);
 			menu.addAction(zoom_action);
+			menu.addSeparator();
+			menu.addAction(QString::fromUtf8("☰ ตั้งค่าแปลภาษา & เสียงพากย์ (PS-Translator)..."), this, &StreamWindow::OpenTranslatorMenu);
 			releaseKeyboard();
 			connect(&menu, &QMenu::aboutToHide, this, [this] {
 				grabKeyboard();
@@ -114,6 +116,11 @@ void StreamWindow::Init()
 	addAction(zoom_action);
 	connect(zoom_action, &QAction::triggered, this, &StreamWindow::ToggleZoom);
 
+	auto translator_menu_action = new QAction(tr("Translator Menu"), this);
+	translator_menu_action->setShortcut(Qt::Key_F2);
+	addAction(translator_menu_action);
+	connect(translator_menu_action, &QAction::triggered, this, &StreamWindow::OpenTranslatorMenu);
+
 	auto quit_action = new QAction(tr("Quit"), this);
 	quit_action->setShortcut(Qt::CTRL + Qt::Key_Q);
 	addAction(quit_action);
@@ -131,7 +138,7 @@ void StreamWindow::Init()
 
 	UpdateTransformModeActions();
 
-	// Initialize PS-Translator components
+	// Initialize PS-Translator components on top of av_widget (or this)
 	translator = new Translator(this);
 	connect(translator, &Translator::SubtitleReady, this, &StreamWindow::OnSubtitleReady);
 	if (session)
@@ -139,24 +146,26 @@ void StreamWindow::Init()
 		connect(session, &StreamSession::AudioSamplesAvailable, translator, &Translator::FeedAudioSamples, Qt::DirectConnection);
 	}
 
-	subtitle_widget = new SubtitleOverlayWidget(this);
-	crop_widget = new CropBoxWidget(this);
-	crop_widget->hide();
+	QWidget *overlay_parent = av_widget ? static_cast<QWidget*>(av_widget) : this;
 
-	black_screen_widget = new QWidget(this);
+	subtitle_widget = new SubtitleOverlayWidget(overlay_parent);
+	crop_widget = new CropBoxWidget(overlay_parent);
+	crop_widget->show(); // Show crop box by default so user sees translation area!
+
+	black_screen_widget = new QWidget(overlay_parent);
 	black_screen_widget->setStyleSheet("background-color: black;");
 	black_screen_widget->hide();
 
-	menu_button = new QPushButton(QString::fromUtf8("☰"), this);
-	menu_button->setFixedSize(42, 42);
+	menu_button = new QPushButton(QString::fromUtf8("☰"), overlay_parent);
+	menu_button->setFixedSize(44, 44);
 	menu_button->setCursor(Qt::PointingHandCursor);
 	menu_button->setStyleSheet(
 		"QPushButton {"
-		"  background-color: rgba(30, 30, 36, 0.85);"
+		"  background-color: rgba(24, 28, 36, 0.90);"
 		"  color: #00E676;"
-		"  font-size: 20px;"
+		"  font-size: 22px;"
 		"  font-weight: bold;"
-		"  border-radius: 21px;"
+		"  border-radius: 22px;"
 		"  border: 2px solid #00E676;"
 		"}"
 		"QPushButton:hover {"
@@ -164,6 +173,7 @@ void StreamWindow::Init()
 		"  color: black;"
 		"}");
 	connect(menu_button, &QPushButton::clicked, this, &StreamWindow::OpenTranslatorMenu);
+	menu_button->show();
 
 	ocr_timer = new QTimer(this);
 	connect(ocr_timer, &QTimer::timeout, this, &StreamWindow::CaptureAndProcessOcr);
@@ -329,22 +339,22 @@ void StreamWindow::ToggleZoom()
 
 void StreamWindow::resizeEvent(QResizeEvent *event)
 {
+	QMainWindow::resizeEvent(event);
 	UpdateVideoTransform();
 	UpdateOverlayPositions();
-	QMainWindow::resizeEvent(event);
 }
 
 void StreamWindow::moveEvent(QMoveEvent *event)
 {
-	UpdateVideoTransform();
 	QMainWindow::moveEvent(event);
+	UpdateVideoTransform();
 }
 
 void StreamWindow::changeEvent(QEvent *event)
 {
+	QMainWindow::changeEvent(event);
 	if(event->type() == QEvent::ActivationChange)
 		UpdateVideoTransform();
-	QMainWindow::changeEvent(event);
 }
 
 void StreamWindow::UpdateVideoTransform()
@@ -361,17 +371,28 @@ void StreamWindow::UpdateVideoTransform()
 
 void StreamWindow::UpdateOverlayPositions()
 {
+	QWidget *p = av_widget ? static_cast<QWidget*>(av_widget) : this;
+	int pw = p->width();
+	int ph = p->height();
+
 	if (crop_widget)
+	{
 		crop_widget->UpdatePositionFromParent();
+		crop_widget->raise();
+	}
 	if (subtitle_widget)
+	{
 		subtitle_widget->UpdatePositionFromParent();
+		subtitle_widget->raise();
+	}
 	if (menu_button)
 	{
-		menu_button->move(width() - menu_button->width() - 20, 20);
+		menu_button->move(pw - menu_button->width() - 24, 24);
 		menu_button->raise();
+		menu_button->show();
 	}
 	if (black_screen_widget)
-		black_screen_widget->setGeometry(rect());
+		black_screen_widget->setGeometry(0, 0, pw, ph);
 }
 
 void StreamWindow::CaptureAndProcessOcr()

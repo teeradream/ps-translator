@@ -111,6 +111,7 @@ jobs:
             -G Ninja `
             "-DCMAKE_POLICY_VERSION_MINIMUM=3.5" `
             -DCMAKE_BUILD_TYPE=Release `
+            "-DCMAKE_CXX_FLAGS=/D_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS" `
             -DCHIAKI_ENABLE_GUI=ON `
             -DCHIAKI_ENABLE_CLI=OFF `
             -DCHIAKI_ENABLE_TESTS=OFF `

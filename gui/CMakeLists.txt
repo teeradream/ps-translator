@@ -11,6 +11,7 @@ endif()
 
 if(WIN32)
 	add_definitions(-DWIN32_LEAN_AND_MEAN)
+	add_definitions(-D_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS)
 endif()
 
 set(RESOURCE_FILES "")

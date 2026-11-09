@@ -132,7 +132,15 @@ jobs:
           Copy-Item "$buildDir/gui/chiaki.exe" "dist-chiaki/chiaki.exe"
 
           # Deploy Qt dependencies
-          & "$env:QT_ROOT_DIR\bin\windeployqt.exe" dist-chiaki/chiaki.exe --no-compiler-runtime
+          $windeploy = (Get-Command windeployqt.exe -ErrorAction SilentlyContinue)?.Source
+          if (-not $windeploy) {
+            $windeploy = (Get-ChildItem -Path "$env:RUNNER_WORKSPACE", "$env:Qt5_Dir", "C:\Qt", "D:\a" -Recurse -Filter "windeployqt.exe" -ErrorAction SilentlyContinue | Select-Object -First 1)?.FullName
+          }
+          if (-not $windeploy) {
+            $windeploy = "windeployqt.exe"
+          }
+          Write-Host "Using windeployqt: $windeploy"
+          & $windeploy dist-chiaki/chiaki.exe --no-compiler-runtime
 
           # Copy Runtime DLLs
           Copy-Item "$env:FFMPEG_DIR/bin/*.dll" "dist-chiaki/" -Force

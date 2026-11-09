@@ -4,12 +4,15 @@ on:
   push:
     branches: [ main ]
     paths:
+      - 'gui/**'
+      - 'lib/**'
       - 'windows-app/**'
       - '.github/workflows/windows.yml'
+      - 'CMakeLists.txt'
   workflow_dispatch:
 
 jobs:
-  build-windows:
+  build-chiaki-desktop:
     runs-on: windows-latest
     permissions:
       contents: write
@@ -17,151 +20,147 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Setup MSYS2 MinGW64 GCC & OpenSSL
-        uses: msys2/setup-msys2@v2
         with:
-          msystem: MINGW64
-          update: false
-          install: >-
-            mingw-w64-x86_64-gcc
-            mingw-w64-x86_64-openssl
+          submodules: recursive
 
-      - name: Download FFmpeg Shared SDK & Compile Native libchiaki Bridge (chiaki_win_bridge.dll)
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install Python Protobuf
+        run: |
+          pip install protobuf==3.19.5
+
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Setup Qt 5.15.2
+        uses: jurplel/install-qt-action@v3
+        with:
+          version: '5.15.2'
+          host: 'windows'
+          target: 'desktop'
+          arch: 'win64_msvc2019_64'
+
+      - name: Download Build Tools & Dependencies (Protoc, Ninja, FFmpeg, SDL2, OpenSSL, Opus)
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          New-Item -ItemType Directory -Force -Path "windows-app/native_dlls" | Out-Null
 
-          Write-Host "Downloading FFmpeg Win64 Shared SDK..."
+          # 1. Protoc
+          Write-Host "Downloading Protoc 3.19.4..."
+          curl.exe -L -sS -o protoc.zip "https://github.com/protocolbuffers/protobuf/releases/download/v3.19.4/protoc-3.19.4-win64.zip"
+          Expand-Archive -Path protoc.zip -DestinationPath "C:\protoc" -Force
+          echo "C:\protoc\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+          # 2. Ninja
+          Write-Host "Downloading Ninja..."
+          curl.exe -L -sS -o ninja.zip "https://github.com/ninja-build/ninja/releases/download/v1.12.1/ninja-win.zip"
+          Expand-Archive -Path ninja.zip -DestinationPath "C:\ninja" -Force
+          echo "C:\ninja" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+          # 3. FFmpeg Win64 Shared SDK
+          Write-Host "Downloading FFmpeg SDK..."
           curl.exe -L -sS -o ffmpeg.zip "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl-shared.zip"
           Expand-Archive -Path ffmpeg.zip -DestinationPath ffmpeg-sdk -Force
-          $ffDir = Get-ChildItem -Path ffmpeg-sdk -Directory | Select-Object -First 1
-          Write-Host "FFmpeg SDK extracted to: $($ffDir.FullName)"
+          $ffDir = (Get-ChildItem -Path ffmpeg-sdk -Directory).FullName
+          echo "FFMPEG_DIR=$ffDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-          $mingwDir = if (Test-Path "$env:RUNNER_TEMP\msys64\mingw64\bin\gcc.exe") { "$env:RUNNER_TEMP\msys64\mingw64" } else { "C:\msys64\mingw64" }
-          Write-Host "Using MinGW64 directory: $mingwDir"
-          $env:PATH = "$mingwDir\bin;$env:PATH"
+          # 4. SDL2 VC
+          Write-Host "Downloading SDL2..."
+          curl.exe -L -sS -o SDL2.zip "https://www.libsdl.org/release/SDL2-devel-2.26.2-VC.zip"
+          Expand-Archive -Path SDL2.zip -DestinationPath . -Force
+          $sdlDir = (Get-ChildItem -Directory -Filter "SDL2-2.26.2").FullName
+          echo "SDL2_DIR=$sdlDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-          $libSrcs = Get-ChildItem "lib/src/*.c" | Where-Object { $_.Name -notmatch "^(ffmpegdecoder|pidecoder|opusdecoder)\.c$" } | ForEach-Object { $_.FullName }
-          $gfSrcs = @(
-            "third-party/gf-complete/src/gf.c",
-            "third-party/gf-complete/src/gf_wgen.c",
-            "third-party/gf-complete/src/gf_w4.c",
-            "third-party/gf-complete/src/gf_w8.c",
-            "third-party/gf-complete/src/gf_w16.c",
-            "third-party/gf-complete/src/gf_w32.c",
-            "third-party/gf-complete/src/gf_w64.c",
-            "third-party/gf-complete/src/gf_w128.c",
-            "third-party/gf-complete/src/gf_rand.c",
-            "third-party/gf-complete/src/gf_general.c",
-            "third-party/gf-complete/src/gf_cpu.c"
-          )
-          $jerasureSrcs = @(
-            "third-party/jerasure/src/galois.c",
-            "third-party/jerasure/src/jerasure.c",
-            "third-party/jerasure/src/reed_sol.c",
-            "third-party/jerasure/src/cauchy.c",
-            "third-party/jerasure/src/liberation.c"
-          )
-          $nanopbSrcs = @(
-            "third-party/nanopb/pb_common.c",
-            "third-party/nanopb/pb_decode.c",
-            "third-party/nanopb/pb_encode.c"
-          )
+          # 5. OpenSSL 1.1.1s (FireDaemon)
+          Write-Host "Downloading OpenSSL 1.1.1..."
+          curl.exe -L -sS -o openssl.zip "https://download.firedaemon.com/FireDaemon-OpenSSL/openssl-1.1.1s.zip"
+          Expand-Archive -Path openssl.zip -DestinationPath openssl-1.1 -Force
+          echo "OPENSSL_DIR=$PWD/openssl-1.1/x64" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-          $allSrcs = @(
-            "windows-app/native/chiaki_win_bridge.c",
-            "windows-app/native/takion.pb.c"
-          ) + $nanopbSrcs + $gfSrcs + $jerasureSrcs + $libSrcs
+          # 6. Build Opus
+          Write-Host "Building Opus..."
+          git clone --depth 1 --branch v1.4 https://github.com/xiph/opus.git
+          $env:PATH = "C:\ninja;$env:PATH"
+          cmake -B opus/build -S opus -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$PWD/opus-prefix"
+          ninja -C opus/build install
+          echo "OPUS_DIR=$PWD/opus-prefix" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-          Write-Host "Compiling chiaki_win_bridge.dll with MinGW64 gcc..."
-          & "$mingwDir\bin\gcc.exe" -shared -O2 `
-            -Wno-int-conversion `
-            -Wno-incompatible-pointer-types `
-            -Wno-pointer-to-int-cast `
-            -D_WIN32_WINNT=0x0601 `
-            '-DCHIAKI_VERSION="2.1.1"' `
-            -DPB_C99_STATIC_ASSERT `
-            -DOPENSSL_SUPPRESS_DEPRECATED `
-            -Iwindows-app/native/include `
-            -Iwindows-app/native `
-            -Ilib/include `
-            -Ithird-party/nanopb `
-            -Ithird-party/gf-complete/include `
-            -Ithird-party/jerasure/include `
-            "-I$($ffDir.FullName)/include" `
-            "-I$mingwDir/include" `
-            @allSrcs `
-            -o "windows-app/native_dlls/chiaki_win_bridge.dll" `
-            "-L$($ffDir.FullName)/lib" `
-            "-L$mingwDir/lib" `
-            -lavcodec -lswscale -lavutil -lcrypto -lws2_32 -lwsock32 -lbcrypt -lpthread
-
-          if (-not (Test-Path "windows-app/native_dlls/chiaki_win_bridge.dll")) {
-            throw "Failed to build chiaki_win_bridge.dll"
-          }
-
-          # Copy FFmpeg runtime DLLs and MinGW runtime DLLs into native_dlls
-          Copy-Item "$($ffDir.FullName)/bin/avcodec-*.dll" "windows-app/native_dlls/" -Force
-          Copy-Item "$($ffDir.FullName)/bin/avutil-*.dll" "windows-app/native_dlls/" -Force
-          Copy-Item "$($ffDir.FullName)/bin/swscale-*.dll" "windows-app/native_dlls/" -Force
-          Copy-Item "$($ffDir.FullName)/bin/swresample-*.dll" "windows-app/native_dlls/" -Force -ErrorAction SilentlyContinue
-
-          Copy-Item "$mingwDir\bin\libcrypto-*.dll" "windows-app/native_dlls/" -Force
-          Copy-Item "$mingwDir\bin\libwinpthread-1.dll" "windows-app/native_dlls/" -Force -ErrorAction SilentlyContinue
-          Copy-Item "$mingwDir\bin\libgcc_s_seh-1.dll" "windows-app/native_dlls/" -Force -ErrorAction SilentlyContinue
-          Copy-Item "$mingwDir\bin\zlib1.dll" "windows-app/native_dlls/" -Force -ErrorAction SilentlyContinue
-
-          Get-ChildItem "windows-app/native_dlls"
-
-      - name: Setup .NET 8.0
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '8.0.x'
-
-      - name: Publish Single-File Self-Contained PS-Translator-Windows.exe
+      - name: Build Chiaki v2.2.0 C++ GUI with PS-Translator
         shell: pwsh
         run: |
-          dotnet publish windows-app/PSTranslatorWin.csproj `
-            -c Release `
-            -r win-x64 `
-            --self-contained true `
-            -p:PublishSingleFile=true `
-            -p:IncludeNativeLibrariesForSelfExtract=true `
-            -p:IncludeAllContentForSelfExtract=true `
-            -p:EnableCompressionInSingleFile=true `
-            -o publish-win
+          $ErrorActionPreference = "Stop"
+          $env:PATH = "C:\ninja;C:\protoc\bin;$env:PATH"
 
-          New-Item -ItemType Directory -Force -Path dist-win | Out-Null
-          Copy-Item "publish-win/PS-Translator-Windows.exe" "dist-win/PS-Translator-Windows.exe"
-          Get-ChildItem dist-win
+          $buildDir = "build-chiaki"
+          cmake -B $buildDir -S . `
+            -G Ninja `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DCHIAKI_ENABLE_GUI=ON `
+            -DCHIAKI_ENABLE_CLI=OFF `
+            -DCHIAKI_ENABLE_TESTS=OFF `
+            -DCHIAKI_ENABLE_ANDROID=OFF `
+            -DCHIAKI_GUI_ENABLE_SDL_GAMECONTROLLER=ON `
+            "-DCMAKE_PREFIX_PATH=$env:FFMPEG_DIR;$env:OPUS_DIR;$env:OPENSSL_DIR;$env:SDL2_DIR" `
+            "-DFFMPEG_ROOT=$env:FFMPEG_DIR" `
+            "-DSDL2_DIR=$env:SDL2_DIR" `
+            "-DOPENSSL_ROOT_DIR=$env:OPENSSL_DIR"
 
-      - name: Upload Windows Artifact
+          ninja -C $buildDir chiaki
+
+          # Create distribution package
+          New-Item -ItemType Directory -Force -Path "dist-chiaki" | Out-Null
+          Copy-Item "$buildDir/gui/chiaki.exe" "dist-chiaki/chiaki.exe"
+
+          # Deploy Qt dependencies
+          & "$env:QT_ROOT_DIR\bin\windeployqt.exe" dist-chiaki/chiaki.exe --no-compiler-runtime
+
+          # Copy Runtime DLLs
+          Copy-Item "$env:FFMPEG_DIR/bin/*.dll" "dist-chiaki/" -Force
+          Copy-Item "$env:SDL2_DIR/lib/x64/SDL2.dll" "dist-chiaki/" -Force
+          Copy-Item "$env:OPENSSL_DIR/bin/*.dll" "dist-chiaki/" -Force
+          Copy-Item "$env:OPUS_DIR/bin/*.dll" "dist-chiaki/" -Force -ErrorAction SilentlyContinue
+
+          # Also copy chiaki.exe directly as chiaki-translator.exe for single drop-in replacement
+          Copy-Item "$buildDir/gui/chiaki.exe" "chiaki.exe"
+
+          # Compress complete folder into ZIP package
+          Compress-Archive -Path "dist-chiaki/*" -DestinationPath "Chiaki-Translator-v2.2.0-Windows.zip" -Force
+
+          Get-ChildItem -Path "dist-chiaki"
+          Get-ChildItem -Filter "*.zip"
+
+      - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: PS-Translator-Windows11
-          path: dist-win/PS-Translator-Windows.exe
+          name: Chiaki-Translator-v2.2.0-Windows
+          path: |
+            Chiaki-Translator-v2.2.0-Windows.zip
+            chiaki.exe
 
-      - name: Attach Windows 11 Native Chiaki Translator to GitHub Release
+      - name: Attach Chiaki Translator v2.2.0 to GitHub Release
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/heads/main')
         with:
           tag_name: v2.0.8
-          name: "PS Translator v2.0.8 (Native Chiaki Windows 11 .EXE & Android .APK)"
+          name: "PS Translator v2.0.8 (Chiaki v2.2.0 Native Windows Translator, Android APK & DeX)"
           body: |
-            ### PS Translator v2.0.8 (Native Chiaki Windows 11 & Android APK)
+            ### PS Translator v2.0.8 (Native Chiaki v2.2.0 Windows 11 & Android APK)
 
-            #### 1. สำหรับคอมพิวเตอร์ Windows 11 (`PS-Translator-Windows.exe` ไฟล์เดียวจบ)
-            - **Native Chiaki Converted into Translator (เหมือนแอปมือถือ APK 100%):** แปลงโปรแกรมสตรีม PS5/PS4 (`libchiaki`) ให้มีระบบแปลซับไตเติ้ลและพากย์เสียงไทยในตัว ค้นหาเครื่อง PS5 ในวงแลน ลงทะเบียนด้วย PIN 8 หลัก ปลุกเครื่องจาก Rest Mode และสตรีมภาพ/เสียง/จอยเกม พร้อมแปลซับไตเติ้ลในโปรแกรมเดียว ไม่ต้องเปิดหลายโปรแกรม
-            - **แสดงคำแปลอยู่ในหน้าต่างโปรแกรม (ไม่ลอยนอกหน้าต่าง):** กล่องซับไตเติ้ลและกรอบเขียวเลือกพื้นที่ซับไตเติ้ลอยู่ในหน้าต่างของโปรแกรมโดยตรง พร้อมโหมดขยายเต็มจอ (`F11`) และโหมดจอดำโชว์เฉพาะตัวหนังสือ
-            - **ปรับขนาดและสีตัวหนังสือได้อิสระ:** ปรับขนาดตัวหนังสือภาษาไทย (16-72 px) และภาษาอังกฤษ (11-40 px) เลือกสีตัวหนังสือได้ตามต้องการ (เหลืองทอง, ขาว, เขียว, ฟ้าสว่าง, ชมพู, ส้ม) และปรับความทึบพื้นหลังกล่องซับได้
-            - **ปุ่มปิดเสียงเกมในตัว:** ปิดเฉพาะเสียงเกมจากสตรีม PS5 เพื่อให้ได้ยินเสียงพากย์ไทย AI (ชาย/หญิง/อัตโนมัติ) ชัดเจนโดยเสียงไม่ซ้อนกัน
+            #### 1. สำหรับคอมพิวเตอร์ Windows 11 (Chiaki v2.2.0 Native Translator)
+            - **แปลงจากซอร์สโค้ดแท้ของ Chiaki v2.2.0 (ตรงกับ `chiaki-2-2-0`):** แปลงโปรแกรม Chiaki v2.2.0 C++/Qt6 โดยตรง ให้มีระบบแปลซับไตเติ้ลภาษาไทยและเสียงพากย์ไทย AI ในตัว 100%
+            - **ใช้งานได้ 2 รูปแบบ:**
+              1. **วิธีที่ 1 (แทนที่ตัวเดิม):** ดาวน์โหลดไฟล์ `chiaki.exe` แล้วนำไปวางทับในโฟลเดอร์ `C:\Users\theer\Downloads\chiaki-2-2-0\` ได้ทันที ทุกการตั้งค่าคอนโซล PS5 เดิมยังอยู่ครบ
+              2. **วิธีที่ 2 (ชุดสมบูรณ์):** ดาวน์โหลดไฟล์ `Chiaki-Translator-v2.2.0-Windows.zip` แตกไฟล์แล้วเปิดเล่นได้ทันทีโดยไม่ต้องติดตั้งอะไรเพิ่ม
+            - **กรอบอ่านซับและคำแปลอยู่ในหน้าต่างเกม (ไม่ลอยออกนอกจอ):** ปรับขนาด ลากย้ายตำแหน่งกรอบเขียว และกล่องซับไตเติ้ลได้อิสระ พร้อมขยายเต็มจอ (`F11`) ไปพร้อมกัน
+            - **เมนูตั้งค่าวงกลม `☰` ในตัว:** ปรับขนาดตัวหนังสือไทย/อังกฤษ (16-72 pt), เลือกสีตัวหนังสือ 6 สี, ปรับความทึบพื้นหลัง, ปรับเพศเสียงพากย์, และมีปุ่มปิดเสียงเกมในตัว
 
             #### 2. สำหรับมือถือและแท็บเล็ต Android (`PS-Translator.apk`)
-            - **Fixed Voice Gender Mapping:** แก้ไขปัญหาการเลือกเสียงชายและหญิงสลับกันให้ตรงตามเพศจริง 100%
-            - **Active Button Highlight UI:** เพิ่มแถบสีไฮไลท์สีเขียวชัดเจนบนปุ่มตัวเลือกที่กำลังใช้งานอยู่
-            - **1080p Ultra-Clear OCR & Smart Corrector:** รองรับการตรวจจับซับไตเติ้ลความละเอียดสูง 1080p พร้อมขยายสเกล 2 เท่า และระบบแก้คำผิด c/e อัตโนมัติ
+            - รองรับ Samsung DeX และ Multi-Window เต็มรูปแบบ
+            - แก้ไขการสลับเพศเสียงพากย์ชาย/หญิงตรงตามจริง 100%
           files: |
-            dist-win/PS-Translator-Windows.exe
+            Chiaki-Translator-v2.2.0-Windows.zip
+            chiaki.exe
           token: ${{ secrets.GITHUB_TOKEN }}

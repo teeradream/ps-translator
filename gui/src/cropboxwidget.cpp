@@ -57,6 +57,15 @@ void CropBoxWidget::UpdatePositionFromParent()
 	update();
 }
 
+void CropBoxWidget::SetStatusText(const QString &text)
+{
+	if (status_text != text)
+	{
+		status_text = text;
+		update();
+	}
+}
+
 bool CropBoxWidget::IsInHandle(const QPoint &pos) const
 {
 	QRect handleRect(width() - handle_size, height() - handle_size, handle_size, handle_size);
@@ -77,15 +86,22 @@ void CropBoxWidget::paintEvent(QPaintEvent *)
 	p.drawRect(rect().adjusted(1, 1, -2, -2));
 
 	// Compact top corner badge (does not span entire width or block game subtitles)
-	int badgeW = qMin(220, width());
-	QRect bannerRect(0, 0, badgeW, 18);
-	p.fillRect(bannerRect, QColor(0, 200, 83, 200));
-	p.setPen(Qt::white);
+	QString label = status_text.isEmpty()
+		? QString::fromUtf8("พื้นที่อ่านซับ (ลากย้ายได้)")
+		: QString::fromUtf8("พื้นที่อ่านซับ | %1").arg(status_text);
+
 	QFont f = p.font();
 	f.setBold(true);
 	f.setPointSize(8);
 	p.setFont(f);
-	p.drawText(bannerRect.adjusted(6, 0, -6, 0), Qt::AlignVCenter | Qt::AlignLeft, QString::fromUtf8("พื้นที่อ่านซับ (ลากย้ายได้)"));
+
+	int textW = p.fontMetrics().horizontalAdvance(label) + 16;
+	int badgeW = qBound(180, textW, qMin(width(), 460));
+	QRect bannerRect(0, 0, badgeW, 18);
+	p.fillRect(bannerRect, QColor(0, 180, 75, 215));
+	p.setPen(Qt::white);
+	QString elided = p.fontMetrics().elidedText(label, Qt::ElideRight, bannerRect.width() - 12);
+	p.drawText(bannerRect.adjusted(6, 0, -6, 0), Qt::AlignVCenter | Qt::AlignLeft, elided);
 
 	// Bottom-right resize handle
 	QRect handleRect(width() - handle_size, height() - handle_size, handle_size, handle_size);

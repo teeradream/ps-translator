@@ -26,8 +26,10 @@
 #define _SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS
 #endif
 #include <windows.h>
+#include <winhttp.h>
 #include <sapi.h>
 #include <sphelper.h>
+#pragma comment(lib, "winhttp.lib")
 #if defined(_MSC_VER)
 #include <winrt/Windows.Foundation.h>
 #include <winrt/Windows.Foundation.Collections.h>
@@ -243,8 +245,13 @@ void Translator::FiniTts()
 QString Translator::FixOcrTypos(const QString &text)
 {
 	QString result = text;
+	// Remove common OCR border artifacts like vertical bars or stray brackets
+	result.replace('|', ' ');
+	result.replace(QRegularExpression("^[\\s_~=`^\\-*•]+|[\\s_~=`^\\-*•]+$"), "");
+
 	struct TypoPair { const char *typo; const char *fix; };
 	static const TypoPair replacements[] = {
+		{"alls", "all is"},
 		{"eannot", "cannot"},
 		{"eome", "come"},
 		{"eall", "call"},
@@ -272,15 +279,25 @@ QString Translator::FixOcrTypos(const QString &text)
 
 bool Translator::IsDialogueSubtitle(const QString &text)
 {
-	if (text.trimmed().isEmpty()) return false;
-	if (filter_short_text && text.length() < 3) return false;
+	QString trimmed = text.trimmed();
+	if (trimmed.isEmpty()) return false;
+	if (filter_short_text && trimmed.length() < 3) return false;
+
+	// Require at least 2 English letters to filter out random symbol noise
+	int alphaCount = 0;
+	for (QChar c : trimmed)
+	{
+		if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'))
+			alphaCount++;
+	}
+	if (alphaCount < 2) return false;
 
 	static const QStringList uiKeywords = {
 		"fps", "press", "hold", "options", "loading", "save", "load",
 		"inventory", "equipped", "r1", "r2", "l1", "l2", "pause", "resume"
 	};
 
-	QString lower = text.toLower();
+	QString lower = trimmed.toLower();
 	for (const QString &kw : uiKeywords)
 	{
 		if (lower == kw) return false;
@@ -295,7 +312,7 @@ bool Translator::IsSimilar(const QString &a, const QString &b)
 	if (a.contains(b, Qt::CaseInsensitive) || b.contains(a, Qt::CaseInsensitive))
 	{
 		int diff = std::abs(a.length() - b.length());
-		if (diff <= 3) return true;
+		if (diff <= 4) return true;
 	}
 	return false;
 }
@@ -324,42 +341,78 @@ bool Translator::DetectFemale(const QString &en, const QString &th)
 
 void Translator::ProcessFrame(const QImage &sub_image)
 {
-	if (!subtitle_enabled || is_processing || sub_image.isNull())
+	if (!subtitle_enabled || sub_image.isNull())
 		return;
 
-	is_processing = true;
+	bool expected = false;
+	if (!is_processing.compare_exchange_strong(expected, true))
+		return;
 
 	QtConcurrent::run([this, sub_image]() {
+		struct ProcessingGuard {
+			std::atomic<bool> &flag;
+			~ProcessingGuard() { flag.store(false); }
+		} guard{this->is_processing};
+
 #if defined(_WIN32) && defined(_MSC_VER)
 		try {
 			winrt::init_apartment(winrt::apartment_type::multi_threaded);
 		} catch (...) {}
 #endif
 
-		QString rawText = PerformOcr(sub_image);
-		QString fixed = FixOcrTypos(rawText).simplified().trimmed();
+		if (!this->HasOcrEngineAvailable())
+		{
+			QMetaObject::invokeMethod(this, [this]() {
+				emit StatusUpdated(QString::fromUtf8("⚠️ ไม่พบโฟลเดอร์ tesseract (กรุณาแตกไฟล์ zip ให้ครบ)"));
+			});
+			return;
+		}
 
-		QMetaObject::invokeMethod(this, [this, fixed]() {
-			if (!fixed.isEmpty() && IsDialogueSubtitle(fixed))
+		QString rawText = this->PerformOcr(sub_image);
+		QString fixed = this->FixOcrTypos(rawText).simplified().trimmed();
+
+		if (!fixed.isEmpty() && this->IsDialogueSubtitle(fixed))
+		{
+			this->empty_frame_count = 0;
+			if (!this->IsSimilar(fixed, this->last_recognized_english))
 			{
-				empty_frame_count = 0;
-				if (!IsSimilar(fixed, last_recognized_english))
-				{
-					last_recognized_english = fixed;
-					RequestTranslation(fixed);
-					return;
-				}
+				this->last_recognized_english = fixed;
+				QMetaObject::invokeMethod(this, [this, fixed]() {
+					emit StatusUpdated(QString::fromUtf8("อ่านได้: \"%1\" (กำลังแปล...)").arg(fixed.left(34)));
+				});
+
+				QString thaiResult = this->TranslateTextSync(fixed).trimmed();
+
+				QMetaObject::invokeMethod(this, [this, thaiResult, fixed]() {
+					if (!thaiResult.isEmpty())
+					{
+						emit StatusUpdated(QString::fromUtf8("แปลแล้ว: \"%1\"").arg(thaiResult.left(34)));
+						emit SubtitleReady(thaiResult, fixed);
+						if (this->tts_enabled)
+						{
+							this->SpeakThai(thaiResult, fixed);
+						}
+					}
+					else
+					{
+						emit StatusUpdated(QString::fromUtf8("อ่านได้: \"%1\" (ออฟไลน์)").arg(fixed.left(34)));
+						emit SubtitleReady(fixed, fixed);
+					}
+				});
 			}
-			else
+		}
+		else
+		{
+			this->empty_frame_count++;
+			if (this->empty_frame_count >= 3)
 			{
-				empty_frame_count++;
-				if (empty_frame_count >= 3)
-				{
-					last_recognized_english.clear();
-				}
+				this->last_recognized_english.clear();
+				QString engineName = this->GetActiveOcrEngineName();
+				QMetaObject::invokeMethod(this, [this, engineName]() {
+					emit StatusUpdated(QString::fromUtf8("กำลังสแกนซับอังกฤษ... (%1)").arg(engineName));
+				});
 			}
-			is_processing = false;
-		});
+		}
 	});
 }
 
@@ -435,7 +488,7 @@ static QString WinRtOcrEngineRecognize(const QImage &img, const OcrEngine &engin
 	{
 		int w = img.width();
 		int h = img.height();
-		if (w < 40 || h < 40) return QString();
+		if (w < 20 || h < 15) return QString();
 
 		// Convert to ARGB32_Premultiplied (in-memory little-endian byte order: BGRA)
 		QImage argb = img.convertToFormat(QImage::Format_ARGB32_Premultiplied);
@@ -491,7 +544,7 @@ static QString WinRtOcrEngineRecognize(const QImage &img, const OcrEngine &engin
 
 static QString WinRtOcr(const QImage &img)
 {
-	if (img.isNull() || img.width() < 30 || img.height() < 20)
+	if (img.isNull() || img.width() < 20 || img.height() < 15)
 		return QString();
 
 	OcrEngine engine = GetWinRtOcrEngine();
@@ -503,6 +556,10 @@ static QString WinRtOcr(const QImage &img)
 
 	// Clamp image dimensions to safe bounds (MaxImageDimension)
 	QImage processed = img;
+	if (processed.height() < 60 && processed.width() < 1000)
+	{
+		processed = processed.scaled(processed.width() * 2, processed.height() * 2, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+	}
 	uint32_t maxDim = 2048;
 	try {
 		maxDim = qBound<uint32_t>(1000, OcrEngine::MaxImageDimension(), 2500);
@@ -535,11 +592,11 @@ static QString WinRtOcr(const QImage &img)
 			int b = qBlue(pixel);
 			if (r > 165 && g > 165 && b > 165)
 			{
-				line[x] = qRgb(255, 255, 255);
+				line[x] = qRgb(0, 0, 0);
 			}
 			else
 			{
-				line[x] = qRgb(0, 0, 0);
+				line[x] = qRgb(255, 255, 255);
 			}
 		}
 	}
@@ -555,31 +612,86 @@ static QString GetTesseractExecutablePath()
 	QStringList candidatePaths = {
 		appDir + "/tesseract/tesseract.exe",
 		appDir + "/tesseract.exe",
+		appDir + "/../tesseract/tesseract.exe",
 		"C:/Program Files/Tesseract-OCR/tesseract.exe",
 		"C:/Program Files (x86)/Tesseract-OCR/tesseract.exe"
 	};
 
 	for (const QString &p : candidatePaths)
 	{
-		if (QFile::exists(p))
-			return p;
+		if (QFileInfo::exists(p))
+			return QFileInfo(p).absoluteFilePath();
 	}
 
 	// Try system PATH
 	QString pathEnv = QString::fromLocal8Bit(qgetenv("PATH"));
 	for (const QString &dir : pathEnv.split(';'))
 	{
+		if (dir.trimmed().isEmpty()) continue;
 		QString candidate = QDir(dir).filePath("tesseract.exe");
-		if (QFile::exists(candidate))
-			return candidate;
+		if (QFileInfo::exists(candidate))
+			return QFileInfo(candidate).absoluteFilePath();
 	}
 
 #ifndef _WIN32
-	if (QFile::exists("/usr/bin/tesseract"))
+	if (QFileInfo::exists("/usr/bin/tesseract"))
 		return "/usr/bin/tesseract";
 #endif
 
 	return QString();
+}
+
+static QString ExecuteTesseractProcess(const QImage &img, const QString &tesseractBin, const QString &tempName)
+{
+	QString tempImgPath = QDir::toNativeSeparators(QDir::tempPath() + "/" + tempName);
+	if (!img.save(tempImgPath, "PNG"))
+		return QString();
+
+	QFileInfo tinfo(tesseractBin);
+	QString tessDir = QDir::toNativeSeparators(tinfo.dir().absolutePath());
+	QString tessdataDir = tinfo.dir().filePath("tessdata");
+	if (!QDir(tessdataDir).exists())
+	{
+		QString altTessdata = QCoreApplication::applicationDirPath() + "/tessdata";
+		if (QDir(altTessdata).exists())
+			tessdataDir = altTessdata;
+	}
+	QString nativeTessdataDir = QDir::toNativeSeparators(tessdataDir);
+
+	QProcess proc;
+	proc.setWorkingDirectory(tessDir);
+
+	QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+	env.insert("PATH", tessDir + ";" + env.value("PATH"));
+	if (QDir(tessdataDir).exists())
+	{
+		env.insert("TESSDATA_PREFIX", nativeTessdataDir);
+	}
+	proc.setProcessEnvironment(env);
+
+#ifdef _WIN32
+	proc.setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments *args) {
+		args->flags |= CREATE_NO_WINDOW;
+	});
+#endif
+
+	QStringList args;
+	args << tempImgPath << "stdout";
+	if (QDir(tessdataDir).exists())
+	{
+		args << "--tessdata-dir" << nativeTessdataDir;
+	}
+	args << "-l" << "eng" << "--psm" << "6";
+
+	proc.start(QDir::toNativeSeparators(tesseractBin), args);
+	if (!proc.waitForFinished(4000))
+	{
+		proc.kill();
+		return QString();
+	}
+
+	QByteArray output = proc.readAllStandardOutput();
+	return QString::fromUtf8(output).trimmed();
 }
 
 static QString RunTesseractOcr(const QImage &img)
@@ -591,32 +703,53 @@ static QString RunTesseractOcr(const QImage &img)
 	if (tesseractBin.isEmpty())
 		return QString();
 
-	QString tempImgPath = QDir::tempPath() + "/ps_translator_ocr.png";
-	if (!img.save(tempImgPath, "PNG"))
-		return QString();
+	// Pass 1: Direct image
+	QString text = ExecuteTesseractProcess(img, tesseractBin, "ps_translator_ocr_1.png");
+	if (text.simplified().length() >= 3)
+		return text;
 
-	QProcess proc;
-	QFileInfo tinfo(tesseractBin);
-	QString tessdataDir = tinfo.dir().filePath("tessdata");
-	if (QDir(tessdataDir).exists())
+	// Check if image has bright subtitle-like pixels before running Pass 2
+	QImage rgb = img.convertToFormat(QImage::Format_RGB32);
+	int w = rgb.width();
+	int h = rgb.height();
+	int brightCount = 0;
+	int totalPixels = w * h;
+	for (int y = 0; y < h; y++)
 	{
-		QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
-		env.insert("TESSDATA_PREFIX", tessdataDir);
-		proc.setProcessEnvironment(env);
+		const QRgb *line = reinterpret_cast<const QRgb *>(rgb.constScanLine(y));
+		for (int x = 0; x < w; x++)
+		{
+			if (qGreen(line[x]) > 175)
+				brightCount++;
+		}
 	}
 
-	QStringList args;
-	args << tempImgPath << "stdout" << "-l" << "eng" << "--psm" << "6";
-
-	proc.start(tesseractBin, args);
-	if (!proc.waitForFinished(1500))
+	double brightRatio = (double)brightCount / (double)qMax(1, totalPixels);
+	if (brightRatio >= 0.005 && brightRatio <= 0.40)
 	{
-		proc.kill();
-		return QString();
+		// Pass 2: Binarized black-on-white with 8px white margin for Tesseract
+		const int pad = 8;
+		QImage binImg(w + pad * 2, h + pad * 2, QImage::Format_RGB32);
+		binImg.fill(qRgb(255, 255, 255));
+		for (int y = 0; y < h; y++)
+		{
+			const QRgb *srcLine = reinterpret_cast<const QRgb *>(rgb.constScanLine(y));
+			QRgb *dstLine = reinterpret_cast<QRgb *>(binImg.scanLine(y + pad)) + pad;
+			for (int x = 0; x < w; x++)
+			{
+				QRgb p = srcLine[x];
+				if (qRed(p) > 175 && qGreen(p) > 175 && qBlue(p) > 175)
+					dstLine[x] = qRgb(0, 0, 0);
+				else
+					dstLine[x] = qRgb(255, 255, 255);
+			}
+		}
+		QString text2 = ExecuteTesseractProcess(binImg, tesseractBin, "ps_translator_ocr_2.png");
+		if (text2.simplified().length() > text.simplified().length())
+			return text2;
 	}
 
-	QByteArray output = proc.readAllStandardOutput();
-	return QString::fromUtf8(output).trimmed();
+	return text;
 }
 
 bool Translator::HasOcrEngineAvailable() const
@@ -634,12 +767,12 @@ QString Translator::GetActiveOcrEngineName() const
 {
 	QString tess = GetTesseractExecutablePath();
 	if (!tess.isEmpty())
-		return QString::fromUtf8("Tesseract OCR (ออฟไลน์)");
+		return QString::fromUtf8("Tesseract OCR");
 #if defined(_WIN32) && defined(_MSC_VER)
 	if (GetWinRtOcrEngine() != nullptr)
 		return QString::fromUtf8("Windows WinRT OCR");
 #endif
-	return QString::fromUtf8("ไม่พบเอนจิน OCR ในเครื่อง");
+	return QString::fromUtf8("ไม่พบเอนจิน OCR");
 }
 
 QString Translator::PerformOcr(const QImage &image)
@@ -659,174 +792,210 @@ QString Translator::PerformOcr(const QImage &image)
 	return QString();
 }
 
-void Translator::RequestTranslation(const QString &englishText)
+#ifdef _WIN32
+static QByteArray WinHttpFetch(const std::wstring &host, const std::wstring &path, const QByteArray &postData = QByteArray())
 {
+	QByteArray result;
+	HINTERNET hSession = WinHttpOpen(L"Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+		WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
+		WINHTTP_NO_PROXY_NAME,
+		WINHTTP_NO_PROXY_BYPASS, 0);
+	if (!hSession)
+		return result;
+
+	WinHttpSetTimeouts(hSession, 3000, 3000, 4000, 4000);
+
+	HINTERNET hConnect = WinHttpConnect(hSession, host.c_str(), INTERNET_DEFAULT_HTTPS_PORT, 0);
+	if (!hConnect)
+	{
+		WinHttpCloseHandle(hSession);
+		return result;
+	}
+
+	const wchar_t *verb = postData.isEmpty() ? L"GET" : L"POST";
+	HINTERNET hRequest = WinHttpOpenRequest(hConnect, verb, path.c_str(),
+		nullptr, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, WINHTTP_FLAG_SECURE);
+	if (!hRequest)
+	{
+		WinHttpCloseHandle(hConnect);
+		WinHttpCloseHandle(hSession);
+		return result;
+	}
+
+	const wchar_t *headers = postData.isEmpty()
+		? WINHTTP_NO_ADDITIONAL_HEADERS
+		: L"Content-Type: application/json\r\n";
+	DWORD headersLen = postData.isEmpty() ? 0 : (DWORD)-1L;
+
+	BOOL bResults = WinHttpSendRequest(hRequest,
+		headers, headersLen,
+		postData.isEmpty() ? WINHTTP_NO_REQUEST_DATA : (LPVOID)postData.constData(),
+		(DWORD)postData.size(),
+		(DWORD)postData.size(), 0);
+
+	if (bResults)
+		bResults = WinHttpReceiveResponse(hRequest, nullptr);
+
+	if (bResults)
+	{
+		DWORD dwSize = 0;
+		do
+		{
+			dwSize = 0;
+			if (!WinHttpQueryDataAvailable(hRequest, &dwSize) || dwSize == 0)
+				break;
+
+			QByteArray chunk(dwSize, 0);
+			DWORD dwDownloaded = 0;
+			if (WinHttpReadData(hRequest, chunk.data(), dwSize, &dwDownloaded) && dwDownloaded > 0)
+			{
+				result.append(chunk.constData(), dwDownloaded);
+			}
+		} while (dwSize > 0);
+	}
+
+	WinHttpCloseHandle(hRequest);
+	WinHttpCloseHandle(hConnect);
+	WinHttpCloseHandle(hSession);
+	return result;
+}
+#endif
+
+QString Translator::TranslateTextSync(const QString &englishText)
+{
+	// 1. Try Gemini Flash if configured
 	if (translation_engine == TranslationEngine::GEMINI_FLASH && !gemini_api_key.trimmed().isEmpty())
 	{
-		RequestTranslationGemini(englishText);
+		QJsonObject rootObj;
+		QJsonArray contentsArray;
+		QJsonObject contentObj;
+		QJsonArray partsArray;
+		QJsonObject partObj;
+
+		QString prompt = QString(
+			"You are a professional video game subtitle translator and Thai voice dubbing director.\n"
+			"Translate the following English game subtitle into natural, emotional, authentic Thai game dubbing dialogue (สำนวนบทพากย์เกมภาษาไทยแท้ๆ มีอารมณ์ร่วม ไม่แปลตรงตัวทื่อๆ).\n"
+			"Also determine the speaker gender ('male' or 'female') based on context.\n"
+			"Respond ONLY with valid JSON in this exact structure: {\"thai\": \"คำแปลบทพากย์\", \"gender\": \"male\" or \"female\"}\n\n"
+			"Subtitle: \"%1\"").arg(englishText);
+
+		partObj["text"] = prompt;
+		partsArray.append(partObj);
+		contentObj["parts"] = partsArray;
+		contentsArray.append(contentObj);
+		rootObj["contents"] = contentsArray;
+
+		QJsonObject genConfig;
+		genConfig["responseMimeType"] = "application/json";
+		genConfig["temperature"] = 0.3;
+		rootObj["generationConfig"] = genConfig;
+
+		QByteArray postData = QJsonDocument(rootObj).toJson(QJsonDocument::Compact);
+		QByteArray geminiData;
+#ifdef _WIN32
+		std::wstring path = QString("/v1beta/models/gemini-1.5-flash:generateContent?key=%1").arg(gemini_api_key.trimmed()).toStdWString();
+		geminiData = WinHttpFetch(L"generativelanguage.googleapis.com", path, postData);
+#endif
+		if (!geminiData.isEmpty())
+		{
+			QJsonDocument doc = QJsonDocument::fromJson(geminiData);
+			if (doc.isObject())
+			{
+				QJsonArray candidates = doc.object()["candidates"].toArray();
+				if (!candidates.isEmpty())
+				{
+					QJsonArray parts = candidates[0].toObject()["content"].toObject()["parts"].toArray();
+					if (!parts.isEmpty())
+					{
+						QString text = parts[0].toObject()["text"].toString().trimmed();
+						QJsonDocument parsedJson = QJsonDocument::fromJson(text.toUtf8());
+						if (parsedJson.isObject())
+						{
+							QString thai = parsedJson.object()["thai"].toString().trimmed();
+							last_gemini_gender = parsedJson.object()["gender"].toString().trimmed().toLower();
+							if (!thai.isEmpty())
+								return thai;
+						}
+						else if (!text.isEmpty())
+						{
+							return text;
+						}
+					}
+				}
+			}
+		}
 	}
-	else
+
+	// 2. Google Translate Free via WinHTTP (native Windows Schannel TLS, zero OpenSSL dependency)
+	QString encoded = QString::fromLatin1(QUrl::toPercentEncoding(englishText));
+	QByteArray googleData;
+#ifdef _WIN32
+	std::wstring gPath = QString("/translate_a/single?client=gtx&sl=en&tl=th&dt=t&q=%1").arg(encoded).toStdWString();
+	googleData = WinHttpFetch(L"translate.googleapis.com", gPath);
+#endif
+	if (googleData.isEmpty())
 	{
-		RequestTranslationGoogle(englishText);
+		// Fallback to curl if available
+		QProcess curlProc;
+#ifdef _WIN32
+		curlProc.setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments *args) {
+			args->flags |= CREATE_NO_WINDOW;
+		});
+#endif
+		QString urlStr = QString("https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=th&dt=t&q=%1").arg(encoded);
+		curlProc.start("curl.exe", QStringList() << "-s" << "-m" << "4" << urlStr);
+		if (curlProc.waitForFinished(4500))
+			googleData = curlProc.readAllStandardOutput();
 	}
+
+	if (!googleData.isEmpty())
+	{
+		QJsonDocument doc = QJsonDocument::fromJson(googleData);
+		if (doc.isArray())
+		{
+			QJsonArray rootArray = doc.array();
+			if (!rootArray.isEmpty() && rootArray[0].isArray())
+			{
+				QString thaiResult;
+				QJsonArray chunksArray = rootArray[0].toArray();
+				for (const QJsonValue &chunkVal : chunksArray)
+				{
+					if (chunkVal.isArray())
+					{
+						QJsonArray chunk = chunkVal.toArray();
+						if (!chunk.isEmpty() && chunk[0].isString())
+						{
+							thaiResult += chunk[0].toString();
+						}
+					}
+				}
+				return thaiResult.trimmed();
+			}
+		}
+	}
+
+	return QString();
+}
+
+void Translator::RequestTranslation(const QString &englishText)
+{
+	Q_UNUSED(englishText);
 }
 
 void Translator::RequestTranslationGoogle(const QString &englishText)
 {
-	QString encoded = QUrl::toPercentEncoding(englishText);
-	QString urlStr = QString("https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=th&dt=t&q=%1").arg(encoded);
-
-	QNetworkRequest req((QUrl(urlStr)));
-	req.setHeader(QNetworkRequest::UserAgentHeader, "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
-	req.setAttribute(QNetworkRequest::User, englishText);
-	req.setAttribute(static_cast<QNetworkRequest::Attribute>(QNetworkRequest::UserMax + 1), "google");
-
-	net_manager->get(req);
+	Q_UNUSED(englishText);
 }
 
 void Translator::RequestTranslationGemini(const QString &englishText)
 {
-	QString urlStr = QString("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=%1").arg(gemini_api_key.trimmed());
-
-	QNetworkRequest req((QUrl(urlStr)));
-	req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-	req.setAttribute(QNetworkRequest::User, englishText);
-	req.setAttribute(static_cast<QNetworkRequest::Attribute>(QNetworkRequest::UserMax + 1), "gemini");
-
-	QJsonObject rootObj;
-	QJsonArray contentsArray;
-	QJsonObject contentObj;
-	QJsonArray partsArray;
-	QJsonObject partObj;
-
-	QString prompt = QString(
-		"You are a professional video game subtitle translator and Thai voice dubbing director.\n"
-		"Translate the following English game subtitle into natural, emotional, authentic Thai game dubbing dialogue (สำนวนบทพากย์เกมภาษาไทยแท้ๆ มีอารมณ์ร่วม ไม่แปลตรงตัวทื่อๆ).\n"
-		"Also determine the speaker gender ('male' or 'female') based on context.\n"
-		"Respond ONLY with valid JSON in this exact structure: {\"thai\": \"คำแปลบทพากย์\", \"gender\": \"male\" or \"female\"}\n\n"
-		"Subtitle: \"%1\"").arg(englishText);
-
-	partObj["text"] = prompt;
-	partsArray.append(partObj);
-	contentObj["parts"] = partsArray;
-	contentsArray.append(contentObj);
-	rootObj["contents"] = contentsArray;
-
-	QJsonObject genConfig;
-	genConfig["responseMimeType"] = "application/json";
-	genConfig["temperature"] = 0.3;
-	rootObj["generationConfig"] = genConfig;
-
-	QByteArray postData = QJsonDocument(rootObj).toJson(QJsonDocument::Compact);
-	net_manager->post(req, postData);
+	Q_UNUSED(englishText);
 }
 
 void Translator::OnTranslationReply(QNetworkReply *reply)
 {
-	is_processing = false;
-
-	QString englishText = reply->request().attribute(QNetworkRequest::User).toString();
-	QString engineType = reply->request().attribute(static_cast<QNetworkRequest::Attribute>(QNetworkRequest::UserMax + 1)).toString();
-
-	if (reply->error() != QNetworkReply::NoError)
-	{
+	if (reply)
 		reply->deleteLater();
-		// If Gemini failed (e.g. invalid key, quota, or network drop), automatically fall back to Google Translate!
-		if (engineType == "gemini")
-		{
-			is_processing = true;
-			RequestTranslationGoogle(englishText);
-			return;
-		}
-		is_processing = false;
-		return;
-	}
-
-	QByteArray data = reply->readAll();
-	reply->deleteLater();
-
-	QString thaiResult;
-
-	if (engineType == "gemini")
-	{
-		QJsonDocument doc = QJsonDocument::fromJson(data);
-		if (doc.isObject())
-		{
-			QJsonObject root = doc.object();
-			QJsonArray candidates = root["candidates"].toArray();
-			if (!candidates.isEmpty())
-			{
-				QJsonObject candidate = candidates[0].toObject();
-				QJsonObject content = candidate["content"].toObject();
-				QJsonArray parts = content["parts"].toArray();
-				if (!parts.isEmpty())
-				{
-					QString text = parts[0].toObject()["text"].toString().trimmed();
-					QJsonDocument parsedJson = QJsonDocument::fromJson(text.toUtf8());
-					if (parsedJson.isObject())
-					{
-						QJsonObject parsedObj = parsedJson.object();
-						thaiResult = parsedObj["thai"].toString().trimmed();
-						last_gemini_gender = parsedObj["gender"].toString().trimmed().toLower();
-					}
-					else if (!text.isEmpty())
-					{
-						thaiResult = text;
-					}
-				}
-			}
-		}
-
-		// Fallback to Google if Gemini gave empty result
-		if (thaiResult.isEmpty())
-		{
-			is_processing = true;
-			RequestTranslationGoogle(englishText);
-			return;
-		}
-	}
-	else
-	{
-		// Google Translate parser
-		QJsonDocument doc = QJsonDocument::fromJson(data);
-		if (!doc.isArray())
-		{
-			is_processing = false;
-			return;
-		}
-
-		QJsonArray rootArray = doc.array();
-		if (rootArray.isEmpty() || !rootArray[0].isArray())
-		{
-			is_processing = false;
-			return;
-		}
-
-		QJsonArray chunksArray = rootArray[0].toArray();
-		for (const QJsonValue &chunkVal : chunksArray)
-		{
-			if (chunkVal.isArray())
-			{
-				QJsonArray chunk = chunkVal.toArray();
-				if (!chunk.isEmpty() && chunk[0].isString())
-				{
-					thaiResult += chunk[0].toString();
-				}
-			}
-		}
-	}
-
-	thaiResult = thaiResult.trimmed();
-	if (!thaiResult.isEmpty())
-	{
-		emit SubtitleReady(thaiResult, englishText);
-
-		if (tts_enabled)
-		{
-			SpeakThai(thaiResult, englishText);
-		}
-	}
-
 	is_processing = false;
 }
 

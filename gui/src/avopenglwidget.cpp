@@ -209,6 +209,19 @@ bool AVOpenGLFrame::Update(AVFrame *frame, ChiakiLog *log)
 		int height = frame->height / conversion_config->plane_configs[i].height_divider;
 		int size = width * height * conversion_config->plane_configs[i].data_per_pixel;
 
+		if(i == 0 && conversion_config->plane_configs[0].data_per_pixel == 1 && frame->data[0])
+		{
+			y_plane.resize(size);
+			uint8_t *y_dst = reinterpret_cast<uint8_t *>(y_plane.data());
+			if(frame->linesize[0] == width)
+				memcpy(y_dst, frame->data[0], size);
+			else
+			{
+				for(int l=0; l<height; l++)
+					memcpy(y_dst + width * l, frame->data[0] + frame->linesize[0] * l, width);
+			}
+		}
+
 		f->glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo[i]);
 		f->glBufferData(GL_PIXEL_UNPACK_BUFFER, size, nullptr, GL_STREAM_DRAW);
 
@@ -238,6 +251,91 @@ bool AVOpenGLFrame::Update(AVFrame *frame, ChiakiLog *log)
 	f->glFinish();
 
 	return true;
+}
+
+QImage AVOpenGLWidget::GrabCroppedFrame(const QRectF &norm_rect)
+{
+	int W = width();
+	int H = height();
+	if(W < 50 || H < 50)
+		return QImage();
+
+	{
+		QMutexLocker lock(&frames_mutex);
+		AVOpenGLFrame *frame = &frames[frame_fg];
+		int fw = (int)frame->width;
+		int fh = (int)frame->height;
+		if(fw > 0 && fh > 0 && frame->y_plane.size() >= fw * fh)
+		{
+			float vp_width = (float)W;
+			float vp_height = (float)H;
+			float aspect = (float)fw / (float)fh;
+			if(transform_mode == TransformMode::Fit)
+			{
+				if(H > 0 && aspect < (float)W / (float)H)
+				{
+					vp_height = (float)H;
+					vp_width = vp_height * aspect;
+				}
+				else
+				{
+					vp_width = (float)W;
+					vp_height = vp_width / aspect;
+				}
+			}
+			else if(transform_mode == TransformMode::Zoom)
+			{
+				if(H > 0 && aspect < (float)W / (float)H)
+				{
+					vp_width = (float)W;
+					vp_height = vp_width / aspect;
+				}
+				else
+				{
+					vp_height = (float)H;
+					vp_width = vp_height * aspect;
+				}
+			}
+
+			float vp_x = ((float)W - vp_width) * 0.5f;
+			float vp_y = ((float)H - vp_height) * 0.5f;
+
+			float rx = (float)norm_rect.left() * W;
+			float ry = (float)norm_rect.top() * H;
+			float rw = (float)norm_rect.width() * W;
+			float rh = (float)norm_rect.height() * H;
+
+			int vx = qBound(0, qRound((rx - vp_x) * fw / vp_width), fw - 10);
+			int vy = qBound(0, qRound((ry - vp_y) * fh / vp_height), fh - 10);
+			int vw = qBound(10, qRound(rw * fw / vp_width), fw - vx);
+			int vh = qBound(10, qRound(rh * fh / vp_height), fh - vy);
+
+			QImage img(vw, vh, QImage::Format_RGB32);
+			const uint8_t *y_src = reinterpret_cast<const uint8_t *>(frame->y_plane.constData());
+			for(int y = 0; y < vh; y++)
+			{
+				const uint8_t *src_row = y_src + (vy + y) * fw + vx;
+				QRgb *dst_row = reinterpret_cast<QRgb *>(img.scanLine(y));
+				for(int x = 0; x < vw; x++)
+				{
+					int lum = ((int)src_row[x] - 16) * 255 / 219;
+					if(lum < 0) lum = 0;
+					else if(lum > 255) lum = 255;
+					dst_row[x] = qRgb(lum, lum, lum);
+				}
+			}
+			return img;
+		}
+	}
+
+	QImage full = grabFramebuffer();
+	if(full.isNull() || full.width() < 50 || full.height() < 50)
+		return QImage();
+	int cx = qBound(0, qRound(norm_rect.left() * full.width()), full.width() - 10);
+	int cy = qBound(0, qRound(norm_rect.top() * full.height()), full.height() - 10);
+	int cw = qBound(10, qRound(norm_rect.width() * full.width()), full.width() - cx);
+	int ch = qBound(10, qRound(norm_rect.height() * full.height()), full.height() - cy);
+	return full.copy(cx, cy, cw, ch);
 }
 
 void AVOpenGLWidget::initializeGL()
@@ -425,6 +523,9 @@ void AVOpenGLWidget::paintGL()
 	}
 
 	f->glViewport((widget_width - vp_width) / 2, (widget_height - vp_height) / 2, vp_width, vp_height);
+
+	f->glUseProgram(program);
+	f->glBindVertexArray(vao);
 
 	for(int i=0; i<3; i++)
 	{

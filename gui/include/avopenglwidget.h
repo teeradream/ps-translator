@@ -9,6 +9,9 @@
 
 #include <QOpenGLWidget>
 #include <QMutex>
+#include <QImage>
+#include <QByteArray>
+#include <QRectF>
 
 extern "C"
 {
@@ -46,6 +49,7 @@ struct AVOpenGLFrame
 	unsigned int width;
 	unsigned int height;
 	ConversionConfig *conversion_config;
+	QByteArray y_plane;
 
 	bool Update(AVFrame *frame, ChiakiLog *log);
 };
@@ -81,6 +85,7 @@ class AVOpenGLWidget: public QOpenGLWidget
 
 		void SwapFrames();
 		AVOpenGLFrame *GetBackgroundFrame()	{ return &frames[1 - frame_fg]; }
+		QImage GrabCroppedFrame(const QRectF &norm_rect);
 
 		void SetTransformMode(TransformMode mode) { transform_mode = mode; }
 		TransformMode GetTransformMode() const { return transform_mode; }

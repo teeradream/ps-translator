@@ -65,6 +65,7 @@ public:
 
 signals:
 	void SubtitleReady(const QString &thai, const QString &english);
+	void StatusUpdated(const QString &status);
 	void ErrorOccurred(const QString &error);
 
 private slots:
@@ -96,6 +97,7 @@ private:
 	bool IsSimilar(const QString &a, const QString &b);
 	bool DetectFemale(const QString &en, const QString &th);
 
+	QString TranslateTextSync(const QString &englishText);
 	void RequestTranslation(const QString &englishText);
 	void RequestTranslationGoogle(const QString &englishText);
 	void RequestTranslationGemini(const QString &englishText);

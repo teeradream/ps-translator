@@ -18,6 +18,9 @@ public:
 	void SetNormalizedRect(const QRectF &rect);
 	void UpdatePositionFromParent();
 
+public slots:
+	void SetStatusText(const QString &text);
+
 signals:
 	void RectChanged(const QRectF &rect);
 	void Closed();
@@ -30,6 +33,7 @@ protected:
 
 private:
 	QRectF norm_rect;
+	QString status_text;
 	bool is_dragging;
 	bool is_resizing;
 	QPoint drag_start_pos;

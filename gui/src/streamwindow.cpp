@@ -397,7 +397,7 @@ void StreamWindow::UpdateOverlayPositions()
 
 void StreamWindow::CaptureAndProcessOcr()
 {
-	if (!av_widget || !translator || !translator->IsSubtitleEnabled() || !session || !session->IsConnected())
+	if (!av_widget || !crop_widget || !translator || !translator->IsSubtitleEnabled())
 		return;
 
 	if (translator->IsProcessing())
@@ -406,26 +406,12 @@ void StreamWindow::CaptureAndProcessOcr()
 	if (av_widget->width() < 100 || av_widget->height() < 100)
 		return;
 
-	bool wasVisible = crop_widget && crop_widget->isVisible();
-	if (wasVisible)
-		crop_widget->setVisible(false);
+	QImage cropped = av_widget->GrabCroppedFrame(crop_widget->GetNormalizedRect());
+	if (cropped.isNull() || cropped.width() < 20 || cropped.height() < 10)
+		return;
 
-	QImage fullFrame = av_widget->grabFramebuffer();
-
-	if (wasVisible)
-		crop_widget->setVisible(true);
-
-	if (fullFrame.isNull() || fullFrame.width() < 100) return;
-
-	QRectF norm = crop_widget->GetNormalizedRect();
-	int cx = qBound(0, qRound(norm.left() * fullFrame.width()), fullFrame.width() - 10);
-	int cy = qBound(0, qRound(norm.top() * fullFrame.height()), fullFrame.height() - 10);
-	int cw = qBound(20, qRound(norm.width() * fullFrame.width()), fullFrame.width() - cx);
-	int ch = qBound(10, qRound(norm.height() * fullFrame.height()), fullFrame.height() - cy);
-
-	QImage cropped = fullFrame.copy(cx, cy, cw, ch);
 	QImage ocr_input = cropped;
-	if (cropped.width() < 800 && cropped.height() < 400)
+	if (cropped.height() < 32)
 	{
 		ocr_input = cropped.scaled(cropped.width() * 2, cropped.height() * 2, Qt::KeepAspectRatio, Qt::SmoothTransformation);
 	}

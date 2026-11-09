@@ -156,8 +156,8 @@ jobs:
           # Deploy Tesseract OCR inside dist-chiaki/tesseract/
           New-Item -ItemType Directory -Force -Path "dist-chiaki/tesseract" | Out-Null
           New-Item -ItemType Directory -Force -Path "dist-chiaki/tesseract/tessdata" | Out-Null
-          Copy-Item "C:\tesseract-dist\*.exe" "dist-chiaki/tesseract\"
-          Copy-Item "C:\tesseract-dist\*.dll" "dist-chiaki/tesseract\"
+          Copy-Item "C:\tesseract-dist\tesseract.exe" "dist-chiaki/tesseract\"
+          Copy-Item "C:\tesseract-dist\*.dll" "dist-chiaki/tesseract\" -Exclude "icu*.dll"
           Copy-Item "C:\tesseract-dist\tessdata\eng.traineddata" "dist-chiaki/tesseract/tessdata\"
 
           # Also package standalone tesseract-win64.zip for users who only replaced chiaki.exe

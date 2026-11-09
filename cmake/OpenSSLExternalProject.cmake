@@ -33,21 +33,28 @@ endif()
 
 find_program(MAKE_EXE NAMES gmake make)
 
-set(OPENSSL_SRC_URL "https://mirror.math.princeton.edu/pub/openssl/source/old/1.1.1/openssl-1.1.1s.tar.gz")
+set(OPENSSL_LOCAL_FILE "")
 if(EXISTS "${CMAKE_SOURCE_DIR}/openssl-1.1.1s.tar.gz")
-	set(OPENSSL_SRC_URL "${CMAKE_SOURCE_DIR}/openssl-1.1.1s.tar.gz")
+	set(OPENSSL_LOCAL_FILE "${CMAKE_SOURCE_DIR}/openssl-1.1.1s.tar.gz")
 elseif(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/openssl-1.1.1s.tar.gz")
-	set(OPENSSL_SRC_URL "${CMAKE_CURRENT_SOURCE_DIR}/openssl-1.1.1s.tar.gz")
+	set(OPENSSL_LOCAL_FILE "${CMAKE_CURRENT_SOURCE_DIR}/openssl-1.1.1s.tar.gz")
 elseif(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../openssl-1.1.1s.tar.gz")
-	set(OPENSSL_SRC_URL "${CMAKE_CURRENT_SOURCE_DIR}/../openssl-1.1.1s.tar.gz")
+	set(OPENSSL_LOCAL_FILE "${CMAKE_CURRENT_SOURCE_DIR}/../openssl-1.1.1s.tar.gz")
+endif()
+
+if(OPENSSL_LOCAL_FILE)
+	set(OPENSSL_URLS "${OPENSSL_LOCAL_FILE}")
+else()
+	set(OPENSSL_URLS
+		"https://mirror.math.princeton.edu/pub/openssl/source/old/1.1.1/openssl-1.1.1s.tar.gz"
+		"http://mirrors.ibiblio.org/openssl/source/old/1.1.1/openssl-1.1.1s.tar.gz"
+		"https://github.com/openssl/openssl/releases/download/OpenSSL_1_1_1s/openssl-1.1.1s.tar.gz"
+		"https://www.openssl.org/source/old/1.1.1/openssl-1.1.1s.tar.gz"
+	)
 endif()
 
 ExternalProject_Add(OpenSSL-ExternalProject
-		URL "${OPENSSL_SRC_URL}"
-		    https://mirror.math.princeton.edu/pub/openssl/source/old/1.1.1/openssl-1.1.1s.tar.gz
-		    http://mirrors.ibiblio.org/openssl/source/old/1.1.1/openssl-1.1.1s.tar.gz
-		    https://github.com/openssl/openssl/releases/download/OpenSSL_1_1_1s/openssl-1.1.1s.tar.gz
-		    https://www.openssl.org/source/old/1.1.1/openssl-1.1.1s.tar.gz
+		URL ${OPENSSL_URLS}
 		URL_HASH SHA256=c5ac01e760ee6ff0dab61d6b2bbd30146724d063eb322180c6f18a6f74e4b6aa
 		INSTALL_DIR "${OPENSSL_INSTALL_DIR}"
 		CONFIGURE_COMMAND ${CMAKE_COMMAND} -E env ${OPENSSL_BUILD_ENV}

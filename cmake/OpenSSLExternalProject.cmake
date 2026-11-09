@@ -32,8 +32,19 @@ if(NOT OPENSSL_OS_COMPILER)
 endif()
 
 find_program(MAKE_EXE NAMES gmake make)
+
+set(OPENSSL_SRC_URL "https://github.com/openssl/openssl/releases/download/OpenSSL_1_1_1s/openssl-1.1.1s.tar.gz")
+if(EXISTS "${CMAKE_SOURCE_DIR}/openssl-1.1.1s.tar.gz")
+	set(OPENSSL_SRC_URL "${CMAKE_SOURCE_DIR}/openssl-1.1.1s.tar.gz")
+elseif(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/openssl-1.1.1s.tar.gz")
+	set(OPENSSL_SRC_URL "${CMAKE_CURRENT_SOURCE_DIR}/openssl-1.1.1s.tar.gz")
+elseif(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../openssl-1.1.1s.tar.gz")
+	set(OPENSSL_SRC_URL "${CMAKE_CURRENT_SOURCE_DIR}/../openssl-1.1.1s.tar.gz")
+endif()
+
 ExternalProject_Add(OpenSSL-ExternalProject
-		URL https://github.com/openssl/openssl/releases/download/OpenSSL_1_1_1s/openssl-1.1.1s.tar.gz
+		URL "${OPENSSL_SRC_URL}"
+		    https://github.com/openssl/openssl/releases/download/OpenSSL_1_1_1s/openssl-1.1.1s.tar.gz
 		    https://www.openssl.org/source/old/1.1.1/openssl-1.1.1s.tar.gz
 		    https://www.openssl.org/source/openssl-1.1.1s.tar.gz
 		URL_HASH SHA256=c5ac01e760ee6ff0dab61d6b2bbd30146724d063eb322180c6f18a6f74e4b6aa

@@ -5,7 +5,6 @@ on:
     branches: [ main, native ]
     paths-ignore:
       - 'windows-app/**'
-      - '.github/workflows/**'
   workflow_dispatch:
 
 jobs:
@@ -46,6 +45,14 @@ jobs:
 
       - name: Grant execute permission for gradlew
         run: chmod +x ./gradlew
+
+      - name: Pre-download OpenSSL source tarball
+        run: |
+          curl -fL --retry 5 -o openssl-1.1.1s.tar.gz "https://github.com/openssl/openssl/releases/download/OpenSSL_1_1_1s/openssl-1.1.1s.tar.gz" || \
+          curl -fL --retry 5 -o openssl-1.1.1s.tar.gz "https://www.openssl.org/source/old/1.1.1/openssl-1.1.1s.tar.gz"
+          cp openssl-1.1.1s.tar.gz app/ || true
+          cp openssl-1.1.1s.tar.gz lib/ || true
+          ls -lh openssl-1.1.1s.tar.gz
 
       - name: Build Android APK (assembleDebug)
         run: ./gradlew assembleDebug --stacktrace

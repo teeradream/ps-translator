@@ -136,7 +136,7 @@ void StreamWindow::Init()
 	connect(translator, &Translator::SubtitleReady, this, &StreamWindow::OnSubtitleReady);
 	if (session)
 	{
-		connect(session, &StreamSession::AudioSamplesAvailable, translator, &Translator::FeedAudioSamples);
+		connect(session, &StreamSession::AudioSamplesAvailable, translator, &Translator::FeedAudioSamples, Qt::DirectConnection);
 	}
 
 	subtitle_widget = new SubtitleOverlayWidget(this);
@@ -167,7 +167,7 @@ void StreamWindow::Init()
 
 	ocr_timer = new QTimer(this);
 	connect(ocr_timer, &QTimer::timeout, this, &StreamWindow::CaptureAndProcessOcr);
-	ocr_timer->start(600);
+	ocr_timer->start(1000);
 
 	UpdateOverlayPositions();
 }
@@ -377,6 +377,12 @@ void StreamWindow::UpdateOverlayPositions()
 void StreamWindow::CaptureAndProcessOcr()
 {
 	if (!av_widget || !translator || !translator->IsSubtitleEnabled() || !session || !session->IsConnected())
+		return;
+
+	if (translator->IsProcessing())
+		return;
+
+	if (av_widget->width() < 100 || av_widget->height() < 100)
 		return;
 
 	QImage fullFrame = av_widget->grabFramebuffer();

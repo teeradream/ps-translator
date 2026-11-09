@@ -10,6 +10,7 @@
 #include <QMutex>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
+#include <atomic>
 
 enum class VoiceGenderMode {
 	AUTO_AI,
@@ -34,6 +35,8 @@ public:
 
 	bool IsSubtitleEnabled() const { return subtitle_enabled; }
 	void SetSubtitleEnabled(bool enabled);
+
+	bool IsProcessing() const { return is_processing.load(); }
 
 	bool IsTtsEnabled() const { return tts_enabled; }
 	void SetTtsEnabled(bool enabled);
@@ -72,7 +75,7 @@ private:
 	QString gemini_api_key;
 	double speech_speed;
 	bool filter_short_text;
-	bool is_processing;
+	std::atomic<bool> is_processing;
 
 	QString last_recognized_english;
 	QString last_gemini_gender;

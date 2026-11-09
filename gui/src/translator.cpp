@@ -11,6 +11,7 @@
 #include <QRegularExpression>
 #include <QBuffer>
 #include <QMutexLocker>
+#include <QtConcurrent>
 #include <cmath>
 
 #ifdef _WIN32
@@ -41,7 +42,6 @@ Translator::Translator(QObject *parent)
 	connect(net_manager, &QNetworkAccessManager::finished, this, &Translator::OnTranslationReply);
 
 	LoadSettings();
-	InitTts();
 }
 
 Translator::~Translator()
@@ -119,7 +119,7 @@ void Translator::SetFilterShortText(bool filter)
 
 void Translator::FeedAudioSamples(const int16_t *buf, size_t samples_count)
 {
-	if (!buf || samples_count == 0)
+	if (!buf || samples_count == 0 || !tts_enabled || voice_gender_mode != VoiceGenderMode::AUTO_AI)
 		return;
 
 	QMutexLocker locker(&audio_mutex);
@@ -203,7 +203,7 @@ int Translator::DetectVoiceGenderFromAudio()
 void Translator::InitTts()
 {
 #ifdef _WIN32
-	CoInitialize(nullptr);
+	if (sapi_voice) return;
 	ISpVoice *voice = nullptr;
 	HRESULT hr = CoCreateInstance(CLSID_SpVoice, nullptr, CLSCTX_ALL, IID_ISpVoice, (void **)&voice);
 	if (SUCCEEDED(hr))
@@ -315,20 +315,29 @@ void Translator::ProcessFrame(const QImage &sub_image)
 
 	is_processing = true;
 
-	QString rawText = PerformOcr(sub_image);
-	QString fixed = FixOcrTypos(rawText).simplified().trimmed();
+	QtConcurrent::run([this, sub_image]() {
+#if defined(_WIN32) && defined(_MSC_VER)
+		try {
+			winrt::init_apartment(winrt::apartment_type::multi_threaded);
+		} catch (...) {}
+#endif
 
-	if (!fixed.isEmpty() && IsDialogueSubtitle(fixed))
-	{
-		if (!IsSimilar(fixed, last_recognized_english))
-		{
-			last_recognized_english = fixed;
-			RequestTranslation(fixed);
-			return;
-		}
-	}
+		QString rawText = PerformOcr(sub_image);
+		QString fixed = FixOcrTypos(rawText).simplified().trimmed();
 
-	is_processing = false;
+		QMetaObject::invokeMethod(this, [this, fixed]() {
+			if (!fixed.isEmpty() && IsDialogueSubtitle(fixed))
+			{
+				if (!IsSimilar(fixed, last_recognized_english))
+				{
+					last_recognized_english = fixed;
+					RequestTranslation(fixed);
+					return;
+				}
+			}
+			is_processing = false;
+		});
+	});
 }
 
 #if defined(_WIN32) && defined(_MSC_VER)
@@ -478,7 +487,9 @@ void Translator::OnTranslationReply(QNetworkReply *reply)
 		{
 			is_processing = true;
 			RequestTranslationGoogle(englishText);
+			return;
 		}
+		is_processing = false;
 		return;
 	}
 
@@ -529,10 +540,18 @@ void Translator::OnTranslationReply(QNetworkReply *reply)
 	{
 		// Google Translate parser
 		QJsonDocument doc = QJsonDocument::fromJson(data);
-		if (!doc.isArray()) return;
+		if (!doc.isArray())
+		{
+			is_processing = false;
+			return;
+		}
 
 		QJsonArray rootArray = doc.array();
-		if (rootArray.isEmpty() || !rootArray[0].isArray()) return;
+		if (rootArray.isEmpty() || !rootArray[0].isArray())
+		{
+			is_processing = false;
+			return;
+		}
 
 		QJsonArray chunksArray = rootArray[0].toArray();
 		for (const QJsonValue &chunkVal : chunksArray)
@@ -558,12 +577,18 @@ void Translator::OnTranslationReply(QNetworkReply *reply)
 			SpeakThai(thaiResult, englishText);
 		}
 	}
+
+	is_processing = false;
 }
 
 void Translator::SpeakThai(const QString &thaiText, const QString &englishText)
 {
 #ifdef _WIN32
-	if (!sapi_voice) return;
+	if (!sapi_voice)
+	{
+		InitTts();
+		if (!sapi_voice) return;
+	}
 
 	ISpVoice *voice = reinterpret_cast<ISpVoice *>(sapi_voice);
 

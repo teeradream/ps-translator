@@ -45,10 +45,10 @@ TranslatorMenuDialog::TranslatorMenuDialog(Translator *translator,
 	QPushButton *testBtn = new QPushButton(QString::fromUtf8("🔊 ทดสอบซับไตเติ้ล & เสียงพากย์"), switchGroup);
 	testBtn->setStyleSheet("background-color: #2e3842; color: #00E676; font-weight: bold; padding: 7px; border: 1px solid #00E676; border-radius: 4px;");
 	connect(testBtn, &QPushButton::clicked, this, [this]() {
-		if (sub_overlay)
-			sub_overlay->ShowSubtitle(QString::fromUtf8("ทดสอบระบบแปลภาษาและเสียงพากย์ไทย พร้อมใช้งาน!"), "PS-Translator Thai Dubbing Test: System Ready!");
-		if (translator)
-			translator->SpeakThai(QString::fromUtf8("ทดสอบระบบแปลภาษาและเสียงพากย์ไทย พร้อมใช้งาน"));
+		if (this->sub_overlay)
+			this->sub_overlay->ShowSubtitle(QString::fromUtf8("ทดสอบระบบแปลภาษาและเสียงพากย์ไทย พร้อมใช้งาน!"), "PS-Translator Thai Dubbing Test: System Ready!");
+		if (this->translator)
+			this->translator->SpeakThai(QString::fromUtf8("ทดสอบระบบแปลภาษาและเสียงพากย์ไทย พร้อมใช้งาน"));
 	});
 	switchLayout->addWidget(testBtn);
 	mainLayout->addWidget(switchGroup);

@@ -64,7 +64,6 @@ jobs:
           APK_FILE=$(find app/build/outputs/apk/ -name "*.apk" | head -n 1)
           echo "Found APK at: $APK_FILE"
           cp "$APK_FILE" dist/PS-Translator.apk
-          cp "$APK_FILE" dist/PS-Translator-Native.apk
           ls -la dist/
 
       - name: Upload Artifact

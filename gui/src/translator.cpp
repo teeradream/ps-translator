@@ -24,6 +24,14 @@
 #include <windows.h>
 #include <sapi.h>
 #include <sphelper.h>
+#if defined(_MSC_VER)
+#include <winrt/Windows.Foundation.h>
+#include <winrt/Windows.Foundation.Collections.h>
+#include <winrt/Windows.Media.Ocr.h>
+#include <winrt/Windows.Graphics.Imaging.h>
+#include <winrt/Windows.Storage.Streams.h>
+#include <winrt/Windows.Globalization.h>
+#endif
 #endif
 
 Translator::Translator(QObject *parent)
@@ -341,16 +349,6 @@ void Translator::ProcessFrame(const QImage &sub_image)
 }
 
 #if defined(_WIN32) && defined(_MSC_VER)
-#ifndef _SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS
-#define _SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS
-#endif
-#include <winrt/Windows.Foundation.h>
-#include <winrt/Windows.Foundation.Collections.h>
-#include <winrt/Windows.Media.Ocr.h>
-#include <winrt/Windows.Graphics.Imaging.h>
-#include <winrt/Windows.Storage.Streams.h>
-#include <winrt/Windows.Globalization.h>
-
 using namespace winrt;
 using namespace Windows::Media::Ocr;
 using namespace Windows::Graphics::Imaging;

@@ -26,8 +26,6 @@ add_executable(chiaki WIN32
 		src/main.cpp
 		include/streamwindow.h
 		src/streamwindow.cpp
-		include/simulationwindow.h
-		src/simulationwindow.cpp
 		include/cropboxwidget.h
 		src/cropboxwidget.cpp
 		include/subtitleoverlaywidget.h

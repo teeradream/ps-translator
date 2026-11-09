@@ -59,7 +59,6 @@ class MainWindow : public QMainWindow
 
 		void UpdateDisplayServers();
 		void UpdateServerWidgets();
-		void OpenSimulation();
 
 	public:
 		explicit MainWindow(Settings *settings, QWidget *parent = nullptr);

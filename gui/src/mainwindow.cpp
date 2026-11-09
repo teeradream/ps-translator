@@ -8,7 +8,6 @@
 #include <settingsdialog.h>
 #include <streamsession.h>
 #include <streamwindow.h>
-#include <simulationwindow.h>
 #include <manualhostdialog.h>
 
 #include <QTableWidget>
@@ -134,11 +133,6 @@ MainWindow::MainWindow(Settings *settings, QWidget *parent)
 	tool_bar->addWidget(tool_bar_spacer);
 #endif
 
-	auto sim_action = new QAction(QString::fromUtf8("🎮 โหมดทดสอบจำลอง (Simulation Mode)"), this);
-	sim_action->setToolTip(QString::fromUtf8("เปิดโหมดจำลองเกมสำหรับทดสอบระบบแปลภาษา ซับไตเติ้ล และเสียงพากย์ AI โดยไม่ต้องต่อ PS5"));
-	AddToolBarAction(sim_action);
-	connect(sim_action, &QAction::triggered, this, &MainWindow::OpenSimulation);
-
 	auto add_manual_action = new QAction(tr("Add Console manually"), this);
 	add_manual_action->setIcon(LoadIcon(":/icons/add-24px.svg"));
 	AddToolBarAction(add_manual_action);
@@ -171,25 +165,6 @@ MainWindow::MainWindow(Settings *settings, QWidget *parent)
 	this->window()->winId();
 	tool_bar->attachToWindow(this->window()->windowHandle());
 #endif
-
-	auto sim_btn = new QPushButton(QString::fromUtf8("🎮 เปิดโหมดทดสอบจำลองเกม (Simulation Demo - ไม่ต้องต่อ PS5)"), scroll_content_widget);
-	sim_btn->setCursor(Qt::PointingHandCursor);
-	sim_btn->setStyleSheet(
-		"QPushButton {"
-		"  background-color: #1b5e20;"
-		"  color: #00E676;"
-		"  font-size: 13px;"
-		"  font-weight: bold;"
-		"  padding: 10px 16px;"
-		"  border-radius: 6px;"
-		"  border: 1px solid #00E676;"
-		"}"
-		"QPushButton:hover {"
-		"  background-color: #00E676;"
-		"  color: black;"
-		"}");
-	connect(sim_btn, &QPushButton::clicked, this, &MainWindow::OpenSimulation);
-	scroll_content_layout->addWidget(sim_btn);
 
 	grid_widget = new DynamicGridWidget(200, scroll_content_widget);
 	scroll_content_layout->addWidget(grid_widget);
@@ -400,10 +375,4 @@ void MainWindow::UpdateServerWidgets()
 
 	for(size_t i=0; i<server_item_widgets.count(); i++)
 		server_item_widgets[i]->Update(display_servers[i]);
-}
-
-void MainWindow::OpenSimulation()
-{
-	auto sim_window = new SimulationWindow(this);
-	sim_window->show();
 }

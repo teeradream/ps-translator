@@ -59,27 +59,27 @@ jobs:
 
           # 1. Protoc
           Write-Host "Downloading Protoc 3.19.4..."
-          curl.exe -L -sS -o protoc.zip "https://github.com/protocolbuffers/protobuf/releases/download/v3.19.4/protoc-3.19.4-win64.zip"
-          Expand-Archive -Path protoc.zip -DestinationPath "C:\protoc" -Force
+          curl.exe -fL --retry 3 -o protoc.zip "https://github.com/protocolbuffers/protobuf/releases/download/v3.19.4/protoc-3.19.4-win64.zip"
+          7z x protoc.zip -oC:\protoc -y
           echo "C:\protoc\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
           # 2. Ninja
           Write-Host "Downloading Ninja..."
-          curl.exe -L -sS -o ninja.zip "https://github.com/ninja-build/ninja/releases/download/v1.12.1/ninja-win.zip"
-          Expand-Archive -Path ninja.zip -DestinationPath "C:\ninja" -Force
+          curl.exe -fL --retry 3 -o ninja.zip "https://github.com/ninja-build/ninja/releases/download/v1.12.1/ninja-win.zip"
+          7z x ninja.zip -oC:\ninja -y
           echo "C:\ninja" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
           # 3. FFmpeg Win64 Shared SDK
           Write-Host "Downloading FFmpeg SDK..."
-          curl.exe -L -sS -o ffmpeg.zip "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl-shared.zip"
-          Expand-Archive -Path ffmpeg.zip -DestinationPath ffmpeg-sdk -Force
+          curl.exe -fL --retry 5 --retry-delay 2 -o ffmpeg.zip "https://github.com/FFmpeg-Builds/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl-shared.zip"
+          7z x ffmpeg.zip -offmpeg-sdk -y
           $ffDir = (Get-ChildItem -Path ffmpeg-sdk -Directory).FullName
           echo "FFMPEG_DIR=$ffDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
           # 4. SDL2 VC
           Write-Host "Downloading SDL2..."
-          curl.exe -L -sS -o SDL2.zip "https://www.libsdl.org/release/SDL2-devel-2.26.2-VC.zip"
-          Expand-Archive -Path SDL2.zip -DestinationPath . -Force
+          curl.exe -fL --retry 3 -o SDL2.zip "https://www.libsdl.org/release/SDL2-devel-2.26.2-VC.zip"
+          7z x SDL2.zip -y
           $sdlDir = (Get-ChildItem -Directory -Filter "SDL2-2.26.2").FullName
           $sdlNorm = $sdlDir.Replace("\", "/")
           $sdlCfg = "set(SDL2_INCLUDE_DIRS `"$sdlNorm/include`")`nset(SDL2_LIBRARIES `"$sdlNorm/lib/x64/SDL2.lib`")`nset(SDL2_LIBDIR `"$sdlNorm/lib/x64`")`ninclude(`"$sdlNorm/cmake/sdl2-config-version.cmake`")"
@@ -144,7 +144,7 @@ jobs:
           Copy-Item "$buildDir/gui/chiaki.exe" "chiaki.exe"
 
           # Compress complete folder into ZIP package
-          Compress-Archive -Path "dist-chiaki/*" -DestinationPath "Chiaki-Translator-v2.2.0-Windows.zip" -Force
+          7z a -tzip Chiaki-Translator-v2.2.0-Windows.zip ./dist-chiaki/*
 
           Get-ChildItem -Path "dist-chiaki"
           Get-ChildItem -Filter "*.zip"

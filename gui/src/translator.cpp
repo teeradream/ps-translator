@@ -44,6 +44,7 @@ Translator::Translator(QObject *parent)
 	speech_speed(1.25),
 	filter_short_text(true),
 	is_processing(false),
+	empty_frame_count(0),
 	sapi_voice(nullptr)
 {
 	net_manager = new QNetworkAccessManager(this);
@@ -212,6 +213,7 @@ void Translator::InitTts()
 {
 #ifdef _WIN32
 	if (sapi_voice) return;
+	CoInitialize(nullptr);
 	ISpVoice *voice = nullptr;
 	HRESULT hr = CoCreateInstance(CLSID_SpVoice, nullptr, CLSCTX_ALL, IID_ISpVoice, (void **)&voice);
 	if (SUCCEEDED(hr))
@@ -336,11 +338,20 @@ void Translator::ProcessFrame(const QImage &sub_image)
 		QMetaObject::invokeMethod(this, [this, fixed]() {
 			if (!fixed.isEmpty() && IsDialogueSubtitle(fixed))
 			{
+				empty_frame_count = 0;
 				if (!IsSimilar(fixed, last_recognized_english))
 				{
 					last_recognized_english = fixed;
 					RequestTranslation(fixed);
 					return;
+				}
+			}
+			else
+			{
+				empty_frame_count++;
+				if (empty_frame_count >= 3)
+				{
+					last_recognized_english.clear();
 				}
 			}
 			is_processing = false;
@@ -354,46 +365,183 @@ using namespace Windows::Media::Ocr;
 using namespace Windows::Graphics::Imaging;
 using namespace Windows::Storage::Streams;
 
-static QString WinRtOcr(const QImage &img)
+static OcrEngine GetWinRtOcrEngine()
+{
+	static OcrEngine cachedEngine = nullptr;
+	static bool initialized = false;
+	if (initialized)
+		return cachedEngine;
+
+	initialized = true;
+
+	try
+	{
+		// Priority 1: Check en-US
+		Windows::Globalization::Language enUs(L"en-US");
+		if (OcrEngine::IsLanguageSupported(enUs))
+		{
+			cachedEngine = OcrEngine::TryCreateFromLanguage(enUs);
+			if (cachedEngine) return cachedEngine;
+		}
+	}
+	catch (...) {}
+
+	try
+	{
+		// Priority 2: Any English variant (en-GB, en-AU, en-CA, etc.)
+		auto langs = OcrEngine::AvailableRecognizerLanguages();
+		for (auto const &lang : langs)
+		{
+			std::wstring tag = lang.LanguageTag().c_str();
+			if (tag.rfind(L"en", 0) == 0)
+			{
+				cachedEngine = OcrEngine::TryCreateFromLanguage(lang);
+				if (cachedEngine) return cachedEngine;
+			}
+		}
+	}
+	catch (...) {}
+
+	try
+	{
+		// Priority 3: UserProfileLanguages
+		cachedEngine = OcrEngine::TryCreateFromUserProfileLanguages();
+		if (cachedEngine) return cachedEngine;
+	}
+	catch (...) {}
+
+	try
+	{
+		// Priority 4: Any installed OCR language on system
+		auto langs = OcrEngine::AvailableRecognizerLanguages();
+		if (langs.Size() > 0)
+		{
+			cachedEngine = OcrEngine::TryCreateFromLanguage(langs.GetAt(0));
+			if (cachedEngine) return cachedEngine;
+		}
+	}
+	catch (...) {}
+
+	return nullptr;
+}
+
+static QString WinRtOcrEngineRecognize(const QImage &img, const OcrEngine &engine)
 {
 	try
 	{
-		QImage rgba = img.convertToFormat(QImage::Format_RGBA8888);
-		int w = rgba.width();
-		int h = rgba.height();
+		int w = img.width();
+		int h = img.height();
+		if (w < 40 || h < 40) return QString();
 
-		InMemoryRandomAccessStream stream;
-		DataWriter writer(stream);
+		// Convert to ARGB32_Premultiplied (in-memory little-endian byte order: BGRA)
+		QImage argb = img.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+		w = argb.width();
+		h = argb.height();
 
-		QByteArray pngData;
-		QBuffer buf(&pngData);
-		buf.open(QIODevice::WriteOnly);
-		rgba.save(&buf, "PNG");
-
-		writer.WriteBytes(winrt::array_view<const uint8_t>(reinterpret_cast<const uint8_t*>(pngData.constData()), pngData.size()));
-		writer.StoreAsync().get();
-		writer.FlushAsync().get();
-		writer.DetachStream();
-
-		stream.Seek(0);
-		BitmapDecoder decoder = BitmapDecoder::CreateAsync(stream).get();
-		SoftwareBitmap swBmp = decoder.GetSoftwareBitmapAsync().get();
-
-		OcrEngine engine = OcrEngine::TryCreateFromUserProfileLanguages();
-		if (!engine)
+		// Pack tightly into contiguous byte buffer (stride w * 4)
+		QByteArray rawBytes;
+		rawBytes.resize(w * h * 4);
+		uint8_t *dst = reinterpret_cast<uint8_t*>(rawBytes.data());
+		for (int y = 0; y < h; y++)
 		{
-			Windows::Globalization::Language lang(L"en-US");
-			engine = OcrEngine::TryCreateFromLanguage(lang);
+			const uint8_t *src = argb.constScanLine(y);
+			memcpy(dst + y * w * 4, src, w * 4);
 		}
-		if (engine)
+
+		DataWriter writer;
+		writer.WriteBytes(winrt::array_view<const uint8_t>(
+			reinterpret_cast<const uint8_t*>(rawBytes.constData()),
+			static_cast<uint32_t>(rawBytes.size())
+		));
+		IBuffer buffer = writer.DetachBuffer();
+
+		SoftwareBitmap swBmp = SoftwareBitmap::CreateCopyFromBuffer(
+			buffer,
+			BitmapPixelFormat::Bgra8,
+			w,
+			h,
+			BitmapAlphaMode::Premultiplied
+		);
+
+		OcrResult res = engine.RecognizeAsync(swBmp).get();
+		if (res)
 		{
-			OcrResult res = engine.RecognizeAsync(swBmp).get();
 			std::wstring recognized = res.Text().c_str();
 			return QString::fromStdWString(recognized);
 		}
 	}
-	catch (...) {}
+	catch (const winrt::hresult_error &e)
+	{
+		qWarning("WinRtOcrEngineRecognize HRESULT: 0x%08X: %ls", e.code().value, e.message().c_str());
+	}
+	catch (const std::exception &e)
+	{
+		qWarning("WinRtOcrEngineRecognize std: %s", e.what());
+	}
+	catch (...)
+	{
+		qWarning("WinRtOcrEngineRecognize unknown exception");
+	}
 	return QString();
+}
+
+static QString WinRtOcr(const QImage &img)
+{
+	if (img.isNull() || img.width() < 30 || img.height() < 20)
+		return QString();
+
+	OcrEngine engine = GetWinRtOcrEngine();
+	if (!engine)
+	{
+		qWarning("WinRtOcr: No OCR engine available on this Windows system");
+		return QString();
+	}
+
+	// Clamp image dimensions to safe bounds (MaxImageDimension)
+	QImage processed = img;
+	uint32_t maxDim = 2048;
+	try {
+		maxDim = qBound<uint32_t>(1000, OcrEngine::MaxImageDimension(), 2500);
+	} catch (...) {}
+
+	if ((uint32_t)processed.width() > maxDim || (uint32_t)processed.height() > maxDim)
+	{
+		processed = processed.scaled(maxDim, maxDim, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+	}
+
+	// Pass 1: Original image
+	QString text = WinRtOcrEngineRecognize(processed, engine);
+	if (!text.trimmed().isEmpty())
+	{
+		return text;
+	}
+
+	// Pass 2: High-contrast binarization for game subtitles (white text on dark/variable background)
+	QImage contrastImg = processed.convertToFormat(QImage::Format_RGB32);
+	int w = contrastImg.width();
+	int h = contrastImg.height();
+	for (int y = 0; y < h; y++)
+	{
+		QRgb *line = reinterpret_cast<QRgb*>(contrastImg.scanLine(y));
+		for (int x = 0; x < w; x++)
+		{
+			QRgb pixel = line[x];
+			int r = qRed(pixel);
+			int g = qGreen(pixel);
+			int b = qBlue(pixel);
+			if (r > 165 && g > 165 && b > 165)
+			{
+				line[x] = qRgb(255, 255, 255);
+			}
+			else
+			{
+				line[x] = qRgb(0, 0, 0);
+			}
+		}
+	}
+
+	text = WinRtOcrEngineRecognize(contrastImg, engine);
+	return text;
 }
 #endif
 
@@ -621,6 +769,53 @@ void Translator::SpeakThai(const QString &thaiText, const QString &englishText)
 				isFemale = DetectFemale(englishText, thaiText);
 			}
 			break;
+		}
+	}
+
+	// Try to select Thai voice (Language=41e)
+	// 1. First check Windows OneCore voices (Windows 10/11 default for Thai: Niwat, Premwadee, Achara)
+	bool voiceSet = false;
+	ISpObjectTokenCategory *cat = nullptr;
+	if (SUCCEEDED(CoCreateInstance(CLSID_SpObjectTokenCategory, nullptr, CLSCTX_ALL, IID_ISpObjectTokenCategory, (void**)&cat)))
+	{
+		if (SUCCEEDED(cat->SetId(L"HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Speech_OneCore\\Voices", FALSE)))
+		{
+			IEnumSpObjectTokens *enumTokens = nullptr;
+			const wchar_t *filter = isFemale ? L"Language=41e;Gender=Female" : L"Language=41e;Gender=Male";
+			if (FAILED(cat->EnumTokens(filter, nullptr, &enumTokens)) || !enumTokens)
+			{
+				cat->EnumTokens(L"Language=41e", nullptr, &enumTokens);
+			}
+
+			if (enumTokens)
+			{
+				ISpObjectToken *token = nullptr;
+				if (SUCCEEDED(enumTokens->Next(1, &token, nullptr)) && token)
+				{
+					voice->SetVoice(token);
+					token->Release();
+					voiceSet = true;
+				}
+				enumTokens->Release();
+			}
+		}
+		cat->Release();
+	}
+
+	// 2. Fallback to classic SAPI 5 voices if OneCore didn't find Thai
+	if (!voiceSet)
+	{
+		ISpObjectToken *token = nullptr;
+		HRESULT hr = SpFindBestToken(SPCAT_VOICES, isFemale ? L"Language=41e;Gender=Female" : L"Language=41e;Gender=Male", nullptr, &token);
+		if (FAILED(hr) || !token)
+		{
+			hr = SpFindBestToken(SPCAT_VOICES, L"Language=41e", nullptr, &token);
+		}
+		if (SUCCEEDED(hr) && token)
+		{
+			voice->SetVoice(token);
+			token->Release();
+			voiceSet = true;
 		}
 	}
 

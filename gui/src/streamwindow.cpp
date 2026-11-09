@@ -177,7 +177,7 @@ void StreamWindow::Init()
 
 	ocr_timer = new QTimer(this);
 	connect(ocr_timer, &QTimer::timeout, this, &StreamWindow::CaptureAndProcessOcr);
-	ocr_timer->start(1000);
+	ocr_timer->start(800);
 
 	UpdateOverlayPositions();
 }
@@ -416,9 +416,17 @@ void StreamWindow::CaptureAndProcessOcr()
 	int ch = qBound(10, qRound(norm.height() * fullFrame.height()), fullFrame.height() - cy);
 
 	QImage cropped = fullFrame.copy(cx, cy, cw, ch);
-	QImage scaled = cropped.scaled(cw * 2, ch * 2, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+	QImage ocr_input = cropped;
+	if (cropped.width() < 800 && cropped.height() < 400)
+	{
+		ocr_input = cropped.scaled(cropped.width() * 2, cropped.height() * 2, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+	}
+	else if (cropped.width() > 2000 || cropped.height() > 2000)
+	{
+		ocr_input = cropped.scaled(2000, 2000, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+	}
 
-	translator->ProcessFrame(scaled);
+	translator->ProcessFrame(ocr_input);
 }
 
 void StreamWindow::OnSubtitleReady(const QString &thai, const QString &english)

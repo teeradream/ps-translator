@@ -59,6 +59,8 @@ public:
 	// Feed audio samples from game stream (interleaved stereo PCM 16-bit 48kHz)
 	void FeedAudioSamples(const int16_t *buf, size_t samples_count);
 
+	void SpeakThai(const QString &thaiText, const QString &englishText = QString());
+
 signals:
 	void SubtitleReady(const QString &thai, const QString &english);
 	void ErrorOccurred(const QString &error);
@@ -76,6 +78,7 @@ private:
 	double speech_speed;
 	bool filter_short_text;
 	std::atomic<bool> is_processing;
+	int empty_frame_count;
 
 	QString last_recognized_english;
 	QString last_gemini_gender;
@@ -94,7 +97,6 @@ private:
 	void RequestTranslation(const QString &englishText);
 	void RequestTranslationGoogle(const QString &englishText);
 	void RequestTranslationGemini(const QString &englishText);
-	void SpeakThai(const QString &thaiText, const QString &englishText);
 
 	void InitTts();
 	void FiniTts();

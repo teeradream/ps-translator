@@ -12,6 +12,10 @@
 #include <QBuffer>
 #include <QMutexLocker>
 #include <QtConcurrent>
+#include <QProcess>
+#include <QCoreApplication>
+#include <QDir>
+#include <QFileInfo>
 #include <cmath>
 
 #ifdef _WIN32
@@ -545,14 +549,113 @@ static QString WinRtOcr(const QImage &img)
 }
 #endif
 
+static QString GetTesseractExecutablePath()
+{
+	QString appDir = QCoreApplication::applicationDirPath();
+	QStringList candidatePaths = {
+		appDir + "/tesseract/tesseract.exe",
+		appDir + "/tesseract.exe",
+		"C:/Program Files/Tesseract-OCR/tesseract.exe",
+		"C:/Program Files (x86)/Tesseract-OCR/tesseract.exe"
+	};
+
+	for (const QString &p : candidatePaths)
+	{
+		if (QFile::exists(p))
+			return p;
+	}
+
+	// Try system PATH
+	QString pathEnv = QString::fromLocal8Bit(qgetenv("PATH"));
+	for (const QString &dir : pathEnv.split(';'))
+	{
+		QString candidate = QDir(dir).filePath("tesseract.exe");
+		if (QFile::exists(candidate))
+			return candidate;
+	}
+
+#ifndef _WIN32
+	if (QFile::exists("/usr/bin/tesseract"))
+		return "/usr/bin/tesseract";
+#endif
+
+	return QString();
+}
+
+static QString RunTesseractOcr(const QImage &img)
+{
+	if (img.isNull() || img.width() < 20 || img.height() < 10)
+		return QString();
+
+	QString tesseractBin = GetTesseractExecutablePath();
+	if (tesseractBin.isEmpty())
+		return QString();
+
+	QString tempImgPath = QDir::tempPath() + "/ps_translator_ocr.png";
+	if (!img.save(tempImgPath, "PNG"))
+		return QString();
+
+	QProcess proc;
+	QFileInfo tinfo(tesseractBin);
+	QString tessdataDir = tinfo.dir().filePath("tessdata");
+	if (QDir(tessdataDir).exists())
+	{
+		QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+		env.insert("TESSDATA_PREFIX", tessdataDir);
+		proc.setProcessEnvironment(env);
+	}
+
+	QStringList args;
+	args << tempImgPath << "stdout" << "-l" << "eng" << "--psm" << "6";
+
+	proc.start(tesseractBin, args);
+	if (!proc.waitForFinished(1500))
+	{
+		proc.kill();
+		return QString();
+	}
+
+	QByteArray output = proc.readAllStandardOutput();
+	return QString::fromUtf8(output).trimmed();
+}
+
+bool Translator::HasOcrEngineAvailable() const
+{
+	if (!GetTesseractExecutablePath().isEmpty())
+		return true;
+#if defined(_WIN32) && defined(_MSC_VER)
+	if (GetWinRtOcrEngine() != nullptr)
+		return true;
+#endif
+	return false;
+}
+
+QString Translator::GetActiveOcrEngineName() const
+{
+	QString tess = GetTesseractExecutablePath();
+	if (!tess.isEmpty())
+		return QString::fromUtf8("Tesseract OCR (ออฟไลน์)");
+#if defined(_WIN32) && defined(_MSC_VER)
+	if (GetWinRtOcrEngine() != nullptr)
+		return QString::fromUtf8("Windows WinRT OCR");
+#endif
+	return QString::fromUtf8("ไม่พบเอนจิน OCR ในเครื่อง");
+}
+
 QString Translator::PerformOcr(const QImage &image)
 {
+	// Priority 1: Check bundled / local Tesseract OCR (works on all Windows editions without language pack)
+	QString text = RunTesseractOcr(image);
+	if (!text.isEmpty())
+		return text;
+
 #if defined(_WIN32) && defined(_MSC_VER)
-	QString text = WinRtOcr(image);
-	if (!text.isEmpty()) return text;
-#else
-	Q_UNUSED(image);
+	// Priority 2: Native Windows WinRT OCR (if Windows OCR package is present)
+	text = WinRtOcr(image);
+	if (!text.isEmpty())
+		return text;
 #endif
+
 	return QString();
 }
 

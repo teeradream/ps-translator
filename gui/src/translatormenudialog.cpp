@@ -39,8 +39,29 @@ TranslatorMenuDialog::TranslatorMenuDialog(Translator *translator,
 	tts_enable_check->setChecked(translator->IsTtsEnabled());
 	connect(tts_enable_check, &QCheckBox::toggled, translator, &Translator::SetTtsEnabled);
 
+	QCheckBox *crop_box_check = new QCheckBox(QString::fromUtf8("แสดงกรอบเขียวเลือกตำแหน่งซับไตเติ้ล"), switchGroup);
+	crop_box_check->setChecked(this->crop_widget ? this->crop_widget->isVisible() : true);
+	connect(crop_box_check, &QCheckBox::toggled, this, [this](bool visible) {
+		if (this->crop_widget) this->crop_widget->setVisible(visible);
+	});
+
+	QLabel *ocrStatusLabel = new QLabel(switchGroup);
+	if (this->translator && this->translator->HasOcrEngineAvailable())
+	{
+		ocrStatusLabel->setText(QString::fromUtf8("✔ ระบบอ่านตัวหนังสือ (OCR): %1 พร้อมทำงาน").arg(this->translator->GetActiveOcrEngineName()));
+		ocrStatusLabel->setStyleSheet("color: #00E676; font-size: 11px; padding-top: 4px;");
+	}
+	else
+	{
+		ocrStatusLabel->setText(QString::fromUtf8("⚠️ ไม่พบเอนจิน OCR ในเครื่อง: แนะนำดาวน์โหลดไฟล์ชุดเต็ม ZIP (Chiaki-Translator-v2.2.0-Windows.zip) เพื่อให้มี Tesseract OCR ในตัว"));
+		ocrStatusLabel->setStyleSheet("color: #FF5252; font-size: 11px; font-weight: bold; padding-top: 4px;");
+		ocrStatusLabel->setWordWrap(true);
+	}
+
 	switchLayout->addWidget(sub_enable_check);
 	switchLayout->addWidget(tts_enable_check);
+	switchLayout->addWidget(crop_box_check);
+	switchLayout->addWidget(ocrStatusLabel);
 
 	QPushButton *testBtn = new QPushButton(QString::fromUtf8("🔊 ทดสอบซับไตเติ้ล & เสียงพากย์"), switchGroup);
 	testBtn->setStyleSheet("background-color: #2e3842; color: #00E676; font-weight: bold; padding: 7px; border: 1px solid #00E676; border-radius: 4px;");

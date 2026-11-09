@@ -60,6 +60,8 @@ public:
 	void FeedAudioSamples(const int16_t *buf, size_t samples_count);
 
 	void SpeakThai(const QString &thaiText, const QString &englishText = QString());
+	bool HasOcrEngineAvailable() const;
+	QString GetActiveOcrEngineName() const;
 
 signals:
 	void SubtitleReady(const QString &thai, const QString &english);

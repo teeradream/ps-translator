@@ -68,23 +68,24 @@ void CropBoxWidget::paintEvent(QPaintEvent *)
 	QPainter p(this);
 	p.setRenderHint(QPainter::Antialiasing);
 
-	// Translucent green background
-	p.fillRect(rect(), QColor(0, 230, 118, 30));
+	// Translucent faint green background
+	p.fillRect(rect(), QColor(0, 230, 118, 15));
 
 	// Bright green border
-	QPen pen(QColor(0, 230, 118), 3, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
+	QPen pen(QColor(0, 230, 118), 2, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
 	p.setPen(pen);
 	p.drawRect(rect().adjusted(1, 1, -2, -2));
 
-	// Top banner
-	QRect bannerRect(0, 0, width(), 24);
-	p.fillRect(bannerRect, QColor(0, 200, 83, 220));
+	// Compact top corner badge (does not span entire width or block game subtitles)
+	int badgeW = qMin(220, width());
+	QRect bannerRect(0, 0, badgeW, 18);
+	p.fillRect(bannerRect, QColor(0, 200, 83, 200));
 	p.setPen(Qt::white);
 	QFont f = p.font();
 	f.setBold(true);
-	f.setPointSize(9);
+	f.setPointSize(8);
 	p.setFont(f);
-	p.drawText(bannerRect.adjusted(8, 0, -8, 0), Qt::AlignVCenter | Qt::AlignLeft, QString::fromUtf8("กรอบอ่านซับ (ลากเพื่อย้าย / ย่อขยายมุมขวาล่าง)"));
+	p.drawText(bannerRect.adjusted(6, 0, -6, 0), Qt::AlignVCenter | Qt::AlignLeft, QString::fromUtf8("พื้นที่อ่านซับ (ลากย้ายได้)"));
 
 	// Bottom-right resize handle
 	QRect handleRect(width() - handle_size, height() - handle_size, handle_size, handle_size);

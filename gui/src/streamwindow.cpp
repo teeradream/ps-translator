@@ -406,7 +406,15 @@ void StreamWindow::CaptureAndProcessOcr()
 	if (av_widget->width() < 100 || av_widget->height() < 100)
 		return;
 
+	bool wasVisible = crop_widget && crop_widget->isVisible();
+	if (wasVisible)
+		crop_widget->setVisible(false);
+
 	QImage fullFrame = av_widget->grabFramebuffer();
+
+	if (wasVisible)
+		crop_widget->setVisible(true);
+
 	if (fullFrame.isNull() || fullFrame.width() < 100) return;
 
 	QRectF norm = crop_widget->GetNormalizedRect();

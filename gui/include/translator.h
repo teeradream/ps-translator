@@ -6,6 +6,8 @@
 #include <QObject>
 #include <QImage>
 #include <QString>
+#include <QVector>
+#include <QMutex>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 
@@ -13,6 +15,11 @@ enum class VoiceGenderMode {
 	AUTO_AI,
 	MALE,
 	FEMALE
+};
+
+enum class TranslationEngine {
+	GOOGLE_FREE,
+	GEMINI_FLASH
 };
 
 class Translator : public QObject
@@ -34,11 +41,20 @@ public:
 	VoiceGenderMode GetVoiceGenderMode() const { return voice_gender_mode; }
 	void SetVoiceGenderMode(VoiceGenderMode mode);
 
+	TranslationEngine GetTranslationEngine() const { return translation_engine; }
+	void SetTranslationEngine(TranslationEngine engine);
+
+	QString GetGeminiApiKey() const { return gemini_api_key; }
+	void SetGeminiApiKey(const QString &key);
+
 	double GetSpeechSpeed() const { return speech_speed; }
 	void SetSpeechSpeed(double speed);
 
 	bool IsFilterShortText() const { return filter_short_text; }
 	void SetFilterShortText(bool filter);
+
+	// Feed audio samples from game stream (interleaved stereo PCM 16-bit 48kHz)
+	void FeedAudioSamples(const int16_t *buf, size_t samples_count);
 
 signals:
 	void SubtitleReady(const QString &thai, const QString &english);
@@ -52,11 +68,19 @@ private:
 	bool subtitle_enabled;
 	bool tts_enabled;
 	VoiceGenderMode voice_gender_mode;
+	TranslationEngine translation_engine;
+	QString gemini_api_key;
 	double speech_speed;
 	bool filter_short_text;
 	bool is_processing;
 
 	QString last_recognized_english;
+	QString last_gemini_gender;
+
+	// Audio pitch analysis buffer & mutex
+	QMutex audio_mutex;
+	QVector<int16_t> audio_buffer;
+	int DetectVoiceGenderFromAudio();
 
 	QString PerformOcr(const QImage &image);
 	QString FixOcrTypos(const QString &text);
@@ -65,6 +89,8 @@ private:
 	bool DetectFemale(const QString &en, const QString &th);
 
 	void RequestTranslation(const QString &englishText);
+	void RequestTranslationGoogle(const QString &englishText);
+	void RequestTranslationGemini(const QString &englishText);
 	void SpeakThai(const QString &thaiText, const QString &englishText);
 
 	void InitTts();

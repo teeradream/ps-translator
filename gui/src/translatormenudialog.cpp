@@ -18,17 +18,17 @@ TranslatorMenuDialog::TranslatorMenuDialog(Translator *translator,
 	is_text_only(false)
 {
 	setWindowTitle(QString::fromUtf8("ตั้งค่าซับไตเติ้ล & เสียงพากย์ไทย (PS-Translator)"));
-	setFixedWidth(460);
+	setFixedWidth(480);
 	setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
 
 	UpdateDialogStyle();
 
 	QVBoxLayout *mainLayout = new QVBoxLayout(this);
-	mainLayout->setSpacing(14);
-	mainLayout->setContentsMargins(20, 20, 20, 20);
+	mainLayout->setSpacing(12);
+	mainLayout->setContentsMargins(18, 18, 18, 18);
 
 	// 1. General switches
-	QGroupBox *switchGroup = new QGroupBox(QString::fromUtf8("ระบบแปลภาษา & เสียงพากย์"), this);
+	QGroupBox *switchGroup = new QGroupBox(QString::fromUtf8("ระบบเปิด/ปิดการทำงาน"), this);
 	QVBoxLayout *switchLayout = new QVBoxLayout(switchGroup);
 
 	sub_enable_check = new QCheckBox(QString::fromUtf8("เปิดแสดงซับไตเติ้ลแปลไทย"), switchGroup);
@@ -43,12 +43,61 @@ TranslatorMenuDialog::TranslatorMenuDialog(Translator *translator,
 	switchLayout->addWidget(tts_enable_check);
 	mainLayout->addWidget(switchGroup);
 
-	// 2. Voice Gender
-	QGroupBox *genderGroup = new QGroupBox(QString::fromUtf8("เลือกเพศเสียงพากย์"), this);
-	QHBoxLayout *genderLayout = new QHBoxLayout(genderGroup);
+	// 2. Translation Engine (Google Free vs Gemini Flash)
+	QGroupBox *engineGroup = new QGroupBox(QString::fromUtf8("เอนจินการแปลภาษา (Translation Engine)"), this);
+	QVBoxLayout *engineLayout = new QVBoxLayout(engineGroup);
+
+	engine_group = new QButtonGroup(this);
+	engine_google_radio = new QRadioButton(QString::fromUtf8("Google Translate (ฟรี - ค่าเริ่มต้น)"), engineGroup);
+	engine_gemini_radio = new QRadioButton(QString::fromUtf8("Gemini AI Flash (สำนวนพากย์เกม + วิเคราะห์บริบท)"), engineGroup);
+
+	engine_group->addButton(engine_google_radio, 0);
+	engine_group->addButton(engine_gemini_radio, 1);
+
+	if (translator->GetTranslationEngine() == TranslationEngine::GEMINI_FLASH)
+		engine_gemini_radio->setChecked(true);
+	else
+		engine_google_radio->setChecked(true);
+
+	gemini_container = new QWidget(engineGroup);
+	QVBoxLayout *geminiLayout = new QVBoxLayout(gemini_container);
+	geminiLayout->setContentsMargins(8, 2, 8, 2);
+
+	QLabel *keyLabel = new QLabel(QString::fromUtf8("Gemini API Key (จาก Google AI Studio):"), gemini_container);
+	gemini_key_edit = new QLineEdit(gemini_container);
+	gemini_key_edit->setEchoMode(QLineEdit::Password);
+	gemini_key_edit->setPlaceholderText("AIzaSy...");
+	gemini_key_edit->setText(translator->GetGeminiApiKey());
+	gemini_key_edit->setStyleSheet("background-color: #1e1e24; color: #00E676; padding: 6px; border: 1px solid #444; border-radius: 4px;");
+
+	connect(gemini_key_edit, &QLineEdit::textChanged, this, [this](const QString &text) {
+		translator->SetGeminiApiKey(text.trimmed());
+	});
+
+	geminiLayout->addWidget(keyLabel);
+	geminiLayout->addWidget(gemini_key_edit);
+	gemini_container->setVisible(translator->GetTranslationEngine() == TranslationEngine::GEMINI_FLASH);
+
+	connect(engine_group, QOverload<int>::of(&QButtonGroup::buttonClicked), this, [this](int id) {
+		TranslationEngine eng = (id == 1) ? TranslationEngine::GEMINI_FLASH : TranslationEngine::GOOGLE_FREE;
+		translator->SetTranslationEngine(eng);
+		gemini_container->setVisible(eng == TranslationEngine::GEMINI_FLASH);
+	});
+
+	engineLayout->addWidget(engine_google_radio);
+	engineLayout->addWidget(engine_gemini_radio);
+	engineLayout->addWidget(gemini_container);
+	mainLayout->addWidget(engineGroup);
+
+	// 3. Voice Gender Mode
+	QGroupBox *genderGroup = new QGroupBox(QString::fromUtf8("เลือกเพศเสียงพากย์ (Voice Gender)"), this);
+	QVBoxLayout *genderContainerLayout = new QVBoxLayout(genderGroup);
+	QHBoxLayout *genderLayout = new QHBoxLayout();
 
 	gender_group = new QButtonGroup(this);
-	gender_auto_radio = new QRadioButton(QString::fromUtf8("AI วิเคราะห์อัตโนมัติ"), genderGroup);
+	gender_auto_radio = new QRadioButton(QString::fromUtf8("AI ฟังเสียงสดในเกม (Auto)"), genderGroup);
+	gender_auto_radio->setToolTip(QString::fromUtf8("ดักฟังย่านความถี่เสียงตัวละครจากเกมสดๆ เพื่อสลับชาย/หญิงให้อัตโนมัติ แม้กดปิดเสียงเกมก็ยังทำงาน"));
+
 	gender_male_radio = new QRadioButton(QString::fromUtf8("เสียงผู้ชาย"), genderGroup);
 	gender_female_radio = new QRadioButton(QString::fromUtf8("เสียงผู้หญิง"), genderGroup);
 
@@ -73,9 +122,15 @@ TranslatorMenuDialog::TranslatorMenuDialog(Translator *translator,
 	genderLayout->addWidget(gender_auto_radio);
 	genderLayout->addWidget(gender_male_radio);
 	genderLayout->addWidget(gender_female_radio);
+	genderContainerLayout->addLayout(genderLayout);
+
+	QLabel *genderTip = new QLabel(QString::fromUtf8("* โหมด Auto จะวิเคราะห์ความถี่เสียงตัวละครจากเกมสดๆ แม้ปิดเสียงเกมไว้ก็ยังตรวจจับได้"), genderGroup);
+	genderTip->setStyleSheet("color: #90A4AE; font-size: 11px;");
+	genderContainerLayout->addWidget(genderTip);
+
 	mainLayout->addWidget(genderGroup);
 
-	// 3. Speech Speed
+	// 4. Speech Speed
 	QHBoxLayout *speedLayout = new QHBoxLayout();
 	QLabel *speedTitle = new QLabel(QString::fromUtf8("ความเร็วเสียงพูด:"), this);
 	speed_label = new QLabel(QString::asprintf("%.2fx", translator->GetSpeechSpeed()), this);
@@ -92,7 +147,7 @@ TranslatorMenuDialog::TranslatorMenuDialog(Translator *translator,
 	speedLayout->addWidget(speed_label);
 	mainLayout->addLayout(speedLayout);
 
-	// 4. Subtitle Typography
+	// 5. Subtitle Typography
 	QGroupBox *fontGroup = new QGroupBox(QString::fromUtf8("ปรับขนาดและสีตัวหนังสือ"), this);
 	QVBoxLayout *fontLayout = new QVBoxLayout(fontGroup);
 
@@ -184,7 +239,7 @@ TranslatorMenuDialog::TranslatorMenuDialog(Translator *translator,
 
 	mainLayout->addWidget(fontGroup);
 
-	// 5. Actions & Modes
+	// 6. Actions & Modes
 	QHBoxLayout *actionsLayout = new QHBoxLayout();
 
 	adjust_crop_btn = new QPushButton(QString::fromUtf8("ปรับกรอบอ่านซับ"), this);
@@ -216,9 +271,9 @@ TranslatorMenuDialog::TranslatorMenuDialog(Translator *translator,
 	actionsLayout->addWidget(text_only_btn);
 	mainLayout->addLayout(actionsLayout);
 
-	// 6. Close / Done button
+	// 7. Close / Done button
 	QPushButton *closeBtn = new QPushButton(QString::fromUtf8("เสร็จสิ้น"), this);
-	closeBtn->setStyleSheet("background-color: #2196F3; color: white; font-weight: bold; padding: 10px; border-radius: 6px;");
+	closeBtn->setStyleSheet("background-color: #2196F3; color: white; font-weight: bold; padding: 10px; border-radius: 6px; font-size: 15px;");
 	connect(closeBtn, &QPushButton::clicked, this, &QDialog::accept);
 	mainLayout->addWidget(closeBtn);
 }
@@ -226,15 +281,16 @@ TranslatorMenuDialog::TranslatorMenuDialog(Translator *translator,
 void TranslatorMenuDialog::UpdateDialogStyle()
 {
 	setStyleSheet("QDialog {"
-				  "  background-color: #1E1E24;"
+				  "  background-color: #121216;"
 				  "  color: #ECEFF1;"
-				  "  font-family: 'Segoe UI', sans-serif;"
+				  "  font-family: 'Segoe UI', 'Sarabun', sans-serif;"
+				  "  font-size: 13px;"
 				  "}"
 				  "QGroupBox {"
-				  "  border: 1px solid #37474F;"
+				  "  border: 1px solid #33333C;"
 				  "  border-radius: 8px;"
-				  "  margin-top: 14px;"
-				  "  padding-top: 14px;"
+				  "  margin-top: 10px;"
+				  "  padding-top: 10px;"
 				  "  font-weight: bold;"
 				  "  color: #00E676;"
 				  "}"

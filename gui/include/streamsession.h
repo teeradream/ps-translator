@@ -150,6 +150,7 @@ class StreamSession : public QObject
 		void FfmpegFrameAvailable();
 		void SessionQuit(ChiakiQuitReason reason, const QString &reason_str);
 		void LoginPINRequested(bool incorrect);
+		void AudioSamplesAvailable(const int16_t *buf, size_t samples_count);
 
 	private slots:
 		void UpdateGamepads();

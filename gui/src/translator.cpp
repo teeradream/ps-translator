@@ -5,10 +5,12 @@
 #include <QUrlQuery>
 #include <QNetworkRequest>
 #include <QJsonDocument>
+#include <QJsonObject>
 #include <QJsonArray>
 #include <QSettings>
 #include <QRegularExpression>
 #include <QBuffer>
+#include <QMutexLocker>
 #include <cmath>
 
 #ifdef _WIN32
@@ -28,6 +30,8 @@ Translator::Translator(QObject *parent)
 	subtitle_enabled(true),
 	tts_enabled(false),
 	voice_gender_mode(VoiceGenderMode::AUTO_AI),
+	translation_engine(TranslationEngine::GOOGLE_FREE),
+	gemini_api_key(""),
 	speech_speed(1.25),
 	filter_short_text(true),
 	is_processing(false),
@@ -52,6 +56,9 @@ void Translator::LoadSettings()
 	tts_enabled = settings.value("tts_enabled", false).toBool();
 	int mode = settings.value("voice_gender_mode", 0).toInt();
 	voice_gender_mode = static_cast<VoiceGenderMode>(mode);
+	int engine = settings.value("translation_engine", 0).toInt();
+	translation_engine = static_cast<TranslationEngine>(engine);
+	gemini_api_key = settings.value("gemini_api_key", "").toString();
 	speech_speed = settings.value("speech_speed", 1.25).toDouble();
 	filter_short_text = settings.value("filter_short_text", true).toBool();
 }
@@ -62,6 +69,8 @@ void Translator::SaveSettings()
 	settings.setValue("subtitle_enabled", subtitle_enabled);
 	settings.setValue("tts_enabled", tts_enabled);
 	settings.setValue("voice_gender_mode", static_cast<int>(voice_gender_mode));
+	settings.setValue("translation_engine", static_cast<int>(translation_engine));
+	settings.setValue("gemini_api_key", gemini_api_key);
 	settings.setValue("speech_speed", speech_speed);
 	settings.setValue("filter_short_text", filter_short_text);
 }
@@ -84,6 +93,18 @@ void Translator::SetVoiceGenderMode(VoiceGenderMode mode)
 	SaveSettings();
 }
 
+void Translator::SetTranslationEngine(TranslationEngine engine)
+{
+	translation_engine = engine;
+	SaveSettings();
+}
+
+void Translator::SetGeminiApiKey(const QString &key)
+{
+	gemini_api_key = key;
+	SaveSettings();
+}
+
 void Translator::SetSpeechSpeed(double speed)
 {
 	speech_speed = speed;
@@ -94,6 +115,89 @@ void Translator::SetFilterShortText(bool filter)
 {
 	filter_short_text = filter;
 	SaveSettings();
+}
+
+void Translator::FeedAudioSamples(const int16_t *buf, size_t samples_count)
+{
+	if (!buf || samples_count == 0)
+		return;
+
+	QMutexLocker locker(&audio_mutex);
+	// Buffer is interleaved stereo 16-bit 48000 Hz. Downmix to mono and keep last 24,000 samples (0.5s of audio)
+	for (size_t i = 0; i < samples_count; i++)
+	{
+		int32_t mono = (static_cast<int32_t>(buf[2 * i]) + static_cast<int32_t>(buf[2 * i + 1])) / 2;
+		audio_buffer.append(static_cast<int16_t>(mono));
+	}
+
+	if (audio_buffer.size() > 24000)
+	{
+		audio_buffer.remove(0, audio_buffer.size() - 24000);
+	}
+}
+
+int Translator::DetectVoiceGenderFromAudio()
+{
+	// 0 = Unclear/Silent, 1 = Male (Pitch < 160Hz), 2 = Female (Pitch >= 160Hz)
+	QVector<int16_t> samples;
+	{
+		QMutexLocker locker(&audio_mutex);
+		if (audio_buffer.size() < 4800) // Need at least 0.1s of audio
+			return 0;
+		samples = audio_buffer;
+	}
+
+	// Downsample by 4: 48000 Hz -> 12000 Hz
+	const int step = 4;
+	int ds_len = samples.size() / step;
+	if (ds_len < 1000)
+		return 0;
+
+	QVector<double> ds(ds_len);
+	double energy = 0.0;
+	for (int i = 0; i < ds_len; i++)
+	{
+		double val = samples[i * step];
+		ds[i] = val;
+		energy += val * val;
+	}
+
+	double rms = std::sqrt(energy / ds_len);
+	if (rms < 350.0) // Audio is too quiet / ambient silence
+		return 0;
+
+	// Pitch range for human voice: 75 Hz to 350 Hz at 12000 Hz
+	int min_lag = 12000 / 350; // ~34
+	int max_lag = 12000 / 75;  // ~160
+
+	double best_corr = 0.0;
+	int best_lag = 0;
+
+	for (int lag = min_lag; lag <= max_lag; lag++)
+	{
+		double corr = 0.0;
+		int count = ds_len - lag;
+		for (int i = 0; i < count; i++)
+		{
+			corr += ds[i] * ds[i + lag];
+		}
+		if (corr > best_corr)
+		{
+			best_corr = corr;
+			best_lag = lag;
+		}
+	}
+
+	if (best_lag > 0 && best_corr > 0.30 * energy)
+	{
+		double pitch = 12000.0 / best_lag;
+		if (pitch < 160.0)
+			return 1; // Male
+		else
+			return 2; // Female
+	}
+
+	return 0; // Unclear pitch
 }
 
 void Translator::InitTts()
@@ -299,46 +403,147 @@ QString Translator::PerformOcr(const QImage &image)
 
 void Translator::RequestTranslation(const QString &englishText)
 {
+	if (translation_engine == TranslationEngine::GEMINI_FLASH && !gemini_api_key.trimmed().isEmpty())
+	{
+		RequestTranslationGemini(englishText);
+	}
+	else
+	{
+		RequestTranslationGoogle(englishText);
+	}
+}
+
+void Translator::RequestTranslationGoogle(const QString &englishText)
+{
 	QString encoded = QUrl::toPercentEncoding(englishText);
 	QString urlStr = QString("https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=th&dt=t&q=%1").arg(encoded);
 
 	QNetworkRequest req((QUrl(urlStr)));
 	req.setHeader(QNetworkRequest::UserAgentHeader, "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
 	req.setAttribute(QNetworkRequest::User, englishText);
+	req.setAttribute(static_cast<QNetworkRequest::Attribute>(QNetworkRequest::UserMax + 1), "google");
 
 	net_manager->get(req);
+}
+
+void Translator::RequestTranslationGemini(const QString &englishText)
+{
+	QString urlStr = QString("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=%1").arg(gemini_api_key.trimmed());
+
+	QNetworkRequest req((QUrl(urlStr)));
+	req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+	req.setAttribute(QNetworkRequest::User, englishText);
+	req.setAttribute(static_cast<QNetworkRequest::Attribute>(QNetworkRequest::UserMax + 1), "gemini");
+
+	QJsonObject rootObj;
+	QJsonArray contentsArray;
+	QJsonObject contentObj;
+	QJsonArray partsArray;
+	QJsonObject partObj;
+
+	QString prompt = QString(
+		"You are a professional video game subtitle translator and Thai voice dubbing director.\n"
+		"Translate the following English game subtitle into natural, emotional, authentic Thai game dubbing dialogue (สำนวนบทพากย์เกมภาษาไทยแท้ๆ มีอารมณ์ร่วม ไม่แปลตรงตัวทื่อๆ).\n"
+		"Also determine the speaker gender ('male' or 'female') based on context.\n"
+		"Respond ONLY with valid JSON in this exact structure: {\"thai\": \"คำแปลบทพากย์\", \"gender\": \"male\" or \"female\"}\n\n"
+		"Subtitle: \"%1\"").arg(englishText);
+
+	partObj["text"] = prompt;
+	partsArray.append(partObj);
+	contentObj["parts"] = partsArray;
+	contentsArray.append(contentObj);
+	rootObj["contents"] = contentsArray;
+
+	QJsonObject genConfig;
+	genConfig["responseMimeType"] = "application/json";
+	genConfig["temperature"] = 0.3;
+	rootObj["generationConfig"] = genConfig;
+
+	QByteArray postData = QJsonDocument(rootObj).toJson(QJsonDocument::Compact);
+	net_manager->post(req, postData);
 }
 
 void Translator::OnTranslationReply(QNetworkReply *reply)
 {
 	is_processing = false;
 
+	QString englishText = reply->request().attribute(QNetworkRequest::User).toString();
+	QString engineType = reply->request().attribute(static_cast<QNetworkRequest::Attribute>(QNetworkRequest::UserMax + 1)).toString();
+
 	if (reply->error() != QNetworkReply::NoError)
 	{
 		reply->deleteLater();
+		// If Gemini failed (e.g. invalid key, quota, or network drop), automatically fall back to Google Translate!
+		if (engineType == "gemini")
+		{
+			is_processing = true;
+			RequestTranslationGoogle(englishText);
+		}
 		return;
 	}
 
-	QString englishText = reply->request().attribute(QNetworkRequest::User).toString();
 	QByteArray data = reply->readAll();
 	reply->deleteLater();
 
-	QJsonDocument doc = QJsonDocument::fromJson(data);
-	if (!doc.isArray()) return;
-
-	QJsonArray rootArray = doc.array();
-	if (rootArray.isEmpty() || !rootArray[0].isArray()) return;
-
-	QJsonArray chunksArray = rootArray[0].toArray();
 	QString thaiResult;
-	for (const QJsonValue &chunkVal : chunksArray)
+
+	if (engineType == "gemini")
 	{
-		if (chunkVal.isArray())
+		QJsonDocument doc = QJsonDocument::fromJson(data);
+		if (doc.isObject())
 		{
-			QJsonArray chunk = chunkVal.toArray();
-			if (!chunk.isEmpty() && chunk[0].isString())
+			QJsonObject root = doc.object();
+			QJsonArray candidates = root["candidates"].toArray();
+			if (!candidates.isEmpty())
 			{
-				thaiResult += chunk[0].toString();
+				QJsonObject candidate = candidates[0].toObject();
+				QJsonObject content = candidate["content"].toObject();
+				QJsonArray parts = content["parts"].toArray();
+				if (!parts.isEmpty())
+				{
+					QString text = parts[0].toObject()["text"].toString().trimmed();
+					QJsonDocument parsedJson = QJsonDocument::fromJson(text.toUtf8());
+					if (parsedJson.isObject())
+					{
+						QJsonObject parsedObj = parsedJson.object();
+						thaiResult = parsedObj["thai"].toString().trimmed();
+						last_gemini_gender = parsedObj["gender"].toString().trimmed().toLower();
+					}
+					else if (!text.isEmpty())
+					{
+						thaiResult = text;
+					}
+				}
+			}
+		}
+
+		// Fallback to Google if Gemini gave empty result
+		if (thaiResult.isEmpty())
+		{
+			is_processing = true;
+			RequestTranslationGoogle(englishText);
+			return;
+		}
+	}
+	else
+	{
+		// Google Translate parser
+		QJsonDocument doc = QJsonDocument::fromJson(data);
+		if (!doc.isArray()) return;
+
+		QJsonArray rootArray = doc.array();
+		if (rootArray.isEmpty() || !rootArray[0].isArray()) return;
+
+		QJsonArray chunksArray = rootArray[0].toArray();
+		for (const QJsonValue &chunkVal : chunksArray)
+		{
+			if (chunkVal.isArray())
+			{
+				QJsonArray chunk = chunkVal.toArray();
+				if (!chunk.isEmpty() && chunk[0].isString())
+				{
+					thaiResult += chunk[0].toString();
+				}
 			}
 		}
 	}
@@ -365,9 +570,35 @@ void Translator::SpeakThai(const QString &thaiText, const QString &englishText)
 	bool isFemale = false;
 	switch (voice_gender_mode)
 	{
-		case VoiceGenderMode::FEMALE: isFemale = true; break;
-		case VoiceGenderMode::MALE: isFemale = false; break;
-		case VoiceGenderMode::AUTO_AI: isFemale = DetectFemale(englishText, thaiText); break;
+		case VoiceGenderMode::FEMALE: 
+			isFemale = true; 
+			break;
+		case VoiceGenderMode::MALE: 
+			isFemale = false; 
+			break;
+		case VoiceGenderMode::AUTO_AI: {
+			// Step 1: Detect pitch directly from real game voice audio stream
+			int audioGender = DetectVoiceGenderFromAudio();
+			if (audioGender == 1)
+			{
+				isFemale = false; // Male pitch (< 160 Hz)
+			}
+			else if (audioGender == 2)
+			{
+				isFemale = true; // Female pitch (>= 160 Hz)
+			}
+			else if (!last_gemini_gender.isEmpty())
+			{
+				// Step 2: Use Gemini Context if available
+				isFemale = (last_gemini_gender == "female");
+			}
+			else
+			{
+				// Step 3: Heuristic text fallback
+				isFemale = DetectFemale(englishText, thaiText);
+			}
+			break;
+		}
 	}
 
 	long rate = 0;

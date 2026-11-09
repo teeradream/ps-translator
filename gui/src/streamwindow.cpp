@@ -134,6 +134,10 @@ void StreamWindow::Init()
 	// Initialize PS-Translator components
 	translator = new Translator(this);
 	connect(translator, &Translator::SubtitleReady, this, &StreamWindow::OnSubtitleReady);
+	if (session)
+	{
+		connect(session, &StreamSession::AudioSamplesAvailable, translator, &Translator::FeedAudioSamples);
+	}
 
 	subtitle_widget = new SubtitleOverlayWidget(this);
 	crop_widget = new CropBoxWidget(this);

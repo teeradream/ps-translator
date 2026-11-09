@@ -507,6 +507,8 @@ void StreamSession::ConnectHaptics()
 
 void StreamSession::PushAudioFrame(int16_t *buf, size_t samples_count)
 {
+	emit AudioSamplesAvailable(buf, samples_count);
+
 	if(!audio_io || is_audio_muted)
 		return;
 	audio_io->write((const char *)buf, static_cast<qint64>(samples_count * 2 * 2));

@@ -9,7 +9,9 @@
 #include <QSlider>
 #include <QPushButton>
 #include <QLabel>
+#include <QLineEdit>
 #include <QButtonGroup>
+#include <QWidget>
 #include "translator.h"
 #include "subtitleoverlaywidget.h"
 #include "cropboxwidget.h"
@@ -43,6 +45,14 @@ private:
 	QCheckBox *sub_enable_check;
 	QCheckBox *tts_enable_check;
 
+	// Translation Engine
+	QButtonGroup *engine_group;
+	QRadioButton *engine_google_radio;
+	QRadioButton *engine_gemini_radio;
+	QWidget *gemini_container;
+	QLineEdit *gemini_key_edit;
+
+	// Voice Gender
 	QButtonGroup *gender_group;
 	QRadioButton *gender_auto_radio;
 	QRadioButton *gender_male_radio;

@@ -100,6 +100,7 @@ jobs:
           $buildDir = "build-chiaki"
           cmake -B $buildDir -S . `
             -G Ninja `
+            "-DCMAKE_POLICY_VERSION_MINIMUM=3.5" `
             -DCMAKE_BUILD_TYPE=Release `
             -DCHIAKI_ENABLE_GUI=ON `
             -DCHIAKI_ENABLE_CLI=OFF `
@@ -110,8 +111,10 @@ jobs:
             "-DFFMPEG_ROOT=$env:FFMPEG_DIR" `
             "-DSDL2_DIR=$env:SDL2_DIR" `
             "-DOPENSSL_ROOT_DIR=C:\OpenSSL-Win64"
+          if ($LASTEXITCODE -ne 0) { throw "CMake failed with exit code $LASTEXITCODE" }
 
           ninja -C $buildDir chiaki
+          if ($LASTEXITCODE -ne 0) { throw "Ninja failed with exit code $LASTEXITCODE" }
 
           # Create distribution package
           New-Item -ItemType Directory -Force -Path "dist-chiaki" | Out-Null

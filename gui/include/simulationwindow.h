@@ -10,8 +10,7 @@
 #include <QWidget>
 #include <QPushButton>
 #include <QLabel>
-#include <QAudioOutput>
-#include <QIODevice>
+#include <QImage>
 #include "translator.h"
 #include "subtitleoverlaywidget.h"
 #include "cropboxwidget.h"
@@ -64,9 +63,6 @@ private:
 
 	bool is_audio_muted;
 	int audio_sample_index;
-
-	QAudioOutput *audio_output;
-	QIODevice *audio_io;
 };
 
 #endif // CHIAKI_GUI_SIMULATIONWINDOW_H

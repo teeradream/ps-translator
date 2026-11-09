@@ -8,8 +8,6 @@
 #include <QResizeEvent>
 #include <QCloseEvent>
 #include <QCoreApplication>
-#include <QAudioFormat>
-#include <QAudioDeviceInfo>
 #include <cmath>
 
 #ifndef M_PI
@@ -36,15 +34,34 @@ public:
 		subtitle_text = text;
 		is_female = female;
 		pitch_hz = pitch;
+		RenderOffscreenFrame();
 		update();
 	}
 
-	QString GetCurrentSubtitle() const { return subtitle_text; }
+	const QImage &GetOffscreenFrame() const { return offscreen_frame; }
 
 protected:
+	void resizeEvent(QResizeEvent *) override
+	{
+		RenderOffscreenFrame();
+	}
+
 	void paintEvent(QPaintEvent *) override
 	{
 		QPainter p(this);
+		if (!offscreen_frame.isNull())
+		{
+			p.drawImage(0, 0, offscreen_frame);
+		}
+	}
+
+private:
+	void RenderOffscreenFrame()
+	{
+		if (width() < 100 || height() < 100) return;
+
+		offscreen_frame = QImage(size(), QImage::Format_RGB32);
+		QPainter p(&offscreen_frame);
 		p.setRenderHint(QPainter::Antialiasing);
 
 		// 1. Dark Sci-Fi Game Background
@@ -74,7 +91,7 @@ protected:
 		p.setFont(QFont("Segoe UI", 10));
 		p.drawText(30, 102, QString::fromUtf8("HEALTH: [||||||||||||||||||] 100%   SHIELD: [||||||||||||] 84%"));
 
-		// 3. Subtitle Box (in lower-center, perfectly matching default crop box: left 18%, top 72%, width 64%, height 22%)
+		// 3. Subtitle Box (in lower-center, matching default crop box: left 18%, top 72%, width 64%, height 22%)
 		int boxX = qRound(width() * 0.18);
 		int boxY = qRound(height() * 0.72);
 		int boxW = qRound(width() * 0.64);
@@ -101,11 +118,11 @@ protected:
 		p.drawText(textRect, Qt::AlignLeft | Qt::AlignTop | Qt::TextWordWrap, subtitle_text);
 	}
 
-private:
 	QString speaker_name;
 	QString subtitle_text;
 	bool is_female;
 	int pitch_hz;
+	QImage offscreen_frame;
 };
 
 #include "simulationwindow.moc"
@@ -123,9 +140,7 @@ SimulationWindow::SimulationWindow(QWidget *parent)
 	audio_timer(nullptr),
 	current_dialogue_idx(0),
 	is_audio_muted(false),
-	audio_sample_index(0),
-	audio_output(nullptr),
-	audio_io(nullptr)
+	audio_sample_index(0)
 {
 	setAttribute(Qt::WA_DeleteOnClose);
 	setWindowTitle(qApp->applicationName() + QString::fromUtf8(" | โหมดทดสอบจำลอง (Simulation Mode)"));
@@ -169,23 +184,7 @@ SimulationWindow::SimulationWindow(QWidget *parent)
 		}
 	};
 
-	// 3. Audio Output (48kHz 16-bit stereo)
-	QAudioFormat format;
-	format.setSampleRate(48000);
-	format.setChannelCount(2);
-	format.setSampleSize(16);
-	format.setCodec("audio/pcm");
-	format.setByteOrder(QAudioFormat::LittleEndian);
-	format.setSampleType(QAudioFormat::SignedInt);
-
-	QAudioDeviceInfo info = QAudioDeviceInfo::defaultOutputDevice();
-	if (info.isFormatSupported(format))
-	{
-		audio_output = new QAudioOutput(format, this);
-		audio_io = audio_output->start();
-	}
-
-	// 4. Translator components
+	// 3. Translator components
 	translator = new Translator(this);
 	connect(translator, &Translator::SubtitleReady, this, &SimulationWindow::OnSubtitleReady);
 
@@ -193,7 +192,7 @@ SimulationWindow::SimulationWindow(QWidget *parent)
 	crop_widget = new CropBoxWidget(this);
 	crop_widget->show(); // Show green crop box by default in demo mode
 
-	// 5. Menu button (☰)
+	// 4. Menu button (☰)
 	menu_button = new QPushButton(QString::fromUtf8("☰"), this);
 	menu_button->setFixedSize(42, 42);
 	menu_button->setCursor(Qt::PointingHandCursor);
@@ -212,7 +211,7 @@ SimulationWindow::SimulationWindow(QWidget *parent)
 		"}");
 	connect(menu_button, &QPushButton::clicked, this, &SimulationWindow::OpenTranslatorMenu);
 
-	// 6. Top banner guide
+	// 5. Top banner guide
 	top_banner = new QWidget(this);
 	top_banner->setStyleSheet("background-color: rgba(18, 24, 38, 0.90); border-bottom: 2px solid #00E676;");
 	QHBoxLayout *bannerLayout = new QHBoxLayout(top_banner);
@@ -233,28 +232,24 @@ SimulationWindow::SimulationWindow(QWidget *parent)
 	bannerLayout->addStretch();
 	bannerLayout->addWidget(exitBtn);
 
-	// 7. Timers
+	// 6. Timers
 	ocr_timer = new QTimer(this);
 	connect(ocr_timer, &QTimer::timeout, this, &SimulationWindow::CaptureAndProcessOcr);
-	ocr_timer->start(600);
+	ocr_timer->start(800); // OCR scan every 800ms
 
 	dialogue_timer = new QTimer(this);
 	connect(dialogue_timer, &QTimer::timeout, this, &SimulationWindow::AdvanceDialogue);
-	dialogue_timer->start(6000); // Change dialogue line every 6s
+	dialogue_timer->start(7000); // Change dialogue line every 7s
 
 	audio_timer = new QTimer(this);
 	connect(audio_timer, &QTimer::timeout, this, &SimulationWindow::FeedAudioSamples);
-	audio_timer->start(40); // Generate 40ms audio chunks
+	audio_timer->start(100); // Feed 100ms audio chunks in memory to pitch detection
 
 	UpdateOverlayPositions();
 }
 
 SimulationWindow::~SimulationWindow()
 {
-	if (audio_output)
-	{
-		audio_output->stop();
-	}
 }
 
 void SimulationWindow::SetGameAudioMuted(bool muted)
@@ -272,13 +267,13 @@ void SimulationWindow::AdvanceDialogue()
 
 void SimulationWindow::FeedAudioSamples()
 {
-	if (dialogues.isEmpty()) return;
+	if (dialogues.isEmpty() || !translator) return;
 
 	const SimDialogueLine &cur = dialogues[current_dialogue_idx];
 	int freq = cur.pitchHz;
 
 	const int sampleRate = 48000;
-	const int framesCount = sampleRate * 40 / 1000; // 40ms = 1920 frames
+	const int framesCount = sampleRate / 10; // 100ms = 4800 frames
 	QVector<int16_t> stereoPcm(framesCount * 2);
 
 	double twoPiF = 2.0 * M_PI * freq / sampleRate;
@@ -299,16 +294,7 @@ void SimulationWindow::FeedAudioSamples()
 	}
 
 	// Feed to pitch detection engine in Translator (interleaved stereo 48kHz)
-	if (translator)
-	{
-		translator->FeedAudioSamples(stereoPcm.data(), framesCount);
-	}
-
-	// Output to speakers if not muted
-	if (!is_audio_muted && audio_io)
-	{
-		audio_io->write(reinterpret_cast<const char *>(stereoPcm.data()), stereoPcm.size() * sizeof(int16_t));
-	}
+	translator->FeedAudioSamples(stereoPcm.data(), framesCount);
 }
 
 void SimulationWindow::CaptureAndProcessOcr()
@@ -316,7 +302,8 @@ void SimulationWindow::CaptureAndProcessOcr()
 	if (!canvas_widget || !crop_widget || !translator || !translator->IsSubtitleEnabled())
 		return;
 
-	QImage fullFrame = canvas_widget->grab().toImage();
+	// Use offscreen pre-rendered image instead of grab() to prevent any UI thread deadlocks!
+	const QImage &fullFrame = canvas_widget->GetOffscreenFrame();
 	if (fullFrame.isNull() || fullFrame.width() < 100) return;
 
 	QRectF norm = crop_widget->GetNormalizedRect();

@@ -228,6 +228,7 @@ void Translator::ProcessFrame(const QImage &sub_image)
 #include <winrt/Windows.Media.Ocr.h>
 #include <winrt/Windows.Graphics.Imaging.h>
 #include <winrt/Windows.Storage.Streams.h>
+#include <winrt/Windows.Globalization.h>
 
 using namespace winrt;
 using namespace Windows::Media::Ocr;

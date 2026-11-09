@@ -87,7 +87,7 @@ jobs:
           Write-Host "Building Opus..."
           git clone --depth 1 --branch v1.4 https://github.com/xiph/opus.git
           $env:PATH = "C:\ninja;$env:PATH"
-          cmake -B opus/build -S opus -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$PWD/opus-prefix"
+          cmake -B opus/build -S opus -G Ninja -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$PWD/opus-prefix"
           ninja -C opus/build install
           echo "OPUS_DIR=$PWD/opus-prefix" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 

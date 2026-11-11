@@ -1,34 +1,149 @@
-# chiakidroid
-Official repo: https://git.sr.ht/~thestr4ng3r/chiaki
+# 🎮 PS Translator (Android APK)
 
-So, here the things done on the android app:
+<p align="center">
+  <img src="app/src/main/res/mipmap-xxxhdpi/ic_launcher.png" width="120" height="120" alt="PS Translator Logo" />
+</p>
 
-* Touchpad Controller now fully worked
-* Disable/Enable on-screen touch commands (Find it on option window)
-* Diasable/Enable touchscreen in fullscreen (Useful if you are on docking like Kishi V2, also find it on option window)
-* Controller Vibration enabled
-* Adaptive Trigger (Incoming)
+<p align="center">
+  <b>แอปพลิเคชันสตรีมเกม PlayStation 5 (PS5) และ PlayStation 4 (PS4) พร้อมระบบตรวจจับซับไตเติล แปลภาษาไทย และพากย์เสียงไทยแบบเรียลไทม์</b><br/>
+  <i>รองรับสมาร์ทโฟน แท็บเล็ต Android และโหมด Samsung DeX เต็มรูปแบบ</i>
+</p>
 
-Download on Relase Page (Tested and 100% working but not updated) or artifacts in Actions (Not tested but latest update) 
+<p align="center">
+  <a href="https://github.com/teeradream/ps-translator/releases/latest"><img src="https://img.shields.io/github/v/release/teeradream/ps-translator?color=00FF88&label=Latest%20Release" alt="Latest Release" /></a>
+  <img src="https://img.shields.io/badge/Platform-Android%208.0%2B-blue.svg" alt="Platform" />
+  <img src="https://img.shields.io/badge/Samsung%20DeX-Supported-orange.svg" alt="Samsung DeX" />
+  <img src="https://img.shields.io/badge/DualSense-Compatible-violet.svg" alt="DualSense" />
+  <img src="https://img.shields.io/badge/License-GPLv3-green.svg" alt="License" />
+</p>
 
-# HOW TO CALL THE OVERLAY (This should be work on official app too)
+---
 
-Find out that the overlay can be called, right now, only when you swipe to call the navigation bar (back button, home button and windows button).
-This is because the overlay is called only when the method onSystemUiVisibilityChange is called. I will figure it out how to change it and if it is necessary.
-Video: https://www.reddit.com/r/remoteplay/comments/12mcd0r/chiaki_android_with_full_implementation_of/
+## 📖 สารบัญ (Table of Contents)
+1. [ภาพรวมและจุดเด่น (Overview)](#-ภาพรวมและจุดเด่น-overview)
+2. [ฟีเจอร์การทำงานทั้งหมด (Key Features)](#-ฟีเจอร์การทำงานทั้งหมด-key-features)
+3. [ดาวน์โหลดและติดตั้ง (Download & Installation)](#-ดาวน์โหลดและติดตั้ง-download--installation)
+4. [วิธีตั้งค่าเชื่อมต่อกับเครื่อง PS5 ในครั้งแรก (Initial Setup)](#-วิธีตั้งค่าเชื่อมต่อกับเครื่อง-ps5-ในครั้งแรก-initial-setup)
+5. [ขั้นตอนการเริ่มเล่นและใช้งานระบบแปลภาษา (How to Use)](#-ขั้นตอนการเริ่มเล่นและใช้งานระบบแปลภาษา-how-to-use)
+6. [ทริคแนะนำเพื่อให้การแปลแม่นยำที่สุด 100% (Pro Tips)](#-ทริคแนะนำเพื่อให้การแปลแม่นยำที่สุด-100-pro-tips)
+7. [การใช้งานในโหมด Samsung DeX](#-การใช้งานในโหมด-samsung-dex)
 
-## Screenshots
+---
 
-Setting page:
+## 🌟 ภาพรวมและจุดเด่น (Overview)
 
-![image](https://user-images.githubusercontent.com/50410305/233785296-bf6e93a8-8434-49ac-9592-eeeae3ab587a.png)
+**PS Translator** ได้รับการพัฒนาขึ้นโดยดัดแปลงจากแกนหลักของ Chiaki สตรีมมิ่งไคลเอนต์โอเพนซอร์สยอดนิยม โดยฝังระบบประมวลผลภาพ **OCR (Optical Character Recognition)**, **ระบบแปลภาษาไทย** และ **ระบบพากย์เสียงไทยอัตโนมัติ** เข้าไปในตัวแอปพลิเคชัน ทำให้เกมเมอร์ชาวไทยสามารถเล่นเกมภาษาอังกฤษบนเครื่อง PS5 / PS4 ได้อย่างเพลิดเพลิน เข้าใจบทสนทนาและเนื้อเรื่องของเกมได้ 100% โดยไม่ต้องพึ่งพาโปรแกรมเสริมภายนอก
 
-Hide/Show on screen buttons:
+---
 
-![image](https://user-images.githubusercontent.com/50410305/233785306-39392e24-62ab-4dc8-a7c4-73077433c03d.png)
+## 🚀 ฟีเจอร์การทำงานทั้งหมด (Key Features)
 
-Hide/Show touchpad on screen:
+### 1. สตรีมตรงจาก PS5 / PS4 ความหน่วงต่ำมาก (Ultra-Low Latency Streaming)
+- สตรีมภาพและเสียงความละเอียดสูงสุด **1080p ที่ 60 FPS** ลื่นไหล ไม่กระตุก
+- รองรับการเชื่อมต่อจอยเกม **DualSense (PS5)**, DualShock 4, จอยบลูทูธมาตรฐาน (Xbox, โทรศัพท์, จอยหนีบ Type-C) พร้อมระบบสั่น (Haptics)
+- มีปุ่มควบคุมเสมือนบนหน้าจอสัมผัส (On-Screen Touch Controls) ปรับเปิด/ปิดการแสดงผลได้อิสระ
 
-![image](https://user-images.githubusercontent.com/50410305/233785321-573d616f-991e-4eff-903b-c954de8bc427.png)
+### 2. ตรวจจับซับไตเติลและแปลภาษาไทยแบบเรียลไทม์ (Live OCR & Translation)
+- สแกนอ่านแถบซับไตเติลภาษาอังกฤษในเกมอัตโนมัติด้วยเทคโนโลยี OCR ความละเอียดสูง
+- **Smart Typo Corrector:** ระบบแก้คำผิดอัจฉริยะ ป้องกันการอ่านสับสนของตัวอักษร เช่น ระหว่างตัว `c` กับ `e` หรือสระตกหล่น
+- ประมวลผลแปลประโยคภาษาอังกฤษเป็นภาษาไทยทันที ให้สำนวนบทสนทนาที่สละสลวย เข้ากับเนื้อหาเกม
 
-Builded with Android Studio on WSL2 (Kali-distro) 
+### 3. กรอบสแกนซับไตเติลและกล่องข้อความปรับแต่งได้ (Customizable Subtitle Box)
+- **กรอบสีเขียวเล็งตำแหน่ง:** สามารถแตะลากย้ายตำแหน่ง และย่อ/ขยายกรอบสีเขียวเพื่อครอบเฉพาะแถบซับไตเติลของเกมแต่ละเกมได้อย่างแม่นยำ
+- **ปรับขนาดตัวอักษร:** ปรับขนาดตัวหนังสือภาษาไทยได้ตั้งแต่ 16 pt ถึง 72 pt
+- **เลือกสีตัวหนังสือได้ 6 สี:** เขียวนีออน, ฟ้าไซเบอร์, เหลืองทอง, ขาวสว่าง, ชมพูนีออน, ส้ม
+- **ปรับความทึบแสงของพื้นหลัง:** เลือกความโปร่งใสหรือดำสนิท 100% เพื่อให้อ่านตัวหนังสือได้ชัดเจนที่สุด
+
+### 4. ระบบพากย์เสียงภาษาไทย (Thai Voice Dubbing)
+- สังเคราะห์และพากย์เสียงภาษาไทยอัตโนมัติทันทีที่ตัวละครในเกมพูด
+- **ระบบแยกเสียงตัวละคร:** วิเคราะห์และเลือกเสียงพากย์ชายหรือหญิงให้ตรงตามบทสนทนา
+- **ปรับความเร็วเสียงพากย์ (Speech Speed):** ปรับความเร็วได้ตั้งแต่ `0.9x` จนถึง `1.5x` (แนะนำ `1.25x` เพื่อให้เสียงพูดจบไวพอดีกับจังหวะของเกม)
+
+### 5. ปุ่มปิดเฉพาะเสียงเกม (Mute Game Audio)
+- สั่งปิดเฉพาะเสียงพูดภาษาอังกฤษของตัวเกม เพื่อให้ได้ยินเสียงพากย์ภาษาไทยได้อย่างชัดเจน โดยเสียงเอฟเฟกต์และเสียงพากย์ไทยยังคงทำงานตามปกติ
+
+### 6. โหมดจอดำแสดงเฉพาะตัวหนังสือ (Text-Only Mode)
+- สลับหน้าจอปิดการแสดงผลภาพเกมชั่วคราว ให้เหลือเฉพาะตัวหนังสือซับไตเติลภาษาไทยขนาดใหญ่บนพื้นหลังดำสนิท เหมาะสำหรับผู้ที่ต้องการอ่านสตอรี่หรือบทสรุปเนื้อเรื่อง
+
+### 7. เมนูลอยวงกลม 3 ขีด (Floating Menu Button ☰)
+- ปุ่มเมนูลอยแบบมินิมอล ไม่บดบังหน้าจอเกม แตะเพียงครั้งเดียวเพื่อเปิดหน้าต่างตั้งค่า ปรับขนาดตัวหนังสือ เปลี่ยนสี หรือเปิด/ปิดเสียงพากย์ได้ทันที
+
+### 8. รองรับ Samsung DeX & Multi-Window เต็มรูปแบบ
+- เสียบสายต่อภาพขึ้นจอคอมพิวเตอร์หรือทีวีในโหมด **Samsung DeX** ได้อย่างสมบูรณ์แบบ
+- ย่อ/ขยายหน้าต่างแบบอิสระ (Pop-up View) และคลิกเมาส์ทำงานอื่นขณะสตรีมเกมได้โดยที่สัญญาณสตรีมเกมและการแปลไม่หลุด
+
+---
+
+## 📲 ดาวน์โหลดและติดตั้ง (Download & Installation)
+
+1. เข้าไปที่หน้าดาวน์โหลดเวอร์ชันล่าสุดบน GitHub:  
+   👉 **[ดาวน์โหลด PS-Translator.apk (v2.0.8)](https://github.com/teeradream/ps-translator/releases/latest)**
+2. แตะดาวน์โหลดไฟล์ **`PS-Translator.apk`**
+3. แตะที่ไฟล์เพื่อทำการติดตั้ง:
+   - หากระบบแจ้งเตือนความปลอดภัย ให้เลือก **"อนุญาตการติดตั้งจากแหล่งนี้" (Allow install from unknown apps)**
+4. เมื่อติดตั้งเสร็จ ไอคอน **PS Translator** จะปรากฏบนหน้าจออุปกรณ์ของท่าน
+
+---
+
+## 🎮 วิธีตั้งค่าเชื่อมต่อกับเครื่อง PS5 ในครั้งแรก (Initial Setup)
+
+*(ทำเพียงครั้งแรกครั้งเดียว ระบบจะบันทึกเครื่องไว้ตลอดไป)*
+
+### ขั้นตอนที่ 1: ตั้งค่าที่เครื่อง PS5
+1. ตรวจสอบให้แน่ใจว่า **เครื่อง PS5 และอุปกรณ์ Android เชื่อมต่อ Wi-Fi เครือข่ายเดียวกัน** (แนะนำ Wi-Fi 5GHz หรือต่อสาย LAN ที่เครื่อง PS5)
+2. ที่เครื่อง PS5 ไปที่ **Settings (การตั้งค่า)** > **System (ระบบ)** > **Remote Play (การเล่นระยะไกล)**
+3. เปิดสวิตช์ **Enable Remote Play (เปิดใช้งานการเล่นระยะไกล)** ให้เป็นสีเขียว
+4. เลือกเมนู **Link Device (เชื่อมโยงอุปกรณ์)** > หน้าจอ PS5 จะแสดง **รหัสตัวเลข PIN 8 หลัก** พร้อมเวลานับถอยหลัง 300 วินาที
+
+### ขั้นตอนที่ 2: ตั้งค่าในแอป PS Translator
+1. เปิดแอป **PS Translator** บนอุปกรณ์ Android
+2. แอปจะค้นหาเครื่อง PS5 ในเครือข่ายอัตโนมัติ (จะปรากฏชื่อเครื่อง เช่น `PS5-xxx`)
+3. แตะค้างหรือเลือกที่เครื่อง PS5 แล้วเลือก **Register (ลงทะเบียน)**
+4. กรอกข้อมูลสำคัญ 2 ส่วน:
+   - **PSN Account ID (Base64):** รหัสบัญชี PSN ของท่าน สามารถหาได้ง่ายๆ ผ่านเว็บช่วยเหลือ เช่น:
+     - [psn.flGen.com](https://psn.flgen.com/)
+     - [pyrosoft.pro/psnid/](https://pyrosoft.pro/psnid/)  
+     *(เพียงพิมพ์ชื่อ PSN Online ID ของท่านลงไป แล้วคัดลอกรหัส Account ID มาวางลงในช่อง)*
+   - **PIN:** นำรหัส PIN 8 หลักที่ปรากฏบนหน้าจอ PS5 มากรอก
+5. แตะปุ่ม **Register** เพื่อยืนยัน > เมื่อสำเร็จสถานะจะเปลี่ยนเป็นพร้อมสตรีม
+
+---
+
+## 🕹️ ขั้นตอนการเริ่มเล่นและใช้งานระบบแปลภาษา (How to Use)
+
+1. **เริ่มสตรีมเกม:** แตะที่ชื่อเครื่อง PS5 ในหน้าแรก ตัวแอปจะเชื่อมต่อและปลุกเครื่อง PS5 ขึ้นมาทันที
+2. **เรียกเปิดเมนูควบคุม:** แตะที่ **ปุ่มลอยวงกลม 3 ขีด (`☰`)** ที่มุมหน้าจอ
+3. **ปรับกรอบสแกนซับไตเติล (Crop Box):**
+   - ในเมนู แตะเลือก **"ปรับกรอบซับไตเติล"** กรอบสี่เหลี่ยมสีเขียวจะปรากฏขึ้นมา
+   - ลากย้ายและปรับขนาดของกรอบสีเขียวให้ครอบเฉพาะแถบที่ซับไตเติลของเกมปรากฏขึ้นมาพอดี
+   - แตะปุ่มบันทึกตำแหน่ง กรอบสีเขียวจะซ่อนตัวไป
+4. **เปิดระบบแปลและเสียงพากย์:**
+   - ในแผงเมนู เปิดสวิตช์ **"แปลภาษาไทย (Auto Translate)"**
+   - เปิดสวิตช์ **"เสียงพากย์ไทย (Thai Voice Dubbing)"**
+   - หากต้องการปิดเสียงพูดภาษาอังกฤษของตัวเกม ให้เปิดสวิตช์ **"ปิดเสียงเกม (Mute Game Audio)"**
+5. **ปรับแต่งให้สบายตา:**
+   - ปรับขนาดฟอนต์ตัวหนังสือ (A- / A+)
+   - เลือกสีตัวหนังสือภาษาไทย และความเร็วเสียงพากย์ตามต้องการ
+
+---
+
+## 💡 ทริคแนะนำเพื่อให้การแปลแม่นยำที่สุด 100% (Pro Tips)
+
+- **เปิดพื้นหลังซับไตเติลในเกม (Subtitle Background):** แนะนำให้เข้าไปที่เมนูตัวเลือกของแต่ละเกม (Accessibility / Audio & Subtitles) แล้วเปิดพื้นหลังซับไตเติล (เช่น Subtitle Background Opacity 50-100%) จะช่วยให้ OCR อ่านตัวหนังสือได้แม่นยำ 100% ไม่มีแสงหรือฉากหลังเกมมารบกวน
+- **ตั้งขนาดซับไตเติลในเกมเป็น Medium หรือ Large:** ตัวหนังสือที่ขนาดพอเหมาะจะทำให้ OCR สแกนได้เร็วและลดข้อผิดพลาด
+- **เชื่อมต่อจอย DualSense ผ่านบลูทูธ:** กดปุ่ม `PS` + `Create/Share` บนจอย DualSense ค้างไว้พร้อมกันจนไฟกะพริบถี่ๆ แล้วเปิดบลูทูธที่มือถือเลือกเชื่อมต่อ `Wireless Controller` จะได้อรรถรสในการเล่นเหมือนนั่งหน้าจอทีวี
+
+---
+
+## 🖥️ การใช้งานในโหมด Samsung DeX
+
+แอป **PS Translator v2.0.8** รองรับระบบเดสก์ท็อป **Samsung DeX** เต็มรูปแบบ:
+- เสียบสาย HDMI / Type-C หรือเชื่อมต่อไร้สายจากมือถือ/แท็บเล็ต Samsung ไปยังจอคอมพิวเตอร์หรือทีวี
+- เปิดแอป PS Translator ในหน้าจอ DeX สามารถขยายเต็มหน้าจอ หรือปรับขนาดหน้าต่างเกมได้ตามใจชอบ
+- คลิกเมาส์หรือทำงานโปรแกรมอื่นในหน้าจอ DeX ควบคู่ไปได้ โดยที่การสตรีมเกมและการแปลซับไตเติลยังคงทำงานต่อเนื่องตลอดเวลา
+
+---
+
+## 📄 License
+This project is licensed under the GNU General Public License v3 (GPLv3).
+Based on the open-source Chiaki project.

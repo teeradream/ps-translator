@@ -11,7 +11,7 @@ endmacro()
 
 option(CHIAKI_ENABLE_TESTS "Enable tests for Chiaki" OFF)
 option(CHIAKI_ENABLE_CLI "Enable CLI for Chiaki" OFF)
-option(CHIAKI_ENABLE_GUI "Enable Qt GUI" ON)
+option(CHIAKI_ENABLE_GUI "Enable Qt GUI" OFF)
 option(CHIAKI_ENABLE_ANDROID "Enable Android (Use only as part of the Gradle Project)" ON)
 option(CHIAKI_ENABLE_BOREALIS "Enable Borealis GUI (For Nintendo Switch or PC)" OFF)
 tri_option(CHIAKI_ENABLE_SETSU "Enable libsetsu for touchpad input from controller" AUTO)
@@ -192,7 +192,7 @@ else()
 	message(STATUS "Setsu disabled")
 endif()
 
-if(CHIAKI_ENABLE_GUI)
+if(CHIAKI_ENABLE_GUI AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/gui/CMakeLists.txt")
 	add_subdirectory(gui)
 endif()
 

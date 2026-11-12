@@ -10,12 +10,16 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.content.res.Configuration
 import android.graphics.Bitmap
+import android.graphics.Color
 import android.graphics.Rect
+import android.graphics.drawable.GradientDrawable
 import android.media.AudioManager
 import android.os.*
 import android.speech.tts.TextToSpeech
+import android.util.TypedValue
 import android.view.*
 import android.widget.EditText
+import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
@@ -64,6 +68,12 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		MALE
 	}
 
+	data class SubtitleHistoryItem(
+		val english: String,
+		val thai: String,
+		val timestamp: Long = System.currentTimeMillis()
+	)
+
 	private var tts: TextToSpeech? = null
 	private var isTtsEnabled = false
 	private var voiceGenderMode = VoiceGenderMode.AUTO_AI
@@ -76,11 +86,20 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 	private var isFilterShortTextEnabled = true
 	private var speechSpeedRate = 1.25f
 
+	// Subtitle cascade history and styling options
+	private val subtitleHistory = mutableListOf<SubtitleHistoryItem>()
+	private var maxHistoryLines = 3
+	private var currentSubTextColor = Color.parseColor("#00FF88")
+	private var currentSubFontSize = 26
+	private var currentSubPosition = "CENTER"
+	private var currentSubBgOpacity = 80
+
 	private val clearSubtitleRunnable = Runnable {
 		if (::binding.isInitialized && !isDestroyed && !isFinishing) {
-			binding.subtitleOverlayContainer.animate().alpha(0f).setDuration(400).withEndAction {
+			binding.subtitleOverlayContainer.animate().alpha(0f).setDuration(500).withEndAction {
 				binding.subtitleOverlayContainer.isVisible = false
 				binding.subtitleOverlayContainer.alpha = 1f
+				subtitleHistory.clear()
 			}.start()
 		}
 	}
@@ -153,8 +172,23 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		// Subtitle overlay switch
 		binding.subOverlaySwitch.setOnCheckedChangeListener { _, isChecked ->
 			isSubtitleEnabled = isChecked
-			binding.subtitleOverlayContainer.isVisible = isChecked && !isTextOnlyMode && binding.translatedSubText.text.isNotEmpty()
+			binding.subCustomizationContainer.isVisible = isChecked
+			binding.subtitleOverlayContainer.isVisible = isChecked && !isTextOnlyMode && subtitleHistory.isNotEmpty()
 		}
+
+		// Load subtitle customization preferences
+		currentSubTextColor = try {
+			Color.parseColor(cropPrefs.getString("sub_text_color", "#00FF88") ?: "#00FF88")
+		} catch (_: Exception) {
+			Color.parseColor("#00FF88")
+		}
+		currentSubFontSize = cropPrefs.getInt("sub_font_size_sp", 26).coerceIn(16, 42)
+		currentSubPosition = cropPrefs.getString("sub_position", "CENTER") ?: "CENTER"
+		currentSubBgOpacity = cropPrefs.getInt("sub_bg_opacity", 80).coerceIn(0, 100)
+		maxHistoryLines = cropPrefs.getInt("sub_history_limit", 3).coerceIn(1, 3)
+
+		setupSubtitleCustomizationUI()
+		applySubtitleStyles()
 
 		// TTS voice switch
 		binding.ttsVoiceSwitch.setOnCheckedChangeListener { _, isChecked ->
@@ -261,7 +295,7 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		} else {
 			binding.pureFullscreenLayout.isVisible = false
 			binding.aspectRatioLayout.visibility = View.VISIBLE
-			binding.subtitleOverlayContainer.isVisible = isSubtitleEnabled && binding.translatedSubText.text.isNotEmpty()
+			binding.subtitleOverlayContainer.isVisible = isSubtitleEnabled && subtitleHistory.isNotEmpty()
 			binding.btnTextOnlyMode.text = "โหมดโชว์เฉพาะตัวหนังสือ (จอดำ)"
 		}
 	}
@@ -305,28 +339,21 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 								val fixedText = fixOcrText(rawText)
 								val text = fixedText.replace(Regex("\\s+"), " ").trim()
 								if (text.isNotEmpty() && isDialogueSubtitle(text)) {
-									if (!isSimilarText(text, lastRecognizedEnglish)) {
-										lastRecognizedEnglish = text
+									val lastEnglish = subtitleHistory.firstOrNull()?.english ?: ""
+									if (!isSimilarText(text, lastEnglish)) {
 										android.util.Log.d("PSTranslatorOCR", "Detected dialogue: $text")
 										ocrScope.launch {
 											val thai = translateToThai(text)
 											android.util.Log.d("PSTranslatorOCR", "Translated text: $thai")
-											uiVisibilityHandler.removeCallbacks(clearSubtitleRunnable)
-											binding.originalSubText.text = text
-											binding.originalSubText.isVisible = true
-											binding.translatedSubText.text = thai
-											if (isSubtitleEnabled && !isTextOnlyMode) {
-												binding.subtitleOverlayContainer.isVisible = true
-												binding.subtitleOverlayContainer.alpha = 1f
+											// Prepend newest subtitle at top
+											subtitleHistory.add(0, SubtitleHistoryItem(text, thai))
+											while (subtitleHistory.size > maxHistoryLines) {
+												subtitleHistory.removeAt(subtitleHistory.size - 1)
 											}
-											binding.pureOriginalText.text = text
-											binding.pureOriginalText.isVisible = true
-											binding.pureFullscreenText.text = thai
+											renderSubtitles()
 											if (isTtsEnabled) {
 												speakTranslation(text, thai)
 											}
-											// Keep subtitle visible stably for 4.5 seconds
-											uiVisibilityHandler.postDelayed(clearSubtitleRunnable, 4500)
 										}
 									}
 								}
@@ -345,6 +372,250 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 			isCapturing = false
 			android.util.Log.e("PSTranslatorOCR", "PixelCopy request error", e)
 		}
+	}
+
+	private fun setupSubtitleCustomizationUI() {
+		// 1. Position toggle (Center vs Bottom)
+		if (currentSubPosition == "BOTTOM") {
+			binding.positionToggleGroup.check(R.id.btnPosBottom)
+		} else {
+			binding.positionToggleGroup.check(R.id.btnPosCenter)
+		}
+		binding.positionToggleGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
+			if (isChecked) {
+				currentSubPosition = if (checkedId == R.id.btnPosBottom) "BOTTOM" else "CENTER"
+				cropPrefs.edit().putString("sub_position", currentSubPosition).apply()
+				applySubtitleStyles()
+			}
+		}
+
+		// 2. Color toggle
+		when (currentSubTextColor) {
+			Color.parseColor("#FFFFFF") -> binding.colorToggleGroup.check(R.id.btnColorWhite)
+			Color.parseColor("#00E5FF") -> binding.colorToggleGroup.check(R.id.btnColorCyan)
+			Color.parseColor("#FFD700") -> binding.colorToggleGroup.check(R.id.btnColorYellow)
+			Color.parseColor("#FF9100") -> binding.colorToggleGroup.check(R.id.btnColorOrange)
+			Color.parseColor("#FF4081") -> binding.colorToggleGroup.check(R.id.btnColorPink)
+			else -> binding.colorToggleGroup.check(R.id.btnColorGreen)
+		}
+		binding.colorToggleGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
+			if (isChecked) {
+				currentSubTextColor = when (checkedId) {
+					R.id.btnColorWhite -> Color.parseColor("#FFFFFF")
+					R.id.btnColorCyan -> Color.parseColor("#00E5FF")
+					R.id.btnColorYellow -> Color.parseColor("#FFD700")
+					R.id.btnColorOrange -> Color.parseColor("#FF9100")
+					R.id.btnColorPink -> Color.parseColor("#FF4081")
+					else -> Color.parseColor("#00FF88")
+				}
+				val hexColor = String.format("#%06X", 0xFFFFFF and currentSubTextColor)
+				cropPrefs.edit().putString("sub_text_color", hexColor).apply()
+				applySubtitleStyles()
+			}
+		}
+
+		// 3. Font Size Presets & Stepper
+		syncFontSizeToggleState()
+		binding.fontSizeToggleGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
+			if (isChecked) {
+				currentSubFontSize = when (checkedId) {
+					R.id.btnSizeSmall -> 18
+					R.id.btnSizeMedium -> 22
+					R.id.btnSizeLarge -> 26
+					R.id.btnSizeXLarge -> 34
+					else -> 26
+				}
+				cropPrefs.edit().putInt("sub_font_size_sp", currentSubFontSize).apply()
+				applySubtitleStyles()
+			}
+		}
+
+		binding.btnFontDecrease.setOnClickListener {
+			if (currentSubFontSize > 16) {
+				currentSubFontSize -= 2
+				cropPrefs.edit().putInt("sub_font_size_sp", currentSubFontSize).apply()
+				syncFontSizeToggleState()
+				applySubtitleStyles()
+			}
+		}
+
+		binding.btnFontIncrease.setOnClickListener {
+			if (currentSubFontSize < 42) {
+				currentSubFontSize += 2
+				cropPrefs.edit().putInt("sub_font_size_sp", currentSubFontSize).apply()
+				syncFontSizeToggleState()
+				applySubtitleStyles()
+			}
+		}
+
+		// 4. Background Opacity
+		when (currentSubBgOpacity) {
+			0 -> binding.bgOpacityToggleGroup.check(R.id.btnOpacityTransparent)
+			40 -> binding.bgOpacityToggleGroup.check(R.id.btnOpacityGlass)
+			100 -> binding.bgOpacityToggleGroup.check(R.id.btnOpacitySolid)
+			else -> binding.bgOpacityToggleGroup.check(R.id.btnOpacityDark)
+		}
+		binding.bgOpacityToggleGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
+			if (isChecked) {
+				currentSubBgOpacity = when (checkedId) {
+					R.id.btnOpacityTransparent -> 0
+					R.id.btnOpacityGlass -> 40
+					R.id.btnOpacitySolid -> 100
+					else -> 80
+				}
+				cropPrefs.edit().putInt("sub_bg_opacity", currentSubBgOpacity).apply()
+				applySubtitleStyles()
+			}
+		}
+
+		// 5. History Lines Count
+		when (maxHistoryLines) {
+			1 -> binding.historyLinesToggleGroup.check(R.id.btnHistory1)
+			2 -> binding.historyLinesToggleGroup.check(R.id.btnHistory2)
+			else -> binding.historyLinesToggleGroup.check(R.id.btnHistory3)
+		}
+		binding.historyLinesToggleGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
+			if (isChecked) {
+				maxHistoryLines = when (checkedId) {
+					R.id.btnHistory1 -> 1
+					R.id.btnHistory2 -> 2
+					else -> 3
+				}
+				cropPrefs.edit().putInt("sub_history_limit", maxHistoryLines).apply()
+				while (subtitleHistory.size > maxHistoryLines) {
+					subtitleHistory.removeAt(subtitleHistory.size - 1)
+				}
+				renderSubtitles()
+			}
+		}
+	}
+
+	private fun syncFontSizeToggleState() {
+		binding.fontSizeToggleGroup.clearChecked()
+		when (currentSubFontSize) {
+			18 -> binding.fontSizeToggleGroup.check(R.id.btnSizeSmall)
+			22 -> binding.fontSizeToggleGroup.check(R.id.btnSizeMedium)
+			26 -> binding.fontSizeToggleGroup.check(R.id.btnSizeLarge)
+			34 -> binding.fontSizeToggleGroup.check(R.id.btnSizeXLarge)
+		}
+	}
+
+	private fun applySubtitleStyles() {
+		// 1. Background drawable
+		val alphaInt = (currentSubBgOpacity * 255 / 100).coerceIn(0, 255)
+		val bgDrawable = GradientDrawable().apply {
+			shape = GradientDrawable.RECTANGLE
+			cornerRadius = dpToPx(12).toFloat()
+			setColor(Color.argb(alphaInt, 6, 8, 16))
+			if (alphaInt > 0) {
+				setStroke(dpToPx(1), Color.argb(40, 255, 255, 255))
+			}
+		}
+		binding.subtitleOverlayContainer.background = bgDrawable
+
+		// 2. Position (Center vs Bottom)
+		val lp = binding.subtitleOverlayContainer.layoutParams as FrameLayout.LayoutParams
+		if (currentSubPosition == "BOTTOM") {
+			lp.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+			lp.bottomMargin = dpToPx(24)
+		} else {
+			lp.gravity = Gravity.CENTER
+			lp.bottomMargin = 0
+		}
+		binding.subtitleOverlayContainer.layoutParams = lp
+
+		// 3. Text Color & Sizes
+		binding.translatedSubText.setTextColor(currentSubTextColor)
+		binding.translatedSubText.setTextSize(TypedValue.COMPLEX_UNIT_SP, currentSubFontSize.toFloat())
+
+		binding.translatedSubText1.setTextColor(currentSubTextColor)
+		binding.translatedSubText1.setTextSize(TypedValue.COMPLEX_UNIT_SP, (currentSubFontSize * 0.88f).coerceAtLeast(14f))
+
+		binding.translatedSubText2.setTextColor(currentSubTextColor)
+		binding.translatedSubText2.setTextSize(TypedValue.COMPLEX_UNIT_SP, (currentSubFontSize * 0.78f).coerceAtLeast(13f))
+
+		// Text-only mode text styling
+		binding.pureFullscreenText.setTextColor(currentSubTextColor)
+		binding.pureFullscreenText1.setTextColor(currentSubTextColor)
+		binding.pureFullscreenText2.setTextColor(currentSubTextColor)
+
+		// 4. Update Live Preview in Settings Menu
+		val previewBg = GradientDrawable().apply {
+			shape = GradientDrawable.RECTANGLE
+			cornerRadius = dpToPx(10).toFloat()
+			setColor(Color.argb(alphaInt, 6, 8, 16))
+			if (alphaInt > 0) {
+				setStroke(dpToPx(1), Color.argb(40, 255, 255, 255))
+			}
+		}
+		binding.previewSubContainer.background = previewBg
+		binding.previewSubNew.setTextColor(currentSubTextColor)
+		binding.previewSubNew.setTextSize(TypedValue.COMPLEX_UNIT_SP, (currentSubFontSize * 0.8f).coerceAtLeast(14f))
+		binding.previewSubOld.setTextColor(currentSubTextColor)
+		binding.previewSubOld.setTextSize(TypedValue.COMPLEX_UNIT_SP, (currentSubFontSize * 0.7f).coerceAtLeast(12f))
+		binding.tvCurrentFontSize.text = "$currentSubFontSize sp"
+		binding.tvCurrentFontSize.setTextColor(currentSubTextColor)
+
+		// Refresh existing history rendering with updated styles
+		renderSubtitles()
+	}
+
+	private fun renderSubtitles() {
+		if (subtitleHistory.isEmpty()) {
+			binding.subtitleOverlayContainer.isVisible = false
+			return
+		}
+
+		uiVisibilityHandler.removeCallbacks(clearSubtitleRunnable)
+
+		// Slot 0 (Newest)
+		val item0 = subtitleHistory.getOrNull(0)
+		if (item0 != null) {
+			binding.translatedSubText.text = item0.thai
+			binding.originalSubText.text = item0.english
+			binding.layoutSubItem0.alpha = 1.0f
+
+			binding.pureFullscreenText.text = item0.thai
+			binding.pureOriginalText.text = item0.english
+		}
+
+		// Slot 1 (Previous 1, faded 0.65)
+		val item1 = subtitleHistory.getOrNull(1)
+		if (item1 != null && maxHistoryLines >= 2) {
+			binding.layoutSubItem1.isVisible = true
+			binding.translatedSubText1.text = item1.thai
+			binding.originalSubText1.text = item1.english
+			binding.layoutSubItem1.alpha = 0.65f
+
+			binding.pureFullscreenText1.text = item1.thai
+			binding.pureFullscreenText1.isVisible = true
+		} else {
+			binding.layoutSubItem1.isVisible = false
+			binding.pureFullscreenText1.isVisible = false
+		}
+
+		// Slot 2 (Previous 2, faded 0.35)
+		val item2 = subtitleHistory.getOrNull(2)
+		if (item2 != null && maxHistoryLines >= 3) {
+			binding.layoutSubItem2.isVisible = true
+			binding.translatedSubText2.text = item2.thai
+			binding.originalSubText2.text = item2.english
+			binding.layoutSubItem2.alpha = 0.35f
+
+			binding.pureFullscreenText2.text = item2.thai
+			binding.pureFullscreenText2.isVisible = true
+		} else {
+			binding.layoutSubItem2.isVisible = false
+			binding.pureFullscreenText2.isVisible = false
+		}
+
+		if (isSubtitleEnabled && !isTextOnlyMode) {
+			binding.subtitleOverlayContainer.isVisible = true
+			binding.subtitleOverlayContainer.alpha = 1.0f
+		}
+
+		// Keep subtitles comfortably visible for 7.5 seconds
+		uiVisibilityHandler.postDelayed(clearSubtitleRunnable, 7500)
 	}
 
 	@SuppressLint("ClickableViewAccessibility")

@@ -28,48 +28,126 @@
         android:layout_height="wrap_content"
         android:layout_gravity="center"/>
 
-    <!-- Subtitle Translation Overlay (floating over video stream) -->
+    <!-- Subtitle Translation Overlay (floating over video stream - Cascading history) -->
     <LinearLayout
         android:id="@+id/subtitleOverlayContainer"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_gravity="bottom|center_horizontal"
-        android:layout_marginBottom="20dp"
+        android:layout_gravity="center"
         android:layout_marginStart="24dp"
         android:layout_marginEnd="24dp"
         android:orientation="vertical"
         android:gravity="center"
         android:background="#D9060810"
-        android:paddingStart="16dp"
-        android:paddingEnd="16dp"
-        android:paddingTop="10dp"
-        android:paddingBottom="10dp"
+        android:paddingStart="18dp"
+        android:paddingEnd="18dp"
+        android:paddingTop="12dp"
+        android:paddingBottom="12dp"
         android:visibility="gone"
         android:clickable="true"
         android:focusable="false">
 
-        <TextView
-            android:id="@+id/originalSubText"
+        <!-- Slot 0: Newest Subtitle (Brightest, Full Opacity, Center) -->
+        <LinearLayout
+            android:id="@+id/layoutSubItem0"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textColor="#99FFFFFF"
-            android:textSize="13sp"
-            android:text=""
-            android:visibility="gone"/>
+            android:orientation="vertical"
+            android:gravity="center">
 
-        <TextView
-            android:id="@+id/translatedSubText"
+            <TextView
+                android:id="@+id/originalSubText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="#99FFFFFF"
+                android:textSize="13sp"
+                android:text=""
+                android:visibility="gone"/>
+
+            <TextView
+                android:id="@+id/translatedSubText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="#00FF88"
+                android:textSize="26sp"
+                android:textStyle="bold"
+                android:shadowColor="#FF000000"
+                android:shadowDx="2"
+                android:shadowDy="2"
+                android:shadowRadius="5"
+                android:gravity="center"
+                android:text=""/>
+        </LinearLayout>
+
+        <!-- Slot 1: Previous Subtitle 1 (Below Newest, Faded 0.65) -->
+        <LinearLayout
+            android:id="@+id/layoutSubItem1"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textColor="#FFFFFF"
-            android:textSize="22sp"
-            android:textStyle="bold"
-            android:shadowColor="#FF000000"
-            android:shadowDx="2"
-            android:shadowDy="2"
-            android:shadowRadius="4"
+            android:orientation="vertical"
             android:gravity="center"
-            android:text=""/>
+            android:layout_marginTop="8dp"
+            android:alpha="0.65"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/originalSubText1"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="#88FFFFFF"
+                android:textSize="12sp"
+                android:text=""
+                android:visibility="gone"/>
+
+            <TextView
+                android:id="@+id/translatedSubText1"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="#00FF88"
+                android:textSize="22sp"
+                android:textStyle="bold"
+                android:shadowColor="#FF000000"
+                android:shadowDx="2"
+                android:shadowDy="2"
+                android:shadowRadius="4"
+                android:gravity="center"
+                android:text=""/>
+        </LinearLayout>
+
+        <!-- Slot 2: Previous Subtitle 2 (Below Slot 1, Very Faded 0.35) -->
+        <LinearLayout
+            android:id="@+id/layoutSubItem2"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:layout_marginTop="6dp"
+            android:alpha="0.35"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/originalSubText2"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="#66FFFFFF"
+                android:textSize="11sp"
+                android:text=""
+                android:visibility="gone"/>
+
+            <TextView
+                android:id="@+id/translatedSubText2"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="#00FF88"
+                android:textSize="19sp"
+                android:textStyle="bold"
+                android:shadowColor="#FF000000"
+                android:shadowDx="2"
+                android:shadowDy="2"
+                android:shadowRadius="4"
+                android:gravity="center"
+                android:text=""/>
+        </LinearLayout>
     </LinearLayout>
 
     <!-- Pure Text Only Mode: ONLY text on pure black background without video -->
@@ -105,11 +183,35 @@
                 android:id="@+id/pureFullscreenText"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:textColor="#FFFFFF"
+                android:textColor="#00FF88"
                 android:textSize="32sp"
                 android:textStyle="bold"
                 android:gravity="center"
                 android:text="PS Translator\n(รอรับข้อความซับไตเติ้ลจากเกม...)"/>
+
+            <TextView
+                android:id="@+id/pureFullscreenText1"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="#00FF88"
+                android:textSize="26sp"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:alpha="0.65"
+                android:layout_marginTop="14dp"
+                android:visibility="gone"/>
+
+            <TextView
+                android:id="@+id/pureFullscreenText2"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="#00FF88"
+                android:textSize="22sp"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:alpha="0.35"
+                android:layout_marginTop="10dp"
+                android:visibility="gone"/>
 
             <TextView
                 android:id="@+id/pureFullscreenHint"
@@ -279,7 +381,471 @@
                     android:textColor="#EEEEEE"
                     android:textSize="15sp"
                     android:checked="true"
-                    android:layout_marginBottom="8dp"/>
+                    android:layout_marginBottom="6dp"/>
+
+                <!-- Subtitle Customization Container (collapsible/expandable with switch) -->
+                <LinearLayout
+                    android:id="@+id/subCustomizationContainer"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:layout_marginBottom="12dp">
+
+                    <!-- Live Subtitle Preview Box -->
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="ตัวอย่างหน้าตาซับไตเติ้ล:"
+                        android:textColor="#AAAAAA"
+                        android:textSize="13sp"
+                        android:layout_marginTop="4dp"
+                        android:layout_marginBottom="6dp"/>
+
+                    <LinearLayout
+                        android:id="@+id/previewSubContainer"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:gravity="center"
+                        android:background="#D9060810"
+                        android:padding="12dp"
+                        android:layout_marginBottom="10dp">
+
+                        <TextView
+                            android:id="@+id/previewSubNew"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="ซับไตเติ้ลใหม่ล่าสุด (ตรงกลางจอ)"
+                            android:textColor="#00FF88"
+                            android:textSize="18sp"
+                            android:textStyle="bold"
+                            android:shadowColor="#FF000000"
+                            android:shadowDx="2"
+                            android:shadowDy="2"
+                            android:shadowRadius="4"
+                            android:gravity="center"/>
+
+                        <TextView
+                            android:id="@+id/previewSubOld"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="ซับไตเติ้ลก่อนหน้า (จางลงข้างล่าง)"
+                            android:textColor="#00FF88"
+                            android:textSize="15sp"
+                            android:textStyle="bold"
+                            android:alpha="0.65"
+                            android:shadowColor="#FF000000"
+                            android:shadowDx="2"
+                            android:shadowDy="2"
+                            android:shadowRadius="4"
+                            android:layout_marginTop="4dp"
+                            android:gravity="center"/>
+                    </LinearLayout>
+
+                    <!-- Subtitle Position Toggle -->
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="ตำแหน่งซับบนหน้าจอ:"
+                        android:textColor="#AAAAAA"
+                        android:textSize="13sp"
+                        android:layout_marginBottom="6dp"/>
+
+                    <com.google.android.material.button.MaterialButtonToggleGroup
+                        android:id="@+id/positionToggleGroup"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        app:singleSelection="true"
+                        app:selectionRequired="true"
+                        app:checkedButton="@id/btnPosCenter"
+                        android:layout_marginBottom="10dp">
+
+                        <com.google.android.material.button.MaterialButton
+                            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                            android:id="@+id/btnPosCenter"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1.2"
+                            android:text="ตรงกลางจอ (แนะนำ)"
+                            android:textSize="12sp"
+                            android:textStyle="bold"
+                            android:textColor="@color/toggle_btn_text_color"
+                            app:backgroundTint="@color/toggle_btn_bg_tint"
+                            app:strokeColor="@color/toggle_btn_stroke_color"
+                            app:strokeWidth="1.5dp"/>
+
+                        <com.google.android.material.button.MaterialButton
+                            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                            android:id="@+id/btnPosBottom"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="ด้านล่างจอ"
+                            android:textSize="12sp"
+                            android:textStyle="bold"
+                            android:textColor="@color/toggle_btn_text_color"
+                            app:backgroundTint="@color/toggle_btn_bg_tint"
+                            app:strokeColor="@color/toggle_btn_stroke_color"
+                            app:strokeWidth="1.5dp"/>
+                    </com.google.android.material.button.MaterialButtonToggleGroup>
+
+                    <!-- Subtitle Color Selection -->
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="สีตัวหนังสือภาษาไทย:"
+                        android:textColor="#AAAAAA"
+                        android:textSize="13sp"
+                        android:layout_marginBottom="6dp"/>
+
+                    <HorizontalScrollView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:scrollbars="none"
+                        android:layout_marginBottom="10dp">
+
+                        <com.google.android.material.button.MaterialButtonToggleGroup
+                            android:id="@+id/colorToggleGroup"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            app:singleSelection="true"
+                            app:selectionRequired="true"
+                            app:checkedButton="@id/btnColorGreen">
+
+                            <com.google.android.material.button.MaterialButton
+                                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                                android:id="@+id/btnColorGreen"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="เขียวนีออน"
+                                android:textColor="#00FF88"
+                                android:textStyle="bold"
+                                android:textSize="11sp"
+                                app:backgroundTint="@color/toggle_btn_bg_tint"
+                                app:strokeColor="@color/toggle_btn_stroke_color"
+                                app:strokeWidth="1.5dp"/>
+
+                            <com.google.android.material.button.MaterialButton
+                                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                                android:id="@+id/btnColorWhite"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="ขาวสว่าง"
+                                android:textColor="#FFFFFF"
+                                android:textStyle="bold"
+                                android:textSize="11sp"
+                                app:backgroundTint="@color/toggle_btn_bg_tint"
+                                app:strokeColor="@color/toggle_btn_stroke_color"
+                                app:strokeWidth="1.5dp"/>
+
+                            <com.google.android.material.button.MaterialButton
+                                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                                android:id="@+id/btnColorCyan"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="ฟ้าไซเบอร์"
+                                android:textColor="#00E5FF"
+                                android:textStyle="bold"
+                                android:textSize="11sp"
+                                app:backgroundTint="@color/toggle_btn_bg_tint"
+                                app:strokeColor="@color/toggle_btn_stroke_color"
+                                app:strokeWidth="1.5dp"/>
+
+                            <com.google.android.material.button.MaterialButton
+                                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                                android:id="@+id/btnColorYellow"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="เหลืองทอง"
+                                android:textColor="#FFD700"
+                                android:textStyle="bold"
+                                android:textSize="11sp"
+                                app:backgroundTint="@color/toggle_btn_bg_tint"
+                                app:strokeColor="@color/toggle_btn_stroke_color"
+                                app:strokeWidth="1.5dp"/>
+
+                            <com.google.android.material.button.MaterialButton
+                                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                                android:id="@+id/btnColorOrange"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="ส้มสด"
+                                android:textColor="#FF9100"
+                                android:textStyle="bold"
+                                android:textSize="11sp"
+                                app:backgroundTint="@color/toggle_btn_bg_tint"
+                                app:strokeColor="@color/toggle_btn_stroke_color"
+                                app:strokeWidth="1.5dp"/>
+
+                            <com.google.android.material.button.MaterialButton
+                                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                                android:id="@+id/btnColorPink"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="ชมพูหวาน"
+                                android:textColor="#FF4081"
+                                android:textStyle="bold"
+                                android:textSize="11sp"
+                                app:backgroundTint="@color/toggle_btn_bg_tint"
+                                app:strokeColor="@color/toggle_btn_stroke_color"
+                                app:strokeWidth="1.5dp"/>
+                        </com.google.android.material.button.MaterialButtonToggleGroup>
+                    </HorizontalScrollView>
+
+                    <!-- Subtitle Font Size Selection -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:layout_marginBottom="6dp">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="ขนาดตัวหนังสือ:"
+                            android:textColor="#AAAAAA"
+                            android:textSize="13sp"/>
+
+                        <TextView
+                            android:id="@+id/tvCurrentFontSize"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="26 sp"
+                            android:textColor="#00FF88"
+                            android:textStyle="bold"
+                            android:textSize="14sp"/>
+                    </LinearLayout>
+
+                    <!-- Font Size Quick Presets & Stepper -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:layout_marginBottom="10dp">
+
+                        <com.google.android.material.button.MaterialButton
+                            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                            android:id="@+id/btnFontDecrease"
+                            android:layout_width="48dp"
+                            android:layout_height="wrap_content"
+                            android:text="A-"
+                            android:textStyle="bold"
+                            android:textColor="#FFFFFF"
+                            app:strokeColor="#55FFFFFF"
+                            android:layout_marginEnd="6dp"/>
+
+                        <com.google.android.material.button.MaterialButtonToggleGroup
+                            android:id="@+id/fontSizeToggleGroup"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            app:singleSelection="true"
+                            app:checkedButton="@id/btnSizeLarge">
+
+                            <com.google.android.material.button.MaterialButton
+                                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                                android:id="@+id/btnSizeSmall"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="18"
+                                android:textSize="11sp"
+                                android:textStyle="bold"
+                                android:textColor="@color/toggle_btn_text_color"
+                                app:backgroundTint="@color/toggle_btn_bg_tint"
+                                app:strokeColor="@color/toggle_btn_stroke_color"/>
+
+                            <com.google.android.material.button.MaterialButton
+                                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                                android:id="@+id/btnSizeMedium"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="22"
+                                android:textSize="11sp"
+                                android:textStyle="bold"
+                                android:textColor="@color/toggle_btn_text_color"
+                                app:backgroundTint="@color/toggle_btn_bg_tint"
+                                app:strokeColor="@color/toggle_btn_stroke_color"/>
+
+                            <com.google.android.material.button.MaterialButton
+                                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                                android:id="@+id/btnSizeLarge"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="26"
+                                android:textSize="11sp"
+                                android:textStyle="bold"
+                                android:textColor="@color/toggle_btn_text_color"
+                                app:backgroundTint="@color/toggle_btn_bg_tint"
+                                app:strokeColor="@color/toggle_btn_stroke_color"/>
+
+                            <com.google.android.material.button.MaterialButton
+                                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                                android:id="@+id/btnSizeXLarge"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="34"
+                                android:textSize="11sp"
+                                android:textStyle="bold"
+                                android:textColor="@color/toggle_btn_text_color"
+                                app:backgroundTint="@color/toggle_btn_bg_tint"
+                                app:strokeColor="@color/toggle_btn_stroke_color"/>
+                        </com.google.android.material.button.MaterialButtonToggleGroup>
+
+                        <com.google.android.material.button.MaterialButton
+                            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                            android:id="@+id/btnFontIncrease"
+                            android:layout_width="48dp"
+                            android:layout_height="wrap_content"
+                            android:text="A+"
+                            android:textStyle="bold"
+                            android:textColor="#FFFFFF"
+                            app:strokeColor="#55FFFFFF"
+                            android:layout_marginStart="6dp"/>
+                    </LinearLayout>
+
+                    <!-- Background Opacity -->
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="ความโปร่งใสพื้นหลังกล่องซับ:"
+                        android:textColor="#AAAAAA"
+                        android:textSize="13sp"
+                        android:layout_marginBottom="6dp"/>
+
+                    <com.google.android.material.button.MaterialButtonToggleGroup
+                        android:id="@+id/bgOpacityToggleGroup"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        app:singleSelection="true"
+                        app:selectionRequired="true"
+                        app:checkedButton="@id/btnOpacityDark"
+                        android:layout_marginBottom="10dp">
+
+                        <com.google.android.material.button.MaterialButton
+                            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                            android:id="@+id/btnOpacityTransparent"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="ใส 0%"
+                            android:textSize="11sp"
+                            android:textStyle="bold"
+                            android:textColor="@color/toggle_btn_text_color"
+                            app:backgroundTint="@color/toggle_btn_bg_tint"
+                            app:strokeColor="@color/toggle_btn_stroke_color"/>
+
+                        <com.google.android.material.button.MaterialButton
+                            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                            android:id="@+id/btnOpacityGlass"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="กระจก 40%"
+                            android:textSize="11sp"
+                            android:textStyle="bold"
+                            android:textColor="@color/toggle_btn_text_color"
+                            app:backgroundTint="@color/toggle_btn_bg_tint"
+                            app:strokeColor="@color/toggle_btn_stroke_color"/>
+
+                        <com.google.android.material.button.MaterialButton
+                            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                            android:id="@+id/btnOpacityDark"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1.2"
+                            android:text="กึ่งทึบ 80%"
+                            android:textSize="11sp"
+                            android:textStyle="bold"
+                            android:textColor="@color/toggle_btn_text_color"
+                            app:backgroundTint="@color/toggle_btn_bg_tint"
+                            app:strokeColor="@color/toggle_btn_stroke_color"/>
+
+                        <com.google.android.material.button.MaterialButton
+                            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                            android:id="@+id/btnOpacitySolid"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="ทึบ 100%"
+                            android:textSize="11sp"
+                            android:textStyle="bold"
+                            android:textColor="@color/toggle_btn_text_color"
+                            app:backgroundTint="@color/toggle_btn_bg_tint"
+                            app:strokeColor="@color/toggle_btn_stroke_color"/>
+                    </com.google.android.material.button.MaterialButtonToggleGroup>
+
+                    <!-- Subtitle History Lines Count -->
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="จำนวนแถวซับไตเติ้ลย้อนหลัง (ให้อ่านทัน):"
+                        android:textColor="#AAAAAA"
+                        android:textSize="13sp"
+                        android:layout_marginBottom="6dp"/>
+
+                    <com.google.android.material.button.MaterialButtonToggleGroup
+                        android:id="@+id/historyLinesToggleGroup"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        app:singleSelection="true"
+                        app:selectionRequired="true"
+                        app:checkedButton="@id/btnHistory3"
+                        android:layout_marginBottom="10dp">
+
+                        <com.google.android.material.button.MaterialButton
+                            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                            android:id="@+id/btnHistory1"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="1 แถว (ล่าสุด)"
+                            android:textSize="11sp"
+                            android:textStyle="bold"
+                            android:textColor="@color/toggle_btn_text_color"
+                            app:backgroundTint="@color/toggle_btn_bg_tint"
+                            app:strokeColor="@color/toggle_btn_stroke_color"/>
+
+                        <com.google.android.material.button.MaterialButton
+                            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                            android:id="@+id/btnHistory2"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="2 แถว"
+                            android:textSize="11sp"
+                            android:textStyle="bold"
+                            android:textColor="@color/toggle_btn_text_color"
+                            app:backgroundTint="@color/toggle_btn_bg_tint"
+                            app:strokeColor="@color/toggle_btn_stroke_color"/>
+
+                        <com.google.android.material.button.MaterialButton
+                            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                            android:id="@+id/btnHistory3"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1.2"
+                            android:text="3 แถว (แนะนำ)"
+                            android:textSize="11sp"
+                            android:textStyle="bold"
+                            android:textColor="@color/toggle_btn_text_color"
+                            app:backgroundTint="@color/toggle_btn_bg_tint"
+                            app:strokeColor="@color/toggle_btn_stroke_color"/>
+                    </com.google.android.material.button.MaterialButtonToggleGroup>
+
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:background="#22FFFFFF"
+                        android:layout_marginTop="4dp"
+                        android:layout_marginBottom="8dp"/>
+                </LinearLayout>
 
                 <!-- TTS Voice Toggle -->
                 <com.google.android.material.switchmaterial.SwitchMaterial

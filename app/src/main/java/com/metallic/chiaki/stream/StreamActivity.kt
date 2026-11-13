@@ -81,7 +81,12 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 	private var isAudioMuted = false
 	private var isTextOnlyMode = false
 	private var isCapturing = false
-	private var lastRecognizedEnglish = ""
+	private var isTranslating = false
+	private var pendingOcrEnglish = ""
+	private var lastTranslatedEnglish = ""
+	private var lastTranslatedThai = ""
+	private var lastSpokenThai = ""
+	private var lastSpokenTimeMs = 0L
 	private lateinit var cropPrefs: SharedPreferences
 	private var isFilterShortTextEnabled = true
 	private var speechSpeedRate = 1.25f
@@ -93,16 +98,6 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 	private var currentSubFontSize = 26
 	private var currentSubPosition = "CENTER"
 	private var currentSubBgOpacity = 80
-
-	private val clearSubtitleRunnable = Runnable {
-		if (::binding.isInitialized && !isDestroyed && !isFinishing) {
-			binding.subtitleOverlayContainer.animate().alpha(0f).setDuration(500).withEndAction {
-				binding.subtitleOverlayContainer.isVisible = false
-				binding.subtitleOverlayContainer.alpha = 1f
-				subtitleHistory.clear()
-			}.start()
-		}
-	}
 
 	private val hideMenuButtonRunnable = Runnable {
 		if (::binding.isInitialized && !binding.menuPanelContainer.isVisible) {
@@ -152,6 +147,7 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 			val show = !binding.menuPanelContainer.isVisible
 			binding.menuPanelContainer.isVisible = show
 			if (show) {
+				showMenuPage("MAIN")
 				binding.btnMenuToggle.alpha = 1.0f
 				uiVisibilityHandler.removeCallbacks(hideMenuButtonRunnable)
 			} else {
@@ -167,6 +163,19 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		binding.menuPanelContainer.setOnClickListener {
 			binding.menuPanelContainer.isVisible = false
 			resetMenuButtonTimer()
+		}
+
+		binding.btnMenuBack.setOnClickListener {
+			showMenuPage("MAIN")
+		}
+		binding.btnOpenSubText.setOnClickListener {
+			showMenuPage("TEXT")
+		}
+		binding.btnOpenSubVoice.setOnClickListener {
+			showMenuPage("VOICE")
+		}
+		binding.btnOpenSubMode.setOnClickListener {
+			showMenuPage("MODE")
 		}
 
 		// Subtitle overlay switch
@@ -339,20 +348,35 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 								val fixedText = fixOcrText(rawText)
 								val text = fixedText.replace(Regex("\\s+"), " ").trim()
 								if (text.isNotEmpty() && isDialogueSubtitle(text)) {
-									val lastEnglish = subtitleHistory.firstOrNull()?.english ?: ""
-									if (!isSimilarText(text, lastEnglish)) {
+									val isDuplicateOfPending = isTranslating && isSimilarText(text, pendingOcrEnglish)
+									val isDuplicateOfLast = isSimilarText(text, lastTranslatedEnglish)
+									val isDuplicateOfRecent = subtitleHistory.take(2).any { isSimilarText(text, it.english) }
+
+									if (!isTranslating && !isDuplicateOfPending && !isDuplicateOfLast && !isDuplicateOfRecent) {
+										isTranslating = true
+										pendingOcrEnglish = text
 										android.util.Log.d("PSTranslatorOCR", "Detected dialogue: $text")
 										ocrScope.launch {
-											val thai = translateToThai(text)
-											android.util.Log.d("PSTranslatorOCR", "Translated text: $thai")
-											// Prepend newest subtitle at top
-											subtitleHistory.add(0, SubtitleHistoryItem(text, thai))
-											while (subtitleHistory.size > maxHistoryLines) {
-												subtitleHistory.removeAt(subtitleHistory.size - 1)
-											}
-											renderSubtitles()
-											if (isTtsEnabled) {
-												speakTranslation(text, thai)
+											try {
+												val thai = translateToThai(text)
+												android.util.Log.d("PSTranslatorOCR", "Translated text: $thai")
+												val isDuplicateThai = isSimilarThai(thai, lastTranslatedThai) ||
+													subtitleHistory.take(2).any { isSimilarThai(thai, it.thai) }
+												if (!isDuplicateThai) {
+													lastTranslatedEnglish = text
+													lastTranslatedThai = thai
+													// Prepend newest subtitle at top
+													subtitleHistory.add(0, SubtitleHistoryItem(text, thai))
+													while (subtitleHistory.size > maxHistoryLines) {
+														subtitleHistory.removeAt(subtitleHistory.size - 1)
+													}
+													renderSubtitles()
+													if (isTtsEnabled) {
+														speakTranslation(text, thai)
+													}
+												}
+											} finally {
+												isTranslating = false
 											}
 										}
 									}
@@ -534,10 +558,14 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		binding.translatedSubText2.setTextColor(currentSubTextColor)
 		binding.translatedSubText2.setTextSize(TypedValue.COMPLEX_UNIT_SP, (currentSubFontSize * 0.78f).coerceAtLeast(13f))
 
-		// Text-only mode text styling
+		// Text-only mode text styling (updates BOTH color and font size live!)
+		val fullSize = (currentSubFontSize + 4).toFloat()
 		binding.pureFullscreenText.setTextColor(currentSubTextColor)
+		binding.pureFullscreenText.setTextSize(TypedValue.COMPLEX_UNIT_SP, fullSize)
 		binding.pureFullscreenText1.setTextColor(currentSubTextColor)
+		binding.pureFullscreenText1.setTextSize(TypedValue.COMPLEX_UNIT_SP, (fullSize * 0.85f).coerceAtLeast(16f))
 		binding.pureFullscreenText2.setTextColor(currentSubTextColor)
+		binding.pureFullscreenText2.setTextSize(TypedValue.COMPLEX_UNIT_SP, (fullSize * 0.72f).coerceAtLeast(14f))
 
 		// 4. Update Live Preview in Settings Menu
 		val previewBg = GradientDrawable().apply {
@@ -560,13 +588,25 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		renderSubtitles()
 	}
 
+	private fun showMenuPage(page: String) {
+		binding.menuMainPage.isVisible = (page == "MAIN")
+		binding.menuSubTextPage.isVisible = (page == "TEXT")
+		binding.menuSubVoicePage.isVisible = (page == "VOICE")
+		binding.menuSubModePage.isVisible = (page == "MODE")
+		binding.btnMenuBack.isVisible = (page != "MAIN")
+		binding.tvMenuTitle.text = when (page) {
+			"TEXT" -> "ปรับแต่งตัวหนังสือ"
+			"VOICE" -> "การออกเสียงพากย์"
+			"MODE" -> "โหมดและการแสดงผล"
+			else -> "ตั้งค่า PS Translator"
+		}
+	}
+
 	private fun renderSubtitles() {
 		if (subtitleHistory.isEmpty()) {
 			binding.subtitleOverlayContainer.isVisible = false
 			return
 		}
-
-		uiVisibilityHandler.removeCallbacks(clearSubtitleRunnable)
 
 		// Slot 0 (Newest)
 		val item0 = subtitleHistory.getOrNull(0)
@@ -609,13 +649,11 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 			binding.pureFullscreenText2.isVisible = false
 		}
 
+		// Keep subtitle window permanently visible without auto-fading out
 		if (isSubtitleEnabled && !isTextOnlyMode) {
 			binding.subtitleOverlayContainer.isVisible = true
 			binding.subtitleOverlayContainer.alpha = 1.0f
 		}
-
-		// Keep subtitles comfortably visible for 7.5 seconds
-		uiVisibilityHandler.postDelayed(clearSubtitleRunnable, 7500)
 	}
 
 	@SuppressLint("ClickableViewAccessibility")
@@ -777,14 +815,26 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 	}
 
 	private fun isSimilarText(a: String, b: String): Boolean {
+		if (a.isBlank() || b.isBlank()) return false
 		if (a.equals(b, ignoreCase = true)) return true
 		val cleanA = a.lowercase().replace(Regex("[^a-z0-9 ]"), "").trim()
 		val cleanB = b.lowercase().replace(Regex("[^a-z0-9 ]"), "").trim()
+		if (cleanA.isEmpty() || cleanB.isEmpty()) return false
 		if (cleanA == cleanB) return true
 		val maxLen = maxOf(cleanA.length, cleanB.length)
-		if (maxLen == 0) return true
 		val dist = levenshteinDistance(cleanA, cleanB)
-		return (1.0 - dist.toDouble() / maxLen) >= 0.75
+		return (1.0 - dist.toDouble() / maxLen) >= 0.72
+	}
+
+	private fun isSimilarThai(a: String, b: String): Boolean {
+		if (a.isBlank() || b.isBlank()) return false
+		val cleanA = a.replace(Regex("[\\s.,!?\"'()\\-…]"), "")
+		val cleanB = b.replace(Regex("[\\s.,!?\"'()\\-…]"), "")
+		if (cleanA.isEmpty() || cleanB.isEmpty()) return false
+		if (cleanA == cleanB) return true
+		val maxLen = maxOf(cleanA.length, cleanB.length)
+		val dist = levenshteinDistance(cleanA, cleanB)
+		return (1.0 - dist.toDouble() / maxLen) >= 0.80
 	}
 
 	private fun isDialogueSubtitle(text: String): Boolean {
@@ -992,6 +1042,12 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 
 	private fun speakTranslation(englishText: String, thaiText: String) {
 		val ttsEngine = tts ?: return
+		val now = System.currentTimeMillis()
+		if (isSimilarThai(thaiText, lastSpokenThai) && (now - lastSpokenTimeMs) < 8000) {
+			return
+		}
+		lastSpokenThai = thaiText
+		lastSpokenTimeMs = now
 
 		val isFemale = when (voiceGenderMode) {
 			VoiceGenderMode.AUTO_AI -> isFemaleCharacter(englishText, thaiText)
@@ -1029,7 +1085,7 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		}
 		ttsEngine.setSpeechRate(speechSpeedRate)
 
-		ttsEngine.speak(thaiText, TextToSpeech.QUEUE_FLUSH, null, "sub_voice")
+		ttsEngine.speak(thaiText, TextToSpeech.QUEUE_ADD, null, "sub_voice_${now}")
 	}
 
 	override fun onStart()

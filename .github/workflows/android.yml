@@ -76,8 +76,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/heads/main')
         with:
-          tag_name: v2.0.9
-          name: "PS Translator v2.0.9 (Smart Subtitle Cascade & Custom Styling)"
+          tag_name: v2.0.10
+          name: "PS Translator v2.0.10 (No-Duplicate Translation, Persistent Subtitles & Floating Sub-Menus)"
           body: |
             ### 🎮 PS Translator v2.0.9 (Android APK & Samsung DeX)
 

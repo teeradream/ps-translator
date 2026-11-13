@@ -16,6 +16,7 @@ import android.graphics.drawable.GradientDrawable
 import android.media.AudioManager
 import android.os.*
 import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import android.util.TypedValue
 import android.view.*
 import android.widget.EditText
@@ -68,6 +69,12 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		MALE
 	}
 
+	enum class TtsQueueMode {
+		QUEUE_ALL,
+		FLUSH_IMMEDIATE,
+		SMART_QUEUE
+	}
+
 	data class SubtitleHistoryItem(
 		val english: String,
 		val thai: String,
@@ -77,6 +84,8 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 	private var tts: TextToSpeech? = null
 	private var isTtsEnabled = false
 	private var voiceGenderMode = VoiceGenderMode.AUTO_AI
+	private var ttsQueueMode = TtsQueueMode.SMART_QUEUE
+	private val activeUtterances = java.util.Collections.synchronizedSet(mutableSetOf<String>())
 	private var isSubtitleEnabled = true
 	private var isAudioMuted = false
 	private var isTextOnlyMode = false
@@ -204,6 +213,11 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 			isTtsEnabled = isChecked
 			binding.voiceGenderContainer.isVisible = isChecked
 			binding.speechSpeedContainer.isVisible = isChecked
+			binding.ttsQueueModeContainer.isVisible = isChecked
+			if (!isChecked) {
+				activeUtterances.clear()
+				tts?.stop()
+			}
 		}
 
 		val savedVoiceMode = cropPrefs.getString("voice_gender_mode", VoiceGenderMode.AUTO_AI.name)
@@ -241,6 +255,26 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 					else -> 1.25f
 				}
 				cropPrefs.edit().putFloat("speech_speed_rate", speechSpeedRate).apply()
+			}
+		}
+
+		// TTS queue mode selection (Queue All / Flush Immediate / Smart Queue)
+		val savedQueueMode = cropPrefs.getString("tts_queue_mode", TtsQueueMode.SMART_QUEUE.name)
+		ttsQueueMode = try { TtsQueueMode.valueOf(savedQueueMode ?: TtsQueueMode.SMART_QUEUE.name) } catch (_: Exception) { TtsQueueMode.SMART_QUEUE }
+		when (ttsQueueMode) {
+			TtsQueueMode.QUEUE_ALL -> binding.ttsQueueModeToggleGroup.check(R.id.btnQueueAdd)
+			TtsQueueMode.FLUSH_IMMEDIATE -> binding.ttsQueueModeToggleGroup.check(R.id.btnQueueFlush)
+			TtsQueueMode.SMART_QUEUE -> binding.ttsQueueModeToggleGroup.check(R.id.btnQueueSmart)
+		}
+
+		binding.ttsQueueModeToggleGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
+			if (isChecked) {
+				ttsQueueMode = when (checkedId) {
+					R.id.btnQueueAdd -> TtsQueueMode.QUEUE_ALL
+					R.id.btnQueueFlush -> TtsQueueMode.FLUSH_IMMEDIATE
+					else -> TtsQueueMode.SMART_QUEUE
+				}
+				cropPrefs.edit().putString("tts_queue_mode", ttsQueueMode.name).apply()
 			}
 		}
 
@@ -312,6 +346,18 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 	override fun onInit(status: Int) {
 		if (status == TextToSpeech.SUCCESS) {
 			tts?.language = Locale("th", "TH")
+			tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+				override fun onStart(utteranceId: String?) {}
+				override fun onDone(utteranceId: String?) {
+					if (utteranceId != null) activeUtterances.remove(utteranceId)
+				}
+				override fun onError(utteranceId: String?) {
+					if (utteranceId != null) activeUtterances.remove(utteranceId)
+				}
+				override fun onStop(utteranceId: String?, interrupted: Boolean) {
+					if (utteranceId != null) activeUtterances.remove(utteranceId)
+				}
+			})
 		}
 	}
 
@@ -1085,7 +1131,24 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		}
 		ttsEngine.setSpeechRate(speechSpeedRate)
 
-		ttsEngine.speak(thaiText, TextToSpeech.QUEUE_ADD, null, "sub_voice_${now}")
+		val utteranceId = "sub_voice_${now}"
+		val queueMode = when (ttsQueueMode) {
+			TtsQueueMode.QUEUE_ALL -> TextToSpeech.QUEUE_ADD
+			TtsQueueMode.FLUSH_IMMEDIATE -> {
+				activeUtterances.clear()
+				TextToSpeech.QUEUE_FLUSH
+			}
+			TtsQueueMode.SMART_QUEUE -> {
+				if (!ttsEngine.isSpeaking || activeUtterances.size <= 1) {
+					TextToSpeech.QUEUE_ADD
+				} else {
+					activeUtterances.clear()
+					TextToSpeech.QUEUE_FLUSH
+				}
+			}
+		}
+		activeUtterances.add(utteranceId)
+		ttsEngine.speak(thaiText, queueMode, null, utteranceId)
 	}
 
 	override fun onStart()

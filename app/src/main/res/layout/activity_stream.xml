@@ -1094,6 +1094,73 @@
                         </com.google.android.material.button.MaterialButtonToggleGroup>
                     </LinearLayout>
 
+                    <!-- TTS Queue Mode Selection (visible when TTS is enabled) -->
+                    <LinearLayout
+                        android:id="@+id/ttsQueueModeContainer"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:visibility="gone"
+                        android:layout_marginBottom="12dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="จังหวะการอ่านเมื่อซับมาเร็ว:"
+                            android:textColor="#AAAAAA"
+                            android:textSize="12sp"
+                            android:layout_marginBottom="4dp"/>
+
+                        <com.google.android.material.button.MaterialButtonToggleGroup
+                            android:id="@+id/ttsQueueModeToggleGroup"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical"
+                            app:singleSelection="true"
+                            app:selectionRequired="true"
+                            app:checkedButton="@id/btnQueueSmart">
+
+                            <com.google.android.material.button.MaterialButton
+                                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                                android:id="@+id/btnQueueAdd"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="อ่านจบประโยค (ต่อคิว)"
+                                android:textSize="11sp"
+                                android:textStyle="bold"
+                                android:textColor="@color/toggle_btn_text_color"
+                                app:backgroundTint="@color/toggle_btn_bg_tint"
+                                app:strokeColor="@color/toggle_btn_stroke_color"
+                                app:strokeWidth="1.5dp"/>
+
+                            <com.google.android.material.button.MaterialButton
+                                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                                android:id="@+id/btnQueueFlush"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="ทันใจตามซับใหม่ (ตัดขึ้นทันที)"
+                                android:textSize="11sp"
+                                android:textStyle="bold"
+                                android:textColor="@color/toggle_btn_text_color"
+                                app:backgroundTint="@color/toggle_btn_bg_tint"
+                                app:strokeColor="@color/toggle_btn_stroke_color"
+                                app:strokeWidth="1.5dp"/>
+
+                            <com.google.android.material.button.MaterialButton
+                                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                                android:id="@+id/btnQueueSmart"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="Smart Queue (ลูกผสม — แนะนำ)"
+                                android:textSize="11sp"
+                                android:textStyle="bold"
+                                android:textColor="@color/toggle_btn_text_color"
+                                app:backgroundTint="@color/toggle_btn_bg_tint"
+                                app:strokeColor="@color/toggle_btn_stroke_color"
+                                app:strokeWidth="1.5dp"/>
+                        </com.google.android.material.button.MaterialButtonToggleGroup>
+                    </LinearLayout>
+
                     <!-- Mute Phone Audio Button -->
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnMuteAudio"

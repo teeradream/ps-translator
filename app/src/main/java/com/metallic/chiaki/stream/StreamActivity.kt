@@ -1194,7 +1194,7 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		super.onDestroy()
 		uiVisibilityHandler.removeCallbacks(captureRunnable)
 		uiVisibilityHandler.removeCallbacks(hideMenuButtonRunnable)
-		uiVisibilityHandler.removeCallbacks(clearSubtitleRunnable)
+		activeUtterances.clear()
 		ocrScope.cancel()
 		tts?.stop()
 		tts?.shutdown()

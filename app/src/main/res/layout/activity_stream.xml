@@ -710,13 +710,14 @@
                             android:layout_height="wrap_content"
                             android:orientation="horizontal"
                             android:gravity="center_vertical"
-                            android:layout_marginBottom="10dp">
+                            android:layout_marginBottom="4dp">
 
                             <com.google.android.material.button.MaterialButton
                                 style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                                 android:id="@+id/btnFontDecrease"
-                                android:layout_width="42dp"
+                                android:layout_width="38dp"
                                 android:layout_height="wrap_content"
+                                android:minWidth="0dp"
                                 android:padding="0dp"
                                 android:text="A-"
                                 android:textStyle="bold"
@@ -730,7 +731,7 @@
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
                                 app:singleSelection="true"
-                                app:checkedButton="@id/btnSizeLarge">
+                                app:checkedButton="@id/btnSizeMedium">
 
                                 <com.google.android.material.button.MaterialButton
                                     style="@style/Widget.MaterialComponents.Button.OutlinedButton"
@@ -738,8 +739,9 @@
                                     android:layout_width="0dp"
                                     android:layout_height="wrap_content"
                                     android:layout_weight="1"
+                                    android:minWidth="0dp"
                                     android:padding="0dp"
-                                    android:text="18"
+                                    android:text="16"
                                     android:textSize="11sp"
                                     android:textStyle="bold"
                                     android:textColor="@color/toggle_btn_text_color"
@@ -752,8 +754,9 @@
                                     android:layout_width="0dp"
                                     android:layout_height="wrap_content"
                                     android:layout_weight="1"
+                                    android:minWidth="0dp"
                                     android:padding="0dp"
-                                    android:text="22"
+                                    android:text="26"
                                     android:textSize="11sp"
                                     android:textStyle="bold"
                                     android:textColor="@color/toggle_btn_text_color"
@@ -766,8 +769,9 @@
                                     android:layout_width="0dp"
                                     android:layout_height="wrap_content"
                                     android:layout_weight="1"
+                                    android:minWidth="0dp"
                                     android:padding="0dp"
-                                    android:text="26"
+                                    android:text="40"
                                     android:textSize="11sp"
                                     android:textStyle="bold"
                                     android:textColor="@color/toggle_btn_text_color"
@@ -780,8 +784,24 @@
                                     android:layout_width="0dp"
                                     android:layout_height="wrap_content"
                                     android:layout_weight="1"
+                                    android:minWidth="0dp"
                                     android:padding="0dp"
-                                    android:text="34"
+                                    android:text="56"
+                                    android:textSize="11sp"
+                                    android:textStyle="bold"
+                                    android:textColor="@color/toggle_btn_text_color"
+                                    app:backgroundTint="@color/toggle_btn_bg_tint"
+                                    app:strokeColor="@color/toggle_btn_stroke_color"/>
+
+                                <com.google.android.material.button.MaterialButton
+                                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                                    android:id="@+id/btnSizeXXLarge"
+                                    android:layout_width="0dp"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:minWidth="0dp"
+                                    android:padding="0dp"
+                                    android:text="72"
                                     android:textSize="11sp"
                                     android:textStyle="bold"
                                     android:textColor="@color/toggle_btn_text_color"
@@ -792,8 +812,9 @@
                             <com.google.android.material.button.MaterialButton
                                 style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                                 android:id="@+id/btnFontIncrease"
-                                android:layout_width="42dp"
+                                android:layout_width="38dp"
                                 android:layout_height="wrap_content"
+                                android:minWidth="0dp"
                                 android:padding="0dp"
                                 android:text="A+"
                                 android:textStyle="bold"
@@ -801,6 +822,16 @@
                                 app:strokeColor="#55FFFFFF"
                                 android:layout_marginStart="4dp"/>
                         </LinearLayout>
+
+                        <SeekBar
+                            android:id="@+id/fontSizeSeekBar"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:max="70"
+                            android:progress="16"
+                            android:progressTint="#00FF88"
+                            android:thumbTint="#00FF88"
+                            android:layout_marginBottom="10dp"/>
 
                         <!-- Background Opacity -->
                         <TextView

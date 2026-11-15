@@ -21,6 +21,7 @@ import android.util.TypedValue
 import android.view.*
 import android.widget.EditText
 import android.widget.FrameLayout
+import android.widget.SeekBar
 import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
@@ -54,6 +55,8 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 	companion object
 	{
 		const val EXTRA_CONNECT_INFO = "connect_info"
+		private const val MIN_SUB_FONT_SIZE = 10
+		private const val MAX_SUB_FONT_SIZE = 80
 	}
 
 	private lateinit var viewModel: StreamViewModel
@@ -107,6 +110,7 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 	private var currentSubFontSize = 26
 	private var currentSubPosition = "CENTER"
 	private var currentSubBgOpacity = 80
+	private var isSyncingFontUI = false
 
 	private val hideMenuButtonRunnable = Runnable {
 		if (::binding.isInitialized && !binding.menuPanelContainer.isVisible) {
@@ -200,7 +204,7 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		} catch (_: Exception) {
 			Color.parseColor("#00FF88")
 		}
-		currentSubFontSize = cropPrefs.getInt("sub_font_size_sp", 26).coerceIn(16, 42)
+		currentSubFontSize = cropPrefs.getInt("sub_font_size_sp", 26).coerceIn(MIN_SUB_FONT_SIZE, MAX_SUB_FONT_SIZE)
 		currentSubPosition = cropPrefs.getString("sub_position", "CENTER") ?: "CENTER"
 		currentSubBgOpacity = cropPrefs.getInt("sub_bg_opacity", 80).coerceIn(0, 100)
 		maxHistoryLines = cropPrefs.getInt("sub_history_limit", 3).coerceIn(1, 3)
@@ -484,25 +488,27 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 			}
 		}
 
-		// 3. Font Size Presets & Stepper
+		// 3. Font Size Presets, Stepper & Slider
 		syncFontSizeToggleState()
 		binding.fontSizeToggleGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
-			if (isChecked) {
+			if (isChecked && !isSyncingFontUI) {
 				currentSubFontSize = when (checkedId) {
-					R.id.btnSizeSmall -> 18
-					R.id.btnSizeMedium -> 22
-					R.id.btnSizeLarge -> 26
-					R.id.btnSizeXLarge -> 34
+					R.id.btnSizeSmall -> 16
+					R.id.btnSizeMedium -> 26
+					R.id.btnSizeLarge -> 40
+					R.id.btnSizeXLarge -> 56
+					R.id.btnSizeXXLarge -> 72
 					else -> 26
 				}
 				cropPrefs.edit().putInt("sub_font_size_sp", currentSubFontSize).apply()
+				syncFontSizeToggleState()
 				applySubtitleStyles()
 			}
 		}
 
 		binding.btnFontDecrease.setOnClickListener {
-			if (currentSubFontSize > 16) {
-				currentSubFontSize -= 2
+			if (currentSubFontSize > MIN_SUB_FONT_SIZE) {
+				currentSubFontSize = (currentSubFontSize - 2).coerceAtLeast(MIN_SUB_FONT_SIZE)
 				cropPrefs.edit().putInt("sub_font_size_sp", currentSubFontSize).apply()
 				syncFontSizeToggleState()
 				applySubtitleStyles()
@@ -510,13 +516,28 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		}
 
 		binding.btnFontIncrease.setOnClickListener {
-			if (currentSubFontSize < 42) {
-				currentSubFontSize += 2
+			if (currentSubFontSize < MAX_SUB_FONT_SIZE) {
+				currentSubFontSize = (currentSubFontSize + 2).coerceAtMost(MAX_SUB_FONT_SIZE)
 				cropPrefs.edit().putInt("sub_font_size_sp", currentSubFontSize).apply()
 				syncFontSizeToggleState()
 				applySubtitleStyles()
 			}
 		}
+
+		binding.fontSizeSeekBar.max = MAX_SUB_FONT_SIZE - MIN_SUB_FONT_SIZE
+		binding.fontSizeSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+			override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+				if (fromUser && !isSyncingFontUI) {
+					currentSubFontSize = (MIN_SUB_FONT_SIZE + progress).coerceIn(MIN_SUB_FONT_SIZE, MAX_SUB_FONT_SIZE)
+					syncFontSizeToggleState()
+					applySubtitleStyles()
+				}
+			}
+			override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+			override fun onStopTrackingTouch(seekBar: SeekBar?) {
+				cropPrefs.edit().putInt("sub_font_size_sp", currentSubFontSize).apply()
+			}
+		})
 
 		// 4. Background Opacity
 		when (currentSubBgOpacity) {
@@ -561,12 +582,19 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 	}
 
 	private fun syncFontSizeToggleState() {
-		binding.fontSizeToggleGroup.clearChecked()
-		when (currentSubFontSize) {
-			18 -> binding.fontSizeToggleGroup.check(R.id.btnSizeSmall)
-			22 -> binding.fontSizeToggleGroup.check(R.id.btnSizeMedium)
-			26 -> binding.fontSizeToggleGroup.check(R.id.btnSizeLarge)
-			34 -> binding.fontSizeToggleGroup.check(R.id.btnSizeXLarge)
+		isSyncingFontUI = true
+		try {
+			binding.fontSizeToggleGroup.clearChecked()
+			when (currentSubFontSize) {
+				16 -> binding.fontSizeToggleGroup.check(R.id.btnSizeSmall)
+				26 -> binding.fontSizeToggleGroup.check(R.id.btnSizeMedium)
+				40 -> binding.fontSizeToggleGroup.check(R.id.btnSizeLarge)
+				56 -> binding.fontSizeToggleGroup.check(R.id.btnSizeXLarge)
+				72 -> binding.fontSizeToggleGroup.check(R.id.btnSizeXXLarge)
+			}
+			binding.fontSizeSeekBar.progress = (currentSubFontSize - MIN_SUB_FONT_SIZE).coerceIn(0, MAX_SUB_FONT_SIZE - MIN_SUB_FONT_SIZE)
+		} finally {
+			isSyncingFontUI = false
 		}
 	}
 
@@ -599,19 +627,19 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		binding.translatedSubText.setTextSize(TypedValue.COMPLEX_UNIT_SP, currentSubFontSize.toFloat())
 
 		binding.translatedSubText1.setTextColor(currentSubTextColor)
-		binding.translatedSubText1.setTextSize(TypedValue.COMPLEX_UNIT_SP, (currentSubFontSize * 0.88f).coerceAtLeast(14f))
+		binding.translatedSubText1.setTextSize(TypedValue.COMPLEX_UNIT_SP, (currentSubFontSize * 0.88f).coerceAtLeast(9f))
 
 		binding.translatedSubText2.setTextColor(currentSubTextColor)
-		binding.translatedSubText2.setTextSize(TypedValue.COMPLEX_UNIT_SP, (currentSubFontSize * 0.78f).coerceAtLeast(13f))
+		binding.translatedSubText2.setTextSize(TypedValue.COMPLEX_UNIT_SP, (currentSubFontSize * 0.78f).coerceAtLeast(8f))
 
 		// Text-only mode text styling (updates BOTH color and font size live!)
 		val fullSize = (currentSubFontSize + 4).toFloat()
 		binding.pureFullscreenText.setTextColor(currentSubTextColor)
 		binding.pureFullscreenText.setTextSize(TypedValue.COMPLEX_UNIT_SP, fullSize)
 		binding.pureFullscreenText1.setTextColor(currentSubTextColor)
-		binding.pureFullscreenText1.setTextSize(TypedValue.COMPLEX_UNIT_SP, (fullSize * 0.85f).coerceAtLeast(16f))
+		binding.pureFullscreenText1.setTextSize(TypedValue.COMPLEX_UNIT_SP, (fullSize * 0.85f).coerceAtLeast(11f))
 		binding.pureFullscreenText2.setTextColor(currentSubTextColor)
-		binding.pureFullscreenText2.setTextSize(TypedValue.COMPLEX_UNIT_SP, (fullSize * 0.72f).coerceAtLeast(14f))
+		binding.pureFullscreenText2.setTextSize(TypedValue.COMPLEX_UNIT_SP, (fullSize * 0.72f).coerceAtLeast(10f))
 
 		// 4. Update Live Preview in Settings Menu
 		val previewBg = GradientDrawable().apply {
@@ -624,9 +652,9 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		}
 		binding.previewSubContainer.background = previewBg
 		binding.previewSubNew.setTextColor(currentSubTextColor)
-		binding.previewSubNew.setTextSize(TypedValue.COMPLEX_UNIT_SP, (currentSubFontSize * 0.8f).coerceAtLeast(14f))
+		binding.previewSubNew.setTextSize(TypedValue.COMPLEX_UNIT_SP, (currentSubFontSize * 0.8f).coerceIn(10f, 34f))
 		binding.previewSubOld.setTextColor(currentSubTextColor)
-		binding.previewSubOld.setTextSize(TypedValue.COMPLEX_UNIT_SP, (currentSubFontSize * 0.7f).coerceAtLeast(12f))
+		binding.previewSubOld.setTextSize(TypedValue.COMPLEX_UNIT_SP, (currentSubFontSize * 0.7f).coerceIn(9f, 28f))
 		binding.tvCurrentFontSize.text = "$currentSubFontSize sp"
 		binding.tvCurrentFontSize.setTextColor(currentSubTextColor)
 

@@ -461,6 +461,110 @@
                         android:textStyle="bold"
                         app:strokeColor="#44FFFFFF"
                         app:backgroundTint="#1AFFFFFF"
+                        android:layout_marginBottom="8dp"/>
+
+                    <!-- Sub-menu Category 4: Gemini AI API Key -->
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnOpenSubApi"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="ตั้งค่า Gemini API (แปล &amp; พากย์ AI)  ›"
+                        android:textAlignment="viewStart"
+                        android:textColor="#00E676"
+                        android:textSize="13sp"
+                        android:textStyle="bold"
+                        app:strokeColor="#00E676"
+                        app:backgroundTint="#1A00E676"
+                        android:layout_marginBottom="4dp"/>
+                </LinearLayout>
+
+                <!-- ================= SUB-PAGE 4: GEMINI API SETTINGS ================= -->
+                <LinearLayout
+                    android:id="@+id/menuSubApiPage"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:visibility="gone">
+
+                    <TextView
+                        android:id="@+id/tvGeminiApiStatus"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="สถานะ: ใช้ระบบแปลฟรี + TTS ในเครื่อง"
+                        android:textColor="#AAAAAA"
+                        android:textSize="12sp"
+                        android:layout_marginBottom="8dp"/>
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Gemini API Key (Google AI Studio):"
+                        android:textColor="#CCCCCC"
+                        android:textSize="12sp"
+                        android:layout_marginBottom="4dp"/>
+
+                    <EditText
+                        android:id="@+id/etGeminiApiKey"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:hint="AIzaSy..."
+                        android:textColor="#FFFFFF"
+                        android:textColorHint="#666666"
+                        android:textSize="13sp"
+                        android:inputType="textPassword"
+                        android:singleLine="true"
+                        android:background="#22FFFFFF"
+                        android:padding="10dp"
+                        android:layout_marginBottom="8dp"/>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:layout_marginBottom="12dp">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnSaveGeminiApiKey"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="บันทึก API Key"
+                            android:textSize="12sp"
+                            android:textStyle="bold"
+                            android:textColor="#000000"
+                            app:backgroundTint="#00E676"
+                            android:layout_marginEnd="6dp"/>
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnClearGeminiApiKey"
+                            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="ล้างคีย์"
+                            android:textSize="12sp"
+                            android:textColor="#FF6B6B"
+                            app:strokeColor="#FF6B6B"/>
+                    </LinearLayout>
+
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/useGeminiTranslateSwitch"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="ใช้ Gemini แปลภาษา (สำนวนเกมธรรมชาติ)"
+                        android:textColor="#EEEEEE"
+                        android:textSize="13sp"
+                        android:checked="true"
+                        android:layout_marginBottom="8dp"/>
+
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/useGeminiTtsSwitch"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="ใช้ Gemini AI พากย์เสียง (เสียงสมจริง)"
+                        android:textColor="#EEEEEE"
+                        android:textSize="13sp"
+                        android:checked="true"
                         android:layout_marginBottom="4dp"/>
                 </LinearLayout>
 

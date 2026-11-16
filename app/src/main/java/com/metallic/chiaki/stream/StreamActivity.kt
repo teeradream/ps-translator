@@ -14,9 +14,12 @@ import android.graphics.Color
 import android.graphics.Rect
 import android.graphics.drawable.GradientDrawable
 import android.media.AudioManager
+import android.media.MediaPlayer
+import android.media.PlaybackParams
 import android.os.*
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
+import android.util.Base64
 import android.util.TypedValue
 import android.view.*
 import android.widget.EditText
@@ -102,6 +105,13 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 	private lateinit var cropPrefs: SharedPreferences
 	private var isFilterShortTextEnabled = true
 	private var speechSpeedRate = 1.25f
+
+	// Gemini API settings (for natural translation & AI voice dubbing)
+	private var geminiApiKey = ""
+	private var isGeminiTranslateEnabled = true
+	private var isGeminiTtsEnabled = true
+	private var geminiMediaPlayer: MediaPlayer? = null
+	private val geminiAudioQueue = java.util.ArrayDeque<java.io.File>()
 
 	// Subtitle cascade history and styling options
 	private val subtitleHistory = mutableListOf<SubtitleHistoryItem>()
@@ -190,6 +200,11 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		binding.btnOpenSubMode.setOnClickListener {
 			showMenuPage("MODE")
 		}
+		binding.btnOpenSubApi.setOnClickListener {
+			showMenuPage("API")
+		}
+
+		setupGeminiApiControls()
 
 		// Subtitle overlay switch
 		binding.subOverlaySwitch.setOnCheckedChangeListener { _, isChecked ->
@@ -221,6 +236,7 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 			if (!isChecked) {
 				activeUtterances.clear()
 				tts?.stop()
+				stopGeminiAudioPlayback()
 			}
 		}
 
@@ -667,12 +683,68 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		binding.menuSubTextPage.isVisible = (page == "TEXT")
 		binding.menuSubVoicePage.isVisible = (page == "VOICE")
 		binding.menuSubModePage.isVisible = (page == "MODE")
+		binding.menuSubApiPage.isVisible = (page == "API")
 		binding.btnMenuBack.isVisible = (page != "MAIN")
 		binding.tvMenuTitle.text = when (page) {
 			"TEXT" -> "ปรับแต่งตัวหนังสือ"
 			"VOICE" -> "การออกเสียงพากย์"
 			"MODE" -> "โหมดและการแสดงผล"
+			"API" -> "ตั้งค่า Gemini API"
 			else -> "ตั้งค่า PS Translator"
+		}
+	}
+
+	private fun setupGeminiApiControls() {
+		geminiApiKey = cropPrefs.getString("gemini_api_key", "")?.trim() ?: ""
+		isGeminiTranslateEnabled = cropPrefs.getBoolean("gemini_translate_enabled", true)
+		isGeminiTtsEnabled = cropPrefs.getBoolean("gemini_tts_enabled", true)
+
+		binding.etGeminiApiKey.setText(geminiApiKey)
+		binding.useGeminiTranslateSwitch.isChecked = isGeminiTranslateEnabled
+		binding.useGeminiTtsSwitch.isChecked = isGeminiTtsEnabled
+		updateGeminiApiStatusUI()
+
+		binding.btnSaveGeminiApiKey.setOnClickListener {
+			val key = binding.etGeminiApiKey.text?.toString()?.trim() ?: ""
+			geminiApiKey = key
+			cropPrefs.edit().putString("gemini_api_key", key).apply()
+			updateGeminiApiStatusUI()
+			if (key.isNotEmpty()) {
+				Toast.makeText(this, "บันทึก Gemini API Key เรียบร้อยแล้ว", Toast.LENGTH_SHORT).show()
+			} else {
+				Toast.makeText(this, "ยังไม่ได้กรอก API Key (ใช้ระบบฟรีเดิม)", Toast.LENGTH_SHORT).show()
+			}
+		}
+
+		binding.btnClearGeminiApiKey.setOnClickListener {
+			geminiApiKey = ""
+			binding.etGeminiApiKey.setText("")
+			cropPrefs.edit().remove("gemini_api_key").apply()
+			updateGeminiApiStatusUI()
+			Toast.makeText(this, "ล้าง API Key แล้ว (กลับไปใช้ระบบฟรีเดิม)", Toast.LENGTH_SHORT).show()
+		}
+
+		binding.useGeminiTranslateSwitch.setOnCheckedChangeListener { _, isChecked ->
+			isGeminiTranslateEnabled = isChecked
+			cropPrefs.edit().putBoolean("gemini_translate_enabled", isChecked).apply()
+		}
+
+		binding.useGeminiTtsSwitch.setOnCheckedChangeListener { _, isChecked ->
+			isGeminiTtsEnabled = isChecked
+			cropPrefs.edit().putBoolean("gemini_tts_enabled", isChecked).apply()
+			if (!isChecked) {
+				stopGeminiAudioPlayback()
+			}
+		}
+	}
+
+	private fun updateGeminiApiStatusUI() {
+		if (geminiApiKey.isNotEmpty()) {
+			binding.tvGeminiApiStatus.text = "สถานะ: เชื่อมต่อ Gemini API แล้ว (พร้อมใช้งาน)"
+			binding.tvGeminiApiStatus.setTextColor(Color.parseColor("#00E676"))
+		} else {
+			binding.tvGeminiApiStatus.text = "สถานะ: ใช้ระบบแปลฟรี + TTS ในเครื่อง"
+			binding.tvGeminiApiStatus.setTextColor(Color.parseColor("#AAAAAA"))
 		}
 	}
 
@@ -932,6 +1004,16 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 	}
 
 	private suspend fun translateToThai(englishText: String): String = withContext(Dispatchers.IO) {
+		if (geminiApiKey.isNotEmpty() && isGeminiTranslateEnabled) {
+			try {
+				val geminiRes = translateWithGemini(englishText)
+				if (!geminiRes.isNullOrBlank()) {
+					return@withContext geminiRes
+				}
+			} catch (e: Exception) {
+				android.util.Log.w("PSTranslatorGemini", "Gemini translate fallback: ${e.message}")
+			}
+		}
 		try {
 			val url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=th&dt=t&q=" + URLEncoder.encode(englishText, "UTF-8")
 			val conn = URL(url).openConnection()
@@ -950,6 +1032,46 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		} catch (e: Exception) {
 			englishText
 		}
+	}
+
+	private fun translateWithGemini(englishText: String): String? {
+		val endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" +
+			URLEncoder.encode(geminiApiKey, "UTF-8")
+		val conn = (URL(endpoint).openConnection() as java.net.HttpURLConnection).apply {
+			requestMethod = "POST"
+			setRequestProperty("Content-Type", "application/json")
+			connectTimeout = 5000
+			readTimeout = 6000
+			doOutput = true
+		}
+
+		val prompt = "Translate this video game dialogue from English to natural Thai. Keep the character's tone, stay concise, and return ONLY the Thai translation:\n$englishText"
+		val body = org.json.JSONObject().apply {
+			put("contents", JSONArray().put(
+				org.json.JSONObject().put("parts", JSONArray().put(
+					org.json.JSONObject().put("text", prompt)
+				))
+			))
+			put("generationConfig", org.json.JSONObject().apply {
+				put("temperature", 0.3)
+				put("maxOutputTokens", 200)
+			})
+		}
+
+		conn.outputStream.bufferedWriter().use { it.write(body.toString()) }
+		if (conn.responseCode !in 200..299) {
+			conn.disconnect()
+			return null
+		}
+		val resText = conn.inputStream.bufferedReader().use { it.readText() }
+		conn.disconnect()
+
+		val json = org.json.JSONObject(resText)
+		val candidates = json.optJSONArray("candidates") ?: return null
+		if (candidates.length() == 0) return null
+		val parts = candidates.getJSONObject(0).optJSONObject("content")?.optJSONArray("parts") ?: return null
+		if (parts.length() == 0) return null
+		return parts.getJSONObject(0).optString("text", "").trim().ifEmpty { null }
 	}
 
 	private fun isFemaleCharacter(englishText: String, thaiText: String): Boolean {
@@ -1115,7 +1237,6 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 	}
 
 	private fun speakTranslation(englishText: String, thaiText: String) {
-		val ttsEngine = tts ?: return
 		val now = System.currentTimeMillis()
 		if (isSimilarThai(thaiText, lastSpokenThai) && (now - lastSpokenTimeMs) < 8000) {
 			return
@@ -1128,6 +1249,172 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 			VoiceGenderMode.FEMALE -> true
 			VoiceGenderMode.MALE -> false
 		}
+
+		if (geminiApiKey.isNotEmpty() && isGeminiTtsEnabled) {
+			ocrScope.launch {
+				val wavFile = withContext(Dispatchers.IO) {
+					synthesizeGeminiTts(thaiText, isFemale, now)
+				}
+				if (wavFile != null && isTtsEnabled && !isDestroyed && !isFinishing) {
+					enqueueGeminiAudio(wavFile)
+				} else if (isTtsEnabled && !isDestroyed && !isFinishing) {
+					speakWithLocalTts(thaiText, isFemale, now)
+				}
+			}
+			return
+		}
+
+		speakWithLocalTts(thaiText, isFemale, now)
+	}
+
+	private fun synthesizeGeminiTts(thaiText: String, isFemale: Boolean, timestamp: Long): java.io.File? {
+		return try {
+			val conn = (URL("https://generativelanguage.googleapis.com/v1beta/interactions").openConnection() as java.net.HttpURLConnection).apply {
+				requestMethod = "POST"
+				setRequestProperty("x-goog-api-key", geminiApiKey)
+				setRequestProperty("Content-Type", "application/json")
+				connectTimeout = 6000
+				readTimeout = 10000
+				doOutput = true
+			}
+
+			val voiceName = if (isFemale) "Kore" else "Charon"
+			val body = org.json.JSONObject().apply {
+				put("model", "gemini-3.8-flash-lite-tts")
+				put("input", JSONArray().put(
+					org.json.JSONObject().apply {
+						put("type", "user_input")
+						put("content", JSONArray().put(
+							org.json.JSONObject().apply {
+								put("type", "text")
+								put("text", thaiText)
+							}
+						))
+					}
+				))
+				put("response_format", org.json.JSONObject().put("type", "audio"))
+				put("generation_config", org.json.JSONObject().put(
+					"speech_config", JSONArray().put(
+						org.json.JSONObject().put("voice", voiceName)
+					)
+				))
+			}
+
+			conn.outputStream.bufferedWriter().use { it.write(body.toString()) }
+			if (conn.responseCode !in 200..299) {
+				conn.disconnect()
+				return null
+			}
+			val resText = conn.inputStream.bufferedReader().use { it.readText() }
+			conn.disconnect()
+
+			val json = org.json.JSONObject(resText)
+			val steps = json.optJSONArray("steps") ?: return null
+			var base64Audio: String? = null
+			for (i in 0 until steps.length()) {
+				val step = steps.getJSONObject(i)
+				if (step.optString("type") == "model_output") {
+					val content = step.optJSONArray("content") ?: continue
+					for (j in 0 until content.length()) {
+						val item = content.getJSONObject(j)
+						if (item.optString("type") == "audio") {
+							base64Audio = item.optString("data", "")
+						}
+					}
+				}
+			}
+			if (base64Audio.isNullOrEmpty()) return null
+
+			val audioBytes = Base64.decode(base64Audio, Base64.DEFAULT)
+			val outFile = java.io.File(cacheDir, "gemini_tts_${timestamp}.wav")
+			outFile.writeBytes(audioBytes)
+			outFile
+		} catch (e: Exception) {
+			android.util.Log.w("PSTranslatorGemini", "Gemini TTS fallback: ${e.message}")
+			null
+		}
+	}
+
+	private fun enqueueGeminiAudio(wavFile: java.io.File) {
+		when (ttsQueueMode) {
+			TtsQueueMode.QUEUE_ALL -> {
+				geminiAudioQueue.addLast(wavFile)
+				if (geminiMediaPlayer == null) {
+					playNextGeminiAudio()
+				}
+			}
+			TtsQueueMode.FLUSH_IMMEDIATE -> {
+				stopGeminiAudioPlayback()
+				geminiAudioQueue.addLast(wavFile)
+				playNextGeminiAudio()
+			}
+			TtsQueueMode.SMART_QUEUE -> {
+				if (geminiMediaPlayer == null && geminiAudioQueue.isEmpty()) {
+					geminiAudioQueue.addLast(wavFile)
+					playNextGeminiAudio()
+				} else if (geminiAudioQueue.size <= 1) {
+					geminiAudioQueue.addLast(wavFile)
+				} else {
+					stopGeminiAudioPlayback()
+					geminiAudioQueue.addLast(wavFile)
+					playNextGeminiAudio()
+				}
+			}
+		}
+	}
+
+	private fun playNextGeminiAudio() {
+		if (!isTtsEnabled || isDestroyed || isFinishing) {
+			stopGeminiAudioPlayback()
+			return
+		}
+		val nextFile = geminiAudioQueue.pollFirst() ?: return
+		try {
+			val mp = MediaPlayer()
+			mp.setDataSource(nextFile.absolutePath)
+			mp.prepare()
+			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+				try {
+					mp.playbackParams = PlaybackParams().setSpeed(speechSpeedRate)
+				} catch (_: Exception) {}
+			}
+			mp.setOnCompletionListener {
+				it.release()
+				if (geminiMediaPlayer == it) geminiMediaPlayer = null
+				nextFile.delete()
+				playNextGeminiAudio()
+			}
+			mp.setOnErrorListener { player, _, _ ->
+				player.release()
+				if (geminiMediaPlayer == player) geminiMediaPlayer = null
+				nextFile.delete()
+				playNextGeminiAudio()
+				true
+			}
+			geminiMediaPlayer = mp
+			mp.start()
+		} catch (_: Exception) {
+			nextFile.delete()
+			geminiMediaPlayer = null
+			playNextGeminiAudio()
+		}
+	}
+
+	private fun stopGeminiAudioPlayback() {
+		try {
+			geminiMediaPlayer?.stop()
+		} catch (_: Exception) {}
+		try {
+			geminiMediaPlayer?.release()
+		} catch (_: Exception) {}
+		geminiMediaPlayer = null
+		while (geminiAudioQueue.isNotEmpty()) {
+			geminiAudioQueue.pollFirst()?.delete()
+		}
+	}
+
+	private fun speakWithLocalTts(thaiText: String, isFemale: Boolean, now: Long) {
+		val ttsEngine = tts ?: return
 
 		try {
 			val voices = ttsEngine.voices
@@ -1223,6 +1510,7 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		uiVisibilityHandler.removeCallbacks(captureRunnable)
 		uiVisibilityHandler.removeCallbacks(hideMenuButtonRunnable)
 		activeUtterances.clear()
+		stopGeminiAudioPlayback()
 		ocrScope.cancel()
 		tts?.stop()
 		tts?.shutdown()

@@ -206,9 +206,13 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 
 		setupGeminiApiControls()
 
-		// Subtitle overlay switch
+		// Subtitle overlay switch (persisted)
+		isSubtitleEnabled = cropPrefs.getBoolean("sub_overlay_enabled", true)
+		binding.subOverlaySwitch.isChecked = isSubtitleEnabled
+		binding.subCustomizationContainer.isVisible = isSubtitleEnabled
 		binding.subOverlaySwitch.setOnCheckedChangeListener { _, isChecked ->
 			isSubtitleEnabled = isChecked
+			cropPrefs.edit().putBoolean("sub_overlay_enabled", isChecked).apply()
 			binding.subCustomizationContainer.isVisible = isChecked
 			binding.subtitleOverlayContainer.isVisible = isChecked && !isTextOnlyMode && subtitleHistory.isNotEmpty()
 		}
@@ -227,9 +231,15 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		setupSubtitleCustomizationUI()
 		applySubtitleStyles()
 
-		// TTS voice switch
+		// TTS voice switch (persisted)
+		isTtsEnabled = cropPrefs.getBoolean("tts_voice_enabled", false)
+		binding.ttsVoiceSwitch.isChecked = isTtsEnabled
+		binding.voiceGenderContainer.isVisible = isTtsEnabled
+		binding.speechSpeedContainer.isVisible = isTtsEnabled
+		binding.ttsQueueModeContainer.isVisible = isTtsEnabled
 		binding.ttsVoiceSwitch.setOnCheckedChangeListener { _, isChecked ->
 			isTtsEnabled = isChecked
+			cropPrefs.edit().putBoolean("tts_voice_enabled", isChecked).apply()
 			binding.voiceGenderContainer.isVisible = isChecked
 			binding.speechSpeedContainer.isVisible = isChecked
 			binding.ttsQueueModeContainer.isVisible = isChecked

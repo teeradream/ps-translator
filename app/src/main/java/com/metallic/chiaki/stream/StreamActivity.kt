@@ -1045,15 +1045,30 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 			doOutput = true
 		}
 
-		val prompt = "Translate this video game dialogue from English to natural Thai. Keep the character's tone, stay concise, and return ONLY the Thai translation:\n$englishText"
+		val prompt = "Translate this video game subtitle from English to natural, punchy spoken Thai (movie/game subtitle style). Accurately translate slang, idioms, and profanity/swear words matching the character's raw emotion without censoring or making it overly polite. Return ONLY the Thai translation:\n$englishText"
+		val safetyCategories = listOf(
+			"HARM_CATEGORY_HARASSMENT",
+			"HARM_CATEGORY_HATE_SPEECH",
+			"HARM_CATEGORY_SEXUALLY_EXPLICIT",
+			"HARM_CATEGORY_DANGEROUS_CONTENT"
+		)
+		val safetyArray = JSONArray().apply {
+			for (cat in safetyCategories) {
+				put(org.json.JSONObject().apply {
+					put("category", cat)
+					put("threshold", "BLOCK_NONE")
+				})
+			}
+		}
 		val body = org.json.JSONObject().apply {
 			put("contents", JSONArray().put(
 				org.json.JSONObject().put("parts", JSONArray().put(
 					org.json.JSONObject().put("text", prompt)
 				))
 			))
+			put("safetySettings", safetyArray)
 			put("generationConfig", org.json.JSONObject().apply {
-				put("temperature", 0.3)
+				put("temperature", 0.35)
 				put("maxOutputTokens", 200)
 			})
 		}

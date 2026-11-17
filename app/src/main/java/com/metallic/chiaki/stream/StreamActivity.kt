@@ -30,6 +30,9 @@ import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isGone
 import androidx.core.view.isVisible
+import androidx.dynamicanimation.animation.DynamicAnimation
+import androidx.dynamicanimation.animation.SpringAnimation
+import androidx.dynamicanimation.animation.SpringForce
 import androidx.lifecycle.*
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.mlkit.vision.common.InputImage
@@ -183,28 +186,24 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		binding.filterShortTextSwitch.isChecked = isFilterShortTextEnabled
 		setupCropEditor()
 
-		// 3-Lines Circular Menu Button
+		// 3-Lines Circular Menu Button -> Liquid Glass Bottom Sheet
 		binding.btnMenuToggle.setOnClickListener {
-			val show = !binding.menuPanelContainer.isVisible
-			binding.menuPanelContainer.isVisible = show
-			if (show) {
-				showMenuPage("MAIN")
-				binding.btnMenuToggle.alpha = 1.0f
-				uiVisibilityHandler.removeCallbacks(hideMenuButtonRunnable)
+			if (!binding.menuPanelContainer.isVisible) {
+				openSettingsSheet()
 			} else {
-				resetMenuButtonTimer()
+				closeSettingsSheet()
 			}
 		}
 
 		binding.btnCloseMenu.setOnClickListener {
-			binding.menuPanelContainer.isVisible = false
-			resetMenuButtonTimer()
+			closeSettingsSheet()
 		}
 
 		binding.menuPanelContainer.setOnClickListener {
-			binding.menuPanelContainer.isVisible = false
-			resetMenuButtonTimer()
+			closeSettingsSheet()
 		}
+
+		setupLiquidGlassMotion()
 
 		binding.btnMenuBack.setOnClickListener {
 			showMenuPage("MAIN")
@@ -1223,6 +1222,150 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		val lp = binding.pureFullscreenInner.layoutParams as FrameLayout.LayoutParams
 		lp.gravity = Gravity.CENTER
 		binding.pureFullscreenInner.layoutParams = lp
+	}
+
+	private fun openSettingsSheet() {
+		showMenuPage("MAIN")
+		binding.btnMenuToggle.alpha = 1.0f
+		uiVisibilityHandler.removeCallbacks(hideMenuButtonRunnable)
+
+		binding.menuPanelContainer.isVisible = true
+		binding.menuPanelContainer.alpha = 0f
+		binding.menuPanelContainer.animate().alpha(1f).setDuration(180).start()
+
+		binding.menuSheetContainer.post {
+			val startY = binding.menuSheetContainer.height.toFloat().coerceAtLeast(dpToPx(260).toFloat())
+			binding.menuSheetContainer.translationY = startY
+			binding.menuContentWrapper.translationY = startY * 0.14f
+
+			SpringAnimation(binding.menuSheetContainer, DynamicAnimation.TRANSLATION_Y, 0f).apply {
+				spring = SpringForce(0f).apply {
+					stiffness = 420f
+					dampingRatio = 0.78f
+				}
+				start()
+			}
+			SpringAnimation(binding.menuContentWrapper, DynamicAnimation.TRANSLATION_Y, 0f).apply {
+				spring = SpringForce(0f).apply {
+					stiffness = 350f
+					dampingRatio = 0.58f
+				}
+				start()
+			}
+		}
+	}
+
+	private fun closeSettingsSheet() {
+		if (!binding.menuPanelContainer.isVisible) return
+		val targetY = binding.menuSheetContainer.height.toFloat().coerceAtLeast(dpToPx(260).toFloat())
+		binding.menuPanelContainer.animate().alpha(0f).setDuration(180).start()
+		binding.menuSheetContainer.animate()
+			.translationY(targetY)
+			.setDuration(200)
+			.withEndAction {
+				binding.menuPanelContainer.isVisible = false
+				binding.menuPanelContainer.alpha = 1f
+				binding.menuSheetContainer.translationY = 0f
+				binding.menuContentWrapper.translationY = 0f
+				resetMenuButtonTimer()
+			}
+			.start()
+	}
+
+	@SuppressLint("ClickableViewAccessibility")
+	private fun setupLiquidGlassMotion() {
+		var startRawY = 0f
+		var velocityTracker: VelocityTracker? = null
+
+		binding.menuDragArea.setOnTouchListener { _, event ->
+			when (event.actionMasked) {
+				MotionEvent.ACTION_DOWN -> {
+					startRawY = event.rawY
+					velocityTracker?.recycle()
+					velocityTracker = VelocityTracker.obtain().apply { addMovement(event) }
+					true
+				}
+				MotionEvent.ACTION_MOVE -> {
+					velocityTracker?.addMovement(event)
+					val dy = event.rawY - startRawY
+					// Rubber-band resistance when pulled up past top limit
+					val clampedY = if (dy < 0f) dy * 0.18f else dy
+					binding.menuSheetContainer.translationY = clampedY
+					// Child follow-through inertia
+					binding.menuContentWrapper.translationY = clampedY * 0.12f
+					true
+				}
+				MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+					velocityTracker?.addMovement(event)
+					velocityTracker?.computeCurrentVelocity(1000)
+					val velY = velocityTracker?.yVelocity ?: 0f
+					velocityTracker?.recycle()
+					velocityTracker = null
+
+					val dy = binding.menuSheetContainer.translationY
+					if (dy > dpToPx(110) || velY > 1200f) {
+						closeSettingsSheet()
+					} else {
+						SpringAnimation(binding.menuSheetContainer, DynamicAnimation.TRANSLATION_Y, 0f).apply {
+							spring = SpringForce(0f).apply {
+								stiffness = 420f
+								dampingRatio = 0.72f
+							}
+							start()
+						}
+						SpringAnimation(binding.menuContentWrapper, DynamicAnimation.TRANSLATION_Y, 0f).apply {
+							spring = SpringForce(0f).apply {
+								stiffness = 350f
+								dampingRatio = 0.52f
+							}
+							start()
+						}
+					}
+					true
+				}
+				else -> false
+			}
+		}
+
+		attachLiquidGlassPressPhysics(binding.menuSheetContainer)
+		attachLiquidGlassPressPhysics(binding.topQuickDrawerPanel)
+		attachLiquidGlassPressPhysics(binding.btnScanNoteFloat)
+		attachLiquidGlassPressPhysics(binding.btnSpeakNote)
+		attachLiquidGlassPressPhysics(binding.btnCloseNote)
+	}
+
+	@SuppressLint("ClickableViewAccessibility")
+	private fun attachLiquidGlassPressPhysics(view: View) {
+		if (view is com.google.android.material.button.MaterialButton || view is android.widget.ImageButton) {
+			view.setOnTouchListener { v, event ->
+				when (event.actionMasked) {
+					MotionEvent.ACTION_DOWN -> {
+						v.animate().scaleX(0.94f).scaleY(0.94f).setDuration(75).start()
+					}
+					MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+						SpringAnimation(v, DynamicAnimation.SCALE_X, 1f).apply {
+							spring = SpringForce(1f).apply {
+								stiffness = 520f
+								dampingRatio = 0.55f
+							}
+							start()
+						}
+						SpringAnimation(v, DynamicAnimation.SCALE_Y, 1f).apply {
+							spring = SpringForce(1f).apply {
+								stiffness = 520f
+								dampingRatio = 0.55f
+							}
+							start()
+						}
+					}
+				}
+				false // Keep normal click & toggle listeners working
+			}
+		} else if (view is ViewGroup) {
+			for (i in 0 until view.childCount) {
+				attachLiquidGlassPressPhysics(view.getChildAt(i))
+			}
+		}
 	}
 
 	private fun levenshteinDistance(s1: String, s2: String): Int {

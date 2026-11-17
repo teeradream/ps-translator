@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Outer subtle glass tint + specular rim -->
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="270"
+                android:startColor="#CC1A2438"
+                android:centerColor="#B8101726"
+                android:endColor="#CC0B101B" />
+            <corners
+                android:topLeftRadius="26dp"
+                android:topRightRadius="26dp"
+                android:bottomLeftRadius="0dp"
+                android:bottomRightRadius="0dp" />
+            <stroke
+                android:width="1.2dp"
+                android:color="#55FFFFFF" />
+        </shape>
+    </item>
+    <!-- Top inner specular highlight -->
+    <item
+        android:left="16dp"
+        android:right="16dp"
+        android:top="1dp"
+        android:bottom="1dp">
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="270"
+                android:startColor="#26FFFFFF"
+                android:centerColor="#00FFFFFF"
+                android:endColor="#00FFFFFF" />
+            <corners
+                android:topLeftRadius="25dp"
+                android:topRightRadius="25dp" />
+        </shape>
+    </item>
+</layer-list>

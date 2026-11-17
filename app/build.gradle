@@ -115,4 +115,5 @@ dependencies {
     kapt "com.squareup.moshi:moshi-kotlin-codegen:1.14.0"
     implementation 'com.google.mlkit:text-recognition:16.0.0'
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.6.4'
+    implementation 'androidx.dynamicanimation:dynamicanimation:1.0.0'
 }

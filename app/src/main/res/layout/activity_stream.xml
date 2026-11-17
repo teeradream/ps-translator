@@ -401,28 +401,21 @@
         </ScrollView>
     </LinearLayout>
 
-    <!-- Floating Quick-Scan Button for Note/Tutorial Crop Box (visible in both Game & Text-Only modes) -->
-    <com.google.android.material.button.MaterialButton
+    <!-- Floating Icon Button for Note/Tutorial Crop Box (matches 3-line menu button style) -->
+    <ImageButton
         android:id="@+id/btnScanNoteFloat"
-        android:layout_width="wrap_content"
-        android:layout_height="40dp"
+        android:layout_width="46dp"
+        android:layout_height="46dp"
         android:layout_gravity="bottom|end"
         android:layout_marginEnd="16dp"
         android:layout_marginBottom="18dp"
-        android:text="แปลเฉพาะจุด"
-        android:textSize="12sp"
-        android:textStyle="bold"
-        android:textColor="#00E5FF"
-        app:backgroundTint="#CC0B1424"
-        app:strokeColor="#00E5FF"
-        app:strokeWidth="1.5dp"
-        app:cornerRadius="20dp"
-        app:icon="@drawable/ic_crop_free"
-        app:iconTint="#00E5FF"
-        app:iconSize="16dp"
-        android:insetTop="0dp"
-        android:insetBottom="0dp"
-        android:elevation="10dp"/>
+        android:background="@drawable/bg_circle_button"
+        android:src="@drawable/ic_crop_free"
+        app:tint="#FFFFFF"
+        android:contentDescription="แปลเฉพาะจุด"
+        android:elevation="10dp"
+        android:clickable="true"
+        android:focusable="true"/>
 
     <!-- Top Translucent Handle Tab to pull down Quick-Control Drawer -->
     <LinearLayout
@@ -500,6 +493,20 @@
             android:textStyle="bold"
             android:textColor="#00FF88"
             app:strokeColor="#00FF88"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:layout_marginEnd="6dp"/>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnQuickTextOnly"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:text="จอดำ: ปิด"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:textColor="#FFFFFF"
+            app:strokeColor="#66FFFFFF"
             android:insetTop="0dp"
             android:insetBottom="0dp"/>
     </LinearLayout>

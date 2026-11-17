@@ -118,6 +118,7 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 
 	// On-demand Note/Tutorial Crop Box & Top Quick Drawer
 	private var isEditingNoteCrop = false
+	private var isNoteCropBoxVisible = false
 	private var isScanningNote = false
 	private var lastNoteThai = ""
 	private var lastNoteEnglish = ""
@@ -384,11 +385,14 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 			binding.pureFullscreenLayout.isVisible = true
 			binding.aspectRatioLayout.visibility = View.VISIBLE
 			binding.subtitleOverlayContainer.isVisible = false
+			binding.floatingNoteCropBox.isVisible = false
 			binding.btnTextOnlyMode.text = "สลับเป็นโหมดสตรีมภาพ"
 		} else {
 			binding.pureFullscreenLayout.isVisible = false
 			binding.aspectRatioLayout.visibility = View.VISIBLE
 			binding.subtitleOverlayContainer.isVisible = isSubtitleEnabled && subtitleHistory.isNotEmpty()
+			binding.floatingNoteCropBox.isVisible = isNoteCropBoxVisible
+			if (isNoteCropBoxVisible) syncFloatingNoteCropBox()
 			binding.btnTextOnlyMode.text = "โหมดโชว์เฉพาะตัวหนังสือ (จอดำ)"
 		}
 	}
@@ -1042,6 +1046,12 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 			updateQuickDrawerUI()
 			resetTopDrawerTimer()
 		}
+
+		binding.btnQuickNoteBox.setOnClickListener {
+			setFloatingNoteCropBoxVisible(!isNoteCropBoxVisible)
+			updateQuickDrawerUI()
+			resetTopDrawerTimer()
+		}
 	}
 
 	private fun openTopQuickDrawer() {
@@ -1107,14 +1117,95 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		binding.btnQuickTextOnly.text = if (isTextOnlyMode) "จอดำ: เปิด" else "จอดำ: ปิด"
 		binding.btnQuickTextOnly.setTextColor(Color.parseColor(if (isTextOnlyMode) "#00E5FF" else "#FFFFFF"))
 		binding.btnQuickTextOnly.strokeColor = android.content.res.ColorStateList.valueOf(Color.parseColor(if (isTextOnlyMode) "#00E5FF" else "#66FFFFFF"))
+
+		binding.btnQuickNoteBox.text = if (isNoteCropBoxVisible) "กรอบ: แสดง" else "กรอบ: ซ่อน"
+		binding.btnQuickNoteBox.setTextColor(Color.parseColor(if (isNoteCropBoxVisible) "#00E5FF" else "#FFFFFF"))
+		binding.btnQuickNoteBox.strokeColor = android.content.res.ColorStateList.valueOf(Color.parseColor(if (isNoteCropBoxVisible) "#00E5FF" else "#66FFFFFF"))
 	}
 
+	@SuppressLint("ClickableViewAccessibility")
 	private fun setupNoteTranslationFeature() {
+		isNoteCropBoxVisible = cropPrefs.getBoolean("note_crop_visible", false)
+		if (isNoteCropBoxVisible && !isTextOnlyMode) {
+			binding.floatingNoteCropBox.isVisible = true
+			syncFloatingNoteCropBox()
+		}
+
 		binding.btnScanNoteFloat.setOnClickListener {
 			captureAndTranslateNote()
 		}
+		binding.btnScanNoteFloat.setOnLongClickListener {
+			setFloatingNoteCropBoxVisible(!isNoteCropBoxVisible)
+			true
+		}
+		binding.btnFloatNoteScan.setOnClickListener {
+			captureAndTranslateNote()
+		}
+		binding.btnFloatNoteHide.setOnClickListener {
+			setFloatingNoteCropBoxVisible(false)
+		}
 		binding.btnCloseNote.setOnClickListener {
 			hideNoteTranslationCard()
+		}
+
+		// Live drag for persistent floating blue crop box
+		var dX = 0f
+		var dY = 0f
+		binding.floatingNoteCropBox.setOnTouchListener { view, event ->
+			val parentW = binding.mainStreamLayout.width.toFloat()
+			val parentH = binding.mainStreamLayout.height.toFloat()
+			when (event.actionMasked) {
+				MotionEvent.ACTION_DOWN -> {
+					dX = view.x - event.rawX
+					dY = view.y - event.rawY
+					true
+				}
+				MotionEvent.ACTION_MOVE -> {
+					view.x = (event.rawX + dX).coerceIn(0f, (parentW - view.width).coerceAtLeast(0f))
+					view.y = (event.rawY + dY).coerceIn(0f, (parentH - view.height).coerceAtLeast(0f))
+					true
+				}
+				MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+					saveFloatingNoteCropBoxCoords()
+					true
+				}
+				else -> false
+			}
+		}
+
+		// Live resize handle for persistent floating blue crop box
+		var initTouchX = 0f
+		var initTouchY = 0f
+		var initW = 0
+		var initH = 0
+		binding.noteResizeHandle.setOnTouchListener { _, event ->
+			val parentW = binding.mainStreamLayout.width
+			val parentH = binding.mainStreamLayout.height
+			val boxX = binding.floatingNoteCropBox.x.toInt()
+			val boxY = binding.floatingNoteCropBox.y.toInt()
+			when (event.actionMasked) {
+				MotionEvent.ACTION_DOWN -> {
+					initTouchX = event.rawX
+					initTouchY = event.rawY
+					initW = binding.floatingNoteCropBox.width
+					initH = binding.floatingNoteCropBox.height
+					true
+				}
+				MotionEvent.ACTION_MOVE -> {
+					val newW = (initW + (event.rawX - initTouchX).toInt()).coerceIn(dpToPx(140), (parentW - boxX).coerceAtLeast(dpToPx(140)))
+					val newH = (initH + (event.rawY - initTouchY).toInt()).coerceIn(dpToPx(70), (parentH - boxY).coerceAtLeast(dpToPx(70)))
+					val lp = binding.floatingNoteCropBox.layoutParams
+					lp.width = newW
+					lp.height = newH
+					binding.floatingNoteCropBox.layoutParams = lp
+					true
+				}
+				MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+					saveFloatingNoteCropBoxCoords()
+					true
+				}
+				else -> false
+			}
 		}
 		binding.btnSpeakNote.setOnClickListener {
 			if (lastNoteThai.isNotEmpty()) {
@@ -1156,8 +1247,12 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		isScanningNote = true
 		binding.btnScanNoteFloat.alpha = 0.45f
 		val wasTextOnlyVisible = isTextOnlyMode && binding.pureFullscreenLayout.isVisible
+		val wasNoteCardVisible = binding.noteTranslationCard.isVisible
 		if (wasTextOnlyVisible) {
 			binding.pureFullscreenLayout.visibility = View.INVISIBLE
+		}
+		if (wasNoteCardVisible) {
+			binding.noteTranslationCard.visibility = View.INVISIBLE
 		}
 
 		val runPixelCopy = {
@@ -1166,6 +1261,9 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 				PixelCopy.request(surfaceView, fullBitmap, { copyResult ->
 					if (wasTextOnlyVisible && isTextOnlyMode) {
 						binding.pureFullscreenLayout.visibility = View.VISIBLE
+					}
+					if (wasNoteCardVisible && lastNoteThai.isNotEmpty()) {
+						binding.noteTranslationCard.visibility = View.VISIBLE
 					}
 					if (copyResult == PixelCopy.SUCCESS) {
 					try {
@@ -1240,27 +1338,103 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 			}
 		}
 
-		if (wasTextOnlyVisible) {
+		if (wasTextOnlyVisible || wasNoteCardVisible) {
 			uiVisibilityHandler.postDelayed(runPixelCopy, 40)
 		} else {
 			runPixelCopy()
 		}
 	}
 
+	private fun setFloatingNoteCropBoxVisible(visible: Boolean) {
+		isNoteCropBoxVisible = visible
+		cropPrefs.edit().putBoolean("note_crop_visible", visible).apply()
+		if (visible && !isTextOnlyMode) {
+			binding.floatingNoteCropBox.isVisible = true
+			syncFloatingNoteCropBox()
+		} else {
+			binding.floatingNoteCropBox.isVisible = false
+		}
+		updateQuickDrawerUI()
+	}
+
+	private fun syncFloatingNoteCropBox() {
+		binding.mainStreamLayout.post {
+			val parentW = binding.mainStreamLayout.width
+			val parentH = binding.mainStreamLayout.height
+			if (parentW <= 0 || parentH <= 0) return@post
+
+			val leftNorm = cropPrefs.getFloat("note_crop_left", 0.20f)
+			val topNorm = cropPrefs.getFloat("note_crop_top", 0.15f)
+			val widthNorm = cropPrefs.getFloat("note_crop_width", 0.60f)
+			val heightNorm = cropPrefs.getFloat("note_crop_height", 0.65f)
+
+			val w = (parentW * widthNorm).toInt().coerceIn(dpToPx(140), parentW)
+			val h = (parentH * heightNorm).toInt().coerceIn(dpToPx(70), parentH)
+			val lp = binding.floatingNoteCropBox.layoutParams
+			lp.width = w
+			lp.height = h
+			binding.floatingNoteCropBox.layoutParams = lp
+			binding.floatingNoteCropBox.x = (parentW * leftNorm).coerceIn(0f, (parentW - w).toFloat().coerceAtLeast(0f))
+			binding.floatingNoteCropBox.y = (parentH * topNorm).coerceIn(0f, (parentH - h).toFloat().coerceAtLeast(0f))
+		}
+	}
+
+	private fun saveFloatingNoteCropBoxCoords() {
+		val parentW = binding.mainStreamLayout.width.toFloat()
+		val parentH = binding.mainStreamLayout.height.toFloat()
+		if (parentW <= 0f || parentH <= 0f) return
+
+		val leftNorm = (binding.floatingNoteCropBox.x / parentW).coerceIn(0f, 0.85f)
+		val topNorm = (binding.floatingNoteCropBox.y / parentH).coerceIn(0f, 0.90f)
+		val widthNorm = (binding.floatingNoteCropBox.width / parentW).coerceIn(0.10f, 1f - leftNorm)
+		val heightNorm = (binding.floatingNoteCropBox.height / parentH).coerceIn(0.06f, 1f - topNorm)
+
+		cropPrefs.edit()
+			.putFloat("note_crop_left", leftNorm)
+			.putFloat("note_crop_top", topNorm)
+			.putFloat("note_crop_width", widthNorm)
+			.putFloat("note_crop_height", heightNorm)
+			.apply()
+	}
+
 	private fun showNoteTranslationCard(english: String, thai: String) {
 		uiVisibilityHandler.removeCallbacks(hideNoteCardRunnable)
 		binding.tvNoteThaiText.text = thai
 		binding.tvNoteOriginalText.text = english
+
+		val parentW = binding.mainStreamLayout.width
+		val parentH = binding.mainStreamLayout.height
+		val cardLp = binding.noteTranslationCard.layoutParams as FrameLayout.LayoutParams
+		if (!isTextOnlyMode && parentW > 0 && parentH > 0) {
+			// Match exact position and width of the blue crop box, with wrap_content height for readability
+			val leftNorm = cropPrefs.getFloat("note_crop_left", 0.20f)
+			val topNorm = cropPrefs.getFloat("note_crop_top", 0.15f)
+			val widthNorm = cropPrefs.getFloat("note_crop_width", 0.60f)
+			val targetW = (parentW * widthNorm).toInt().coerceIn(dpToPx(220), parentW - dpToPx(24))
+			val targetX = (parentW * leftNorm).coerceIn(dpToPx(12).toFloat(), (parentW - targetW - dpToPx(12)).toFloat().coerceAtLeast(0f))
+			val targetY = (parentH * topNorm).coerceIn(dpToPx(16).toFloat(), (parentH - dpToPx(140)).toFloat().coerceAtLeast(dpToPx(16).toFloat()))
+
+			cardLp.gravity = Gravity.TOP or Gravity.START
+			cardLp.width = targetW
+			cardLp.height = FrameLayout.LayoutParams.WRAP_CONTENT
+			binding.noteTranslationCard.layoutParams = cardLp
+			binding.noteTranslationCard.x = targetX
+			binding.noteTranslationCard.y = targetY
+		} else {
+			// Text-Only black screen: dock cleanly at top and push subtitles down
+			cardLp.gravity = Gravity.TOP or Gravity.START
+			cardLp.width = (parentW - dpToPx(96)).coerceAtLeast(dpToPx(240))
+			cardLp.height = FrameLayout.LayoutParams.WRAP_CONTENT
+			binding.noteTranslationCard.layoutParams = cardLp
+			binding.noteTranslationCard.x = dpToPx(24).toFloat()
+			binding.noteTranslationCard.y = dpToPx(40).toFloat()
+		}
+
 		binding.noteTranslationCard.isVisible = true
 		binding.noteTranslationCard.alpha = 0f
 		binding.noteTranslationCard.scaleX = 0.92f
 		binding.noteTranslationCard.scaleY = 0.92f
-		binding.noteTranslationCard.translationY = -dpToPx(16).toFloat()
 		binding.noteTranslationCard.animate().alpha(1f).setDuration(150).start()
-		SpringAnimation(binding.noteTranslationCard, DynamicAnimation.TRANSLATION_Y, 0f).apply {
-			spring = SpringForce(0f).apply { stiffness = 440f; dampingRatio = 0.68f }
-			start()
-		}
 		SpringAnimation(binding.noteTranslationCard, DynamicAnimation.SCALE_X, 1f).apply {
 			spring = SpringForce(1f).apply { stiffness = 480f; dampingRatio = 0.65f }
 			start()
@@ -1403,6 +1577,8 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		attachLiquidGlassPressPhysics(binding.topQuickDrawerPanel)
 		attachLiquidGlassPressPhysics(binding.btnMenuToggle)
 		attachLiquidGlassPressPhysics(binding.btnScanNoteFloat)
+		attachLiquidGlassPressPhysics(binding.btnFloatNoteScan)
+		attachLiquidGlassPressPhysics(binding.btnFloatNoteHide)
 		attachLiquidGlassPressPhysics(binding.btnSpeakNote)
 		attachLiquidGlassPressPhysics(binding.btnCloseNote)
 	}

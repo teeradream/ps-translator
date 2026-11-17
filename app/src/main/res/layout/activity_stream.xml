@@ -309,17 +309,73 @@
         </FrameLayout>
     </FrameLayout>
 
-    <!-- Note/Document Translation Result Card (separate from subtitles, auto-hides after 20s) -->
+    <!-- Persistent Floating Blue Crop Box (Draggable & Resizable live on screen) -->
+    <FrameLayout
+        android:id="@+id/floatingNoteCropBox"
+        android:layout_width="340dp"
+        android:layout_height="180dp"
+        android:background="@drawable/bg_note_crop_box"
+        android:elevation="8dp"
+        android:visibility="gone"
+        android:clickable="true"
+        android:focusable="true">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top|end"
+            android:layout_margin="6dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnFloatNoteScan"
+                android:layout_width="wrap_content"
+                android:layout_height="30dp"
+                android:minWidth="0dp"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp"
+                android:text="แปล"
+                android:textSize="11sp"
+                android:textStyle="bold"
+                android:textColor="#000000"
+                app:backgroundTint="#00E5FF"
+                app:cornerRadius="15dp"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:layout_marginEnd="6dp"/>
+
+            <ImageButton
+                android:id="@+id/btnFloatNoteHide"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:background="@drawable/bg_circle_button"
+                android:src="@drawable/ic_close"
+                app:tint="#FFFFFF"
+                android:padding="6dp"
+                android:contentDescription="ซ่อนกรอบเฉพาะจุด"/>
+        </LinearLayout>
+
+        <ImageView
+            android:id="@+id/noteResizeHandle"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_gravity="bottom|end"
+            android:src="@drawable/ic_resize_handle"
+            app:tint="#00E5FF"
+            android:padding="5dp"
+            android:contentDescription="ปรับขนาดกรอบเฉพาะจุด"
+            android:clickable="true"
+            android:focusable="true"/>
+    </FrameLayout>
+
+    <!-- Note/Document Translation Result Card (separate from subtitles, opaque for readability, auto-hides after 20s) -->
     <LinearLayout
         android:id="@+id/noteTranslationCard"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_gravity="top|center_horizontal"
-        android:layout_marginStart="24dp"
-        android:layout_marginEnd="72dp"
-        android:layout_marginTop="40dp"
         android:orientation="vertical"
-        android:background="@drawable/bg_liquid_glass_card"
+        android:background="@drawable/bg_liquid_glass_note_opaque"
         android:padding="14dp"
         android:elevation="9dp"
         android:visibility="gone"
@@ -503,6 +559,20 @@
             android:layout_width="wrap_content"
             android:layout_height="36dp"
             android:text="จอดำ: ปิด"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:textColor="#FFFFFF"
+            app:strokeColor="#66FFFFFF"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:layout_marginEnd="6dp"/>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnQuickNoteBox"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:text="กรอบ: ปิด"
             android:textSize="11sp"
             android:textStyle="bold"
             android:textColor="#FFFFFF"

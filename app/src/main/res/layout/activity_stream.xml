@@ -427,48 +427,44 @@
 
         <ScrollView
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:maxHeight="190dp">
+            android:layout_height="wrap_content">
 
-            <LinearLayout
+            <FrameLayout
+                android:id="@+id/notePositionalCanvas"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="vertical">
-
-                <TextView
-                    android:id="@+id/tvNoteThaiText"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:textColor="#FFFFFF"
-                    android:textSize="17sp"
-                    android:textStyle="bold"
-                    android:lineSpacingExtra="3dp"
-                    android:text=""/>
-
-                <TextView
-                    android:id="@+id/tvNoteOriginalText"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:textColor="#88FFFFFF"
-                    android:textSize="12sp"
-                    android:layout_marginTop="6dp"
-                    android:text=""/>
-            </LinearLayout>
+                android:minHeight="48dp"/>
         </ScrollView>
     </LinearLayout>
 
-    <!-- Floating Icon Button for Note/Tutorial Crop Box (matches 3-line menu button style) -->
+    <!-- Floating Icon Button for Note/Tutorial Crop Box (bottom-right, left of fullscreen button) -->
     <ImageButton
         android:id="@+id/btnScanNoteFloat"
+        android:layout_width="46dp"
+        android:layout_height="46dp"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="72dp"
+        android:layout_marginBottom="18dp"
+        android:background="@drawable/bg_circle_button"
+        android:src="@drawable/ic_crop_free"
+        app:tint="#FFFFFF"
+        android:contentDescription="แปลเฉพาะจุด"
+        android:elevation="10dp"
+        android:clickable="true"
+        android:focusable="true"/>
+
+    <!-- Floating Icon-Only Fullscreen / Text-Only Black Screen Button (bottom-right) -->
+    <ImageButton
+        android:id="@+id/btnTextOnlyFloat"
         android:layout_width="46dp"
         android:layout_height="46dp"
         android:layout_gravity="bottom|end"
         android:layout_marginEnd="16dp"
         android:layout_marginBottom="18dp"
         android:background="@drawable/bg_circle_button"
-        android:src="@drawable/ic_crop_free"
+        android:src="@drawable/ic_fullscreen"
         app:tint="#FFFFFF"
-        android:contentDescription="แปลเฉพาะจุด"
+        android:contentDescription="โหมดจอดำเต็มจอ"
         android:elevation="10dp"
         android:clickable="true"
         android:focusable="true"/>
@@ -549,20 +545,6 @@
             android:textStyle="bold"
             android:textColor="#00FF88"
             app:strokeColor="#00FF88"
-            android:insetTop="0dp"
-            android:insetBottom="0dp"
-            android:layout_marginEnd="6dp"/>
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnQuickTextOnly"
-            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-            android:layout_width="wrap_content"
-            android:layout_height="36dp"
-            android:text="จอดำ: ปิด"
-            android:textSize="11sp"
-            android:textStyle="bold"
-            android:textColor="#FFFFFF"
-            app:strokeColor="#66FFFFFF"
             android:insetTop="0dp"
             android:insetBottom="0dp"
             android:layout_marginEnd="6dp"/>

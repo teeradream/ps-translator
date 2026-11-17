@@ -161,6 +161,7 @@
         android:focusable="true">
 
         <LinearLayout
+            android:id="@+id/pureFullscreenInner"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_gravity="center"
@@ -248,6 +249,7 @@
             android:gravity="center_vertical">
 
             <TextView
+                android:id="@+id/cropEditorTitle"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
@@ -306,6 +308,199 @@
                 android:focusable="true"/>
         </FrameLayout>
     </FrameLayout>
+
+    <!-- Note/Document Translation Result Card (separate from subtitles, auto-hides after 20s) -->
+    <LinearLayout
+        android:id="@+id/noteTranslationCard"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|center_horizontal"
+        android:layout_marginStart="24dp"
+        android:layout_marginEnd="72dp"
+        android:layout_marginTop="40dp"
+        android:orientation="vertical"
+        android:background="#EB0A1220"
+        android:padding="14dp"
+        android:elevation="9dp"
+        android:visibility="gone"
+        android:clickable="true"
+        android:focusable="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="6dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="คำแปลเอกสาร / คำแนะนำ (ปิดอัตโนมัติใน 20 วิ)"
+                android:textColor="#00E5FF"
+                android:textSize="12sp"
+                android:textStyle="bold"/>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnSpeakNote"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="34dp"
+                android:text="ฟังเสียงพากย์"
+                android:textSize="11sp"
+                android:textColor="#00FF88"
+                app:strokeColor="#00FF88"
+                app:icon="@drawable/ic_volume_up"
+                app:iconTint="#00FF88"
+                app:iconSize="14dp"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:layout_marginEnd="6dp"/>
+
+            <ImageButton
+                android:id="@+id/btnCloseNote"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_close"
+                android:contentDescription="ปิดหน้าต่างคำแปลเอกสาร"/>
+        </LinearLayout>
+
+        <ScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:maxHeight="190dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/tvNoteThaiText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="#FFFFFF"
+                    android:textSize="17sp"
+                    android:textStyle="bold"
+                    android:lineSpacingExtra="3dp"
+                    android:text=""/>
+
+                <TextView
+                    android:id="@+id/tvNoteOriginalText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="#88FFFFFF"
+                    android:textSize="12sp"
+                    android:layout_marginTop="6dp"
+                    android:text=""/>
+            </LinearLayout>
+        </ScrollView>
+    </LinearLayout>
+
+    <!-- Floating Quick-Scan Button for Note/Tutorial Crop Box (visible in both Game & Text-Only modes) -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnScanNoteFloat"
+        android:layout_width="wrap_content"
+        android:layout_height="40dp"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="18dp"
+        android:text="แปลเฉพาะจุด"
+        android:textSize="12sp"
+        android:textStyle="bold"
+        android:textColor="#00E5FF"
+        app:backgroundTint="#CC0B1424"
+        app:strokeColor="#00E5FF"
+        app:strokeWidth="1.5dp"
+        app:cornerRadius="20dp"
+        app:icon="@drawable/ic_crop_free"
+        app:iconTint="#00E5FF"
+        app:iconSize="16dp"
+        android:insetTop="0dp"
+        android:insetBottom="0dp"
+        android:elevation="10dp"/>
+
+    <!-- Top Translucent Handle Tab to pull down Quick-Control Drawer -->
+    <LinearLayout
+        android:id="@+id/topDrawerHandle"
+        android:layout_width="96dp"
+        android:layout_height="22dp"
+        android:layout_gravity="top|center_horizontal"
+        android:layout_marginTop="4dp"
+        android:background="#66000000"
+        android:gravity="center"
+        android:elevation="11dp"
+        android:clickable="true"
+        android:focusable="true">
+
+        <View
+            android:layout_width="42dp"
+            android:layout_height="4dp"
+            android:background="#AAFFFFFF"/>
+    </LinearLayout>
+
+    <!-- Top Translucent Quick-Control Drawer (TTS, Mute Game, Subtitles — auto-hides after 4s) -->
+    <LinearLayout
+        android:id="@+id/topQuickDrawerPanel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|center_horizontal"
+        android:layout_marginTop="6dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="#B80A101D"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp"
+        android:elevation="11dp"
+        android:visibility="gone"
+        android:clickable="true"
+        android:focusable="true">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnQuickTts"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:text="พากย์: ปิด"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:textColor="#FFFFFF"
+            app:strokeColor="#66FFFFFF"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:layout_marginEnd="6dp"/>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnQuickMuteGame"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:text="เสียงเกม: เปิด"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:textColor="#FFFFFF"
+            app:strokeColor="#66FFFFFF"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:layout_marginEnd="6dp"/>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnQuickSub"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:text="ซับ: เปิด"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:textColor="#00FF88"
+            app:strokeColor="#00FF88"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"/>
+    </LinearLayout>
 
     <!-- Floating Circular Button with 3 lines (Hamburger Menu) -->
     <ImageButton
@@ -1331,6 +1526,20 @@
                         app:icon="@drawable/ic_crop_free"
                         app:iconTint="#00E676"
                         app:strokeColor="#00E676"
+                        android:layout_marginBottom="8dp"/>
+
+                    <!-- Adjust Note/Tutorial Crop Box Button -->
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnAdjustNoteCropBox"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="ปรับกรอบแปลเฉพาะจุด (เอกสาร/คำแนะนำ)"
+                        android:textColor="#00E5FF"
+                        android:textSize="13sp"
+                        app:icon="@drawable/ic_crop_free"
+                        app:iconTint="#00E5FF"
+                        app:strokeColor="#00E5FF"
                         android:layout_marginBottom="10dp"/>
 
                     <!-- Filter short UI text toggle -->

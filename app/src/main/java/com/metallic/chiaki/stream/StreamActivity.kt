@@ -113,6 +113,24 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 	private var geminiMediaPlayer: MediaPlayer? = null
 	private val geminiAudioQueue = java.util.ArrayDeque<java.io.File>()
 
+	// On-demand Note/Tutorial Crop Box & Top Quick Drawer
+	private var isEditingNoteCrop = false
+	private var isScanningNote = false
+	private var lastNoteThai = ""
+	private var lastNoteEnglish = ""
+
+	private val hideNoteCardRunnable = Runnable {
+		if (::binding.isInitialized && !isDestroyed && !isFinishing) {
+			hideNoteTranslationCard()
+		}
+	}
+
+	private val hideTopDrawerRunnable = Runnable {
+		if (::binding.isInitialized && !isDestroyed && !isFinishing) {
+			closeTopQuickDrawer()
+		}
+	}
+
 	// Subtitle cascade history and styling options
 	private val subtitleHistory = mutableListOf<SubtitleHistoryItem>()
 	private var maxHistoryLines = 3
@@ -349,6 +367,9 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		adjustStreamViewAspect()
 
 		// Start periodic OCR capture loop
+		setupTopQuickDrawer()
+		setupNoteTranslationFeature()
+		updateQuickDrawerUI()
 		uiVisibilityHandler.postDelayed(captureRunnable, 1500)
 		resetMenuButtonTimer()
 	}
@@ -395,7 +416,7 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		val surfaceView = binding.surfaceView
 		if (surfaceView.holder?.surface?.isValid != true) return
 		if (surfaceView.width <= 100 || surfaceView.height <= 100) return
-		if (isCapturing) return
+		if (isCapturing || isScanningNote) return
 
 		val fullBitmap = Bitmap.createBitmap(1920, 1080, Bitmap.Config.ARGB_8888)
 		isCapturing = true
@@ -816,6 +837,13 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 	private fun setupCropEditor() {
 		binding.btnAdjustCropBox.setOnClickListener {
 			binding.menuPanelContainer.isVisible = false
+			isEditingNoteCrop = false
+			openCropEditor()
+		}
+
+		binding.btnAdjustNoteCropBox.setOnClickListener {
+			binding.menuPanelContainer.isVisible = false
+			isEditingNoteCrop = true
 			openCropEditor()
 		}
 
@@ -893,14 +921,24 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 	}
 
 	private fun openCropEditor() {
+		if (isEditingNoteCrop) {
+			binding.cropEditorTitle.text = "ลากกรอบสีฟ้าไปวางตรงพื้นที่เอกสาร/คำแนะนำ"
+			binding.cropBoxGuideText.text = "กรอบแปลเฉพาะจุด (ลากเพื่อย้าย)"
+			binding.cropBoxGuideText.setTextColor(Color.parseColor("#00E5FF"))
+		} else {
+			binding.cropEditorTitle.text = "ลากกรอบสีเขียวไปวางตรงพื้นที่ซับไตเติ้ลเกม"
+			binding.cropBoxGuideText.text = "กรอบอ่านซับ (ลากเพื่อย้าย)"
+			binding.cropBoxGuideText.setTextColor(Color.parseColor("#00E676"))
+		}
 		binding.cropEditorOverlay.isVisible = true
 		binding.cropEditorOverlay.post {
 			val overlayW = binding.cropEditorOverlay.width
 			val overlayH = binding.cropEditorOverlay.height
-			val leftNorm = cropPrefs.getFloat("crop_left", 0.18f)
-			val topNorm = cropPrefs.getFloat("crop_top", 0.72f)
-			val widthNorm = cropPrefs.getFloat("crop_width", 0.64f)
-			val heightNorm = cropPrefs.getFloat("crop_height", 0.22f)
+			val prefix = if (isEditingNoteCrop) "note_crop_" else "crop_"
+			val leftNorm = cropPrefs.getFloat("${prefix}left", if (isEditingNoteCrop) 0.20f else 0.18f)
+			val topNorm = cropPrefs.getFloat("${prefix}top", if (isEditingNoteCrop) 0.15f else 0.72f)
+			val widthNorm = cropPrefs.getFloat("${prefix}width", if (isEditingNoteCrop) 0.60f else 0.64f)
+			val heightNorm = cropPrefs.getFloat("${prefix}height", if (isEditingNoteCrop) 0.65f else 0.22f)
 
 			val w = (overlayW * widthNorm).toInt().coerceAtLeast(dpToPx(120))
 			val h = (overlayH * heightNorm).toInt().coerceAtLeast(dpToPx(40))
@@ -920,10 +958,15 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		val overlayW = binding.cropEditorOverlay.width
 		val overlayH = binding.cropEditorOverlay.height
 
-		val w = (overlayW * 0.64f).toInt().coerceAtLeast(dpToPx(120))
-		val h = (overlayH * 0.22f).toInt().coerceAtLeast(dpToPx(40))
-		val x = overlayW * 0.18f
-		val y = overlayH * 0.72f
+		val defW = if (isEditingNoteCrop) 0.60f else 0.64f
+		val defH = if (isEditingNoteCrop) 0.65f else 0.22f
+		val defX = if (isEditingNoteCrop) 0.20f else 0.18f
+		val defY = if (isEditingNoteCrop) 0.15f else 0.72f
+
+		val w = (overlayW * defW).toInt().coerceAtLeast(dpToPx(120))
+		val h = (overlayH * defH).toInt().coerceAtLeast(dpToPx(40))
+		val x = overlayW * defX
+		val y = overlayH * defY
 
 		val params = binding.cropBoxFrame.layoutParams
 		params.width = w
@@ -942,16 +985,244 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		val widthNorm = (binding.cropBoxFrame.width / overlayW).coerceIn(0.10f, 1f - leftNorm)
 		val heightNorm = (binding.cropBoxFrame.height / overlayH).coerceIn(0.06f, 1f - topNorm)
 
+		val prefix = if (isEditingNoteCrop) "note_crop_" else "crop_"
 		cropPrefs.edit()
-			.putFloat("crop_left", leftNorm)
-			.putFloat("crop_top", topNorm)
-			.putFloat("crop_width", widthNorm)
-			.putFloat("crop_height", heightNorm)
+			.putFloat("${prefix}left", leftNorm)
+			.putFloat("${prefix}top", topNorm)
+			.putFloat("${prefix}width", widthNorm)
+			.putFloat("${prefix}height", heightNorm)
 			.apply()
 
 		binding.cropEditorOverlay.isVisible = false
 		resetMenuButtonTimer()
-		Toast.makeText(this, "บันทึกกรอบพื้นที่อ่านซับเรียบร้อยแล้ว", Toast.LENGTH_SHORT).show()
+		val msg = if (isEditingNoteCrop) "บันทึกกรอบแปลเฉพาะจุด (เอกสาร/คำแนะนำ) แล้ว" else "บันทึกกรอบพื้นที่อ่านซับเรียบร้อยแล้ว"
+		Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+	}
+
+	@SuppressLint("ClickableViewAccessibility")
+	private fun setupTopQuickDrawer() {
+		var startY = 0f
+		binding.topDrawerHandle.setOnTouchListener { _, event ->
+			when (event.action) {
+				MotionEvent.ACTION_DOWN -> {
+					startY = event.rawY
+					true
+				}
+				MotionEvent.ACTION_UP -> {
+					val dy = event.rawY - startY
+					if (dy > dpToPx(12) || kotlin.math.abs(dy) < dpToPx(12)) {
+						openTopQuickDrawer()
+					}
+					true
+				}
+				else -> false
+			}
+		}
+
+		binding.btnQuickTts.setOnClickListener {
+			binding.ttsVoiceSwitch.isChecked = !binding.ttsVoiceSwitch.isChecked
+			updateQuickDrawerUI()
+			resetTopDrawerTimer()
+		}
+
+		binding.btnQuickMuteGame.setOnClickListener {
+			binding.btnMuteAudio.performClick()
+			updateQuickDrawerUI()
+			resetTopDrawerTimer()
+		}
+
+		binding.btnQuickSub.setOnClickListener {
+			binding.subOverlaySwitch.isChecked = !binding.subOverlaySwitch.isChecked
+			updateQuickDrawerUI()
+			resetTopDrawerTimer()
+		}
+	}
+
+	private fun openTopQuickDrawer() {
+		updateQuickDrawerUI()
+		binding.topDrawerHandle.isVisible = false
+		binding.topQuickDrawerPanel.isVisible = true
+		binding.topQuickDrawerPanel.translationY = -dpToPx(60).toFloat()
+		binding.topQuickDrawerPanel.alpha = 0f
+		binding.topQuickDrawerPanel.animate()
+			.translationY(0f)
+			.alpha(1f)
+			.setDuration(180)
+			.start()
+		resetTopDrawerTimer()
+	}
+
+	private fun closeTopQuickDrawer() {
+		uiVisibilityHandler.removeCallbacks(hideTopDrawerRunnable)
+		if (!binding.topQuickDrawerPanel.isVisible) return
+		binding.topQuickDrawerPanel.animate()
+			.translationY(-dpToPx(60).toFloat())
+			.alpha(0f)
+			.setDuration(180)
+			.withEndAction {
+				binding.topQuickDrawerPanel.isVisible = false
+				binding.topDrawerHandle.isVisible = true
+			}
+			.start()
+	}
+
+	private fun resetTopDrawerTimer() {
+		uiVisibilityHandler.removeCallbacks(hideTopDrawerRunnable)
+		uiVisibilityHandler.postDelayed(hideTopDrawerRunnable, 4000)
+	}
+
+	private fun updateQuickDrawerUI() {
+		if (!::binding.isInitialized) return
+		binding.btnQuickTts.text = if (isTtsEnabled) "พากย์: เปิด" else "พากย์: ปิด"
+		binding.btnQuickTts.setTextColor(Color.parseColor(if (isTtsEnabled) "#00FF88" else "#FFFFFF"))
+		binding.btnQuickTts.strokeColor = android.content.res.ColorStateList.valueOf(Color.parseColor(if (isTtsEnabled) "#00FF88" else "#66FFFFFF"))
+
+		binding.btnQuickMuteGame.text = if (isAudioMuted) "เสียงเกม: ปิด" else "เสียงเกม: เปิด"
+		binding.btnQuickMuteGame.setTextColor(Color.parseColor(if (isAudioMuted) "#FF6B6B" else "#FFFFFF"))
+		binding.btnQuickMuteGame.strokeColor = android.content.res.ColorStateList.valueOf(Color.parseColor(if (isAudioMuted) "#FF6B6B" else "#66FFFFFF"))
+
+		binding.btnQuickSub.text = if (isSubtitleEnabled) "ซับ: เปิด" else "ซับ: ปิด"
+		binding.btnQuickSub.setTextColor(Color.parseColor(if (isSubtitleEnabled) "#00FF88" else "#FFFFFF"))
+		binding.btnQuickSub.strokeColor = android.content.res.ColorStateList.valueOf(Color.parseColor(if (isSubtitleEnabled) "#00FF88" else "#66FFFFFF"))
+	}
+
+	private fun setupNoteTranslationFeature() {
+		binding.btnScanNoteFloat.setOnClickListener {
+			captureAndTranslateNote()
+		}
+		binding.btnCloseNote.setOnClickListener {
+			hideNoteTranslationCard()
+		}
+		binding.btnSpeakNote.setOnClickListener {
+			if (lastNoteThai.isNotEmpty()) {
+				val isFemale = when (voiceGenderMode) {
+					VoiceGenderMode.AUTO_AI -> isFemaleCharacter(lastNoteEnglish, lastNoteThai)
+					VoiceGenderMode.FEMALE -> true
+					VoiceGenderMode.MALE -> false
+				}
+				val now = System.currentTimeMillis()
+				if (geminiApiKey.isNotEmpty() && isGeminiTtsEnabled) {
+					ocrScope.launch {
+						val wavFile = withContext(Dispatchers.IO) {
+							synthesizeGeminiTts(lastNoteThai, isFemale, now)
+						}
+						if (wavFile != null && !isDestroyed && !isFinishing) {
+							enqueueGeminiAudio(wavFile)
+						} else if (!isDestroyed && !isFinishing) {
+							speakWithLocalTts(lastNoteThai, isFemale, now)
+						}
+					}
+				} else {
+					speakWithLocalTts(lastNoteThai, isFemale, now)
+				}
+			}
+			// Extend visibility while listening
+			uiVisibilityHandler.removeCallbacks(hideNoteCardRunnable)
+			uiVisibilityHandler.postDelayed(hideNoteCardRunnable, 20000)
+		}
+	}
+
+	private fun captureAndTranslateNote() {
+		val surfaceView = binding.surfaceView
+		if (surfaceView.holder?.surface?.isValid != true || surfaceView.width <= 100 || surfaceView.height <= 100) {
+			Toast.makeText(this, "ยังไม่พบภาพสตรีมสำหรับสแกน", Toast.LENGTH_SHORT).show()
+			return
+		}
+		if (isScanningNote) return
+
+		isScanningNote = true
+		binding.btnScanNoteFloat.text = "กำลังแปล..."
+		val fullBitmap = Bitmap.createBitmap(1920, 1080, Bitmap.Config.ARGB_8888)
+
+		try {
+			PixelCopy.request(surfaceView, fullBitmap, { copyResult ->
+				if (copyResult == PixelCopy.SUCCESS) {
+					try {
+						val cropLeftNorm = cropPrefs.getFloat("note_crop_left", 0.20f).coerceIn(0f, 0.85f)
+						val cropTopNorm = cropPrefs.getFloat("note_crop_top", 0.15f).coerceIn(0f, 0.90f)
+						val cropWidthNorm = cropPrefs.getFloat("note_crop_width", 0.60f).coerceIn(0.10f, 1f - cropLeftNorm)
+						val cropHeightNorm = cropPrefs.getFloat("note_crop_height", 0.65f).coerceIn(0.06f, 1f - cropTopNorm)
+
+						val cropX = (1920 * cropLeftNorm).toInt().coerceIn(0, 1919)
+						val cropY = (1080 * cropTopNorm).toInt().coerceIn(0, 1079)
+						val cropW = (1920 * cropWidthNorm).toInt().coerceIn(40, 1920 - cropX)
+						val cropH = (1080 * cropHeightNorm).toInt().coerceIn(30, 1080 - cropY)
+
+						val subBitmap = Bitmap.createBitmap(fullBitmap, cropX, cropY, cropW, cropH)
+						val image = InputImage.fromBitmap(subBitmap, 0)
+						textRecognizer.process(image)
+							.addOnSuccessListener { visionText ->
+								val blocks = visionText.textBlocks
+									.sortedWith(compareBy({ it.boundingBox?.top ?: 0 }, { it.boundingBox?.left ?: 0 }))
+									.mapNotNull { block ->
+										val t = block.text.trim().replace(Regex("\\s+"), " ")
+										if (t.length >= 2) t else null
+									}
+								val rawNote = blocks.joinToString("\n")
+								if (rawNote.isBlank()) {
+									isScanningNote = false
+									binding.btnScanNoteFloat.text = "แปลเฉพาะจุด"
+									Toast.makeText(this, "ไม่พบข้อความในกรอบเฉพาะจุด", Toast.LENGTH_SHORT).show()
+								} else {
+									ocrScope.launch {
+										try {
+											val thai = translateToThai(rawNote)
+											lastNoteEnglish = rawNote
+											lastNoteThai = thai
+											showNoteTranslationCard(rawNote, thai)
+										} finally {
+											isScanningNote = false
+											binding.btnScanNoteFloat.text = "แปลเฉพาะจุด"
+										}
+									}
+								}
+							}
+							.addOnFailureListener {
+								isScanningNote = false
+								binding.btnScanNoteFloat.text = "แปลเฉพาะจุด"
+							}
+							.addOnCompleteListener {
+								fullBitmap.recycle()
+								subBitmap.recycle()
+							}
+					} catch (_: Exception) {
+						isScanningNote = false
+						binding.btnScanNoteFloat.text = "แปลเฉพาะจุด"
+						fullBitmap.recycle()
+					}
+				} else {
+					isScanningNote = false
+					binding.btnScanNoteFloat.text = "แปลเฉพาะจุด"
+					fullBitmap.recycle()
+				}
+			}, Handler(Looper.getMainLooper()))
+		} catch (_: Exception) {
+			isScanningNote = false
+			binding.btnScanNoteFloat.text = "แปลเฉพาะจุด"
+			fullBitmap.recycle()
+		}
+	}
+
+	private fun showNoteTranslationCard(english: String, thai: String) {
+		uiVisibilityHandler.removeCallbacks(hideNoteCardRunnable)
+		binding.tvNoteThaiText.text = thai
+		binding.tvNoteOriginalText.text = english
+		binding.noteTranslationCard.isVisible = true
+
+		// In Text-Only fullscreen mode, shift subtitles to bottom temporarily so note card sits cleanly on top
+		val lp = binding.pureFullscreenInner.layoutParams as FrameLayout.LayoutParams
+		lp.gravity = Gravity.BOTTOM
+		binding.pureFullscreenInner.layoutParams = lp
+
+		uiVisibilityHandler.postDelayed(hideNoteCardRunnable, 20000)
+	}
+
+	private fun hideNoteTranslationCard() {
+		uiVisibilityHandler.removeCallbacks(hideNoteCardRunnable)
+		binding.noteTranslationCard.isVisible = false
+		val lp = binding.pureFullscreenInner.layoutParams as FrameLayout.LayoutParams
+		lp.gravity = Gravity.CENTER
+		binding.pureFullscreenInner.layoutParams = lp
 	}
 
 	private fun levenshteinDistance(s1: String, s2: String): Int {
@@ -1534,6 +1805,8 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		super.onDestroy()
 		uiVisibilityHandler.removeCallbacks(captureRunnable)
 		uiVisibilityHandler.removeCallbacks(hideMenuButtonRunnable)
+		uiVisibilityHandler.removeCallbacks(hideNoteCardRunnable)
+		uiVisibilityHandler.removeCallbacks(hideTopDrawerRunnable)
 		activeUtterances.clear()
 		stopGeminiAudioPlayback()
 		ocrScope.cancel()

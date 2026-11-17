@@ -649,10 +649,10 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		val alphaInt = (currentSubBgOpacity * 255 / 100).coerceIn(0, 255)
 		val bgDrawable = GradientDrawable().apply {
 			shape = GradientDrawable.RECTANGLE
-			cornerRadius = dpToPx(12).toFloat()
-			setColor(Color.argb(alphaInt, 6, 8, 16))
+			cornerRadius = dpToPx(18).toFloat()
+			setColor(Color.argb(alphaInt, 12, 18, 32))
 			if (alphaInt > 0) {
-				setStroke(dpToPx(1), Color.argb(40, 255, 255, 255))
+				setStroke(dpToPx(1), Color.argb(85, 255, 255, 255))
 			}
 		}
 		binding.subtitleOverlayContainer.background = bgDrawable
@@ -1041,13 +1041,26 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		updateQuickDrawerUI()
 		binding.topDrawerHandle.isVisible = false
 		binding.topQuickDrawerPanel.isVisible = true
-		binding.topQuickDrawerPanel.translationY = -dpToPx(60).toFloat()
+		binding.topQuickDrawerPanel.translationY = -dpToPx(64).toFloat()
+		binding.topQuickDrawerPanel.scaleX = 0.92f
+		binding.topQuickDrawerPanel.scaleY = 0.92f
 		binding.topQuickDrawerPanel.alpha = 0f
-		binding.topQuickDrawerPanel.animate()
-			.translationY(0f)
-			.alpha(1f)
-			.setDuration(180)
-			.start()
+		binding.topQuickDrawerPanel.animate().alpha(1f).setDuration(140).start()
+		SpringAnimation(binding.topQuickDrawerPanel, DynamicAnimation.TRANSLATION_Y, 0f).apply {
+			spring = SpringForce(0f).apply {
+				stiffness = 440f
+				dampingRatio = 0.66f
+			}
+			start()
+		}
+		SpringAnimation(binding.topQuickDrawerPanel, DynamicAnimation.SCALE_X, 1f).apply {
+			spring = SpringForce(1f).apply { stiffness = 480f; dampingRatio = 0.68f }
+			start()
+		}
+		SpringAnimation(binding.topQuickDrawerPanel, DynamicAnimation.SCALE_Y, 1f).apply {
+			spring = SpringForce(1f).apply { stiffness = 480f; dampingRatio = 0.68f }
+			start()
+		}
 		resetTopDrawerTimer()
 	}
 
@@ -1207,6 +1220,23 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		binding.tvNoteThaiText.text = thai
 		binding.tvNoteOriginalText.text = english
 		binding.noteTranslationCard.isVisible = true
+		binding.noteTranslationCard.alpha = 0f
+		binding.noteTranslationCard.scaleX = 0.92f
+		binding.noteTranslationCard.scaleY = 0.92f
+		binding.noteTranslationCard.translationY = -dpToPx(16).toFloat()
+		binding.noteTranslationCard.animate().alpha(1f).setDuration(150).start()
+		SpringAnimation(binding.noteTranslationCard, DynamicAnimation.TRANSLATION_Y, 0f).apply {
+			spring = SpringForce(0f).apply { stiffness = 440f; dampingRatio = 0.68f }
+			start()
+		}
+		SpringAnimation(binding.noteTranslationCard, DynamicAnimation.SCALE_X, 1f).apply {
+			spring = SpringForce(1f).apply { stiffness = 480f; dampingRatio = 0.65f }
+			start()
+		}
+		SpringAnimation(binding.noteTranslationCard, DynamicAnimation.SCALE_Y, 1f).apply {
+			spring = SpringForce(1f).apply { stiffness = 480f; dampingRatio = 0.65f }
+			start()
+		}
 
 		// In Text-Only fullscreen mode, shift subtitles to bottom temporarily so note card sits cleanly on top
 		val lp = binding.pureFullscreenInner.layoutParams as FrameLayout.LayoutParams
@@ -1231,25 +1261,30 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 
 		binding.menuPanelContainer.isVisible = true
 		binding.menuPanelContainer.alpha = 0f
-		binding.menuPanelContainer.animate().alpha(1f).setDuration(180).start()
+		binding.menuPanelContainer.animate().alpha(1f).setDuration(160).start()
 
 		binding.menuSheetContainer.post {
-			val startY = binding.menuSheetContainer.height.toFloat().coerceAtLeast(dpToPx(260).toFloat())
-			binding.menuSheetContainer.translationY = startY
-			binding.menuContentWrapper.translationY = startY * 0.14f
+			binding.menuSheetContainer.pivotX = binding.menuSheetContainer.width.toFloat()
+			binding.menuSheetContainer.pivotY = 0f
+			binding.menuSheetContainer.scaleX = 0.86f
+			binding.menuSheetContainer.scaleY = 0.86f
+			binding.menuSheetContainer.translationY = -dpToPx(18).toFloat()
+			binding.menuContentWrapper.translationY = -dpToPx(10).toFloat()
 
+			SpringAnimation(binding.menuSheetContainer, DynamicAnimation.SCALE_X, 1f).apply {
+				spring = SpringForce(1f).apply { stiffness = 460f; dampingRatio = 0.68f }
+				start()
+			}
+			SpringAnimation(binding.menuSheetContainer, DynamicAnimation.SCALE_Y, 1f).apply {
+				spring = SpringForce(1f).apply { stiffness = 460f; dampingRatio = 0.68f }
+				start()
+			}
 			SpringAnimation(binding.menuSheetContainer, DynamicAnimation.TRANSLATION_Y, 0f).apply {
-				spring = SpringForce(0f).apply {
-					stiffness = 420f
-					dampingRatio = 0.78f
-				}
+				spring = SpringForce(0f).apply { stiffness = 420f; dampingRatio = 0.70f }
 				start()
 			}
 			SpringAnimation(binding.menuContentWrapper, DynamicAnimation.TRANSLATION_Y, 0f).apply {
-				spring = SpringForce(0f).apply {
-					stiffness = 350f
-					dampingRatio = 0.58f
-				}
+				spring = SpringForce(0f).apply { stiffness = 350f; dampingRatio = 0.56f }
 				start()
 			}
 		}
@@ -1257,14 +1292,19 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 
 	private fun closeSettingsSheet() {
 		if (!binding.menuPanelContainer.isVisible) return
-		val targetY = binding.menuSheetContainer.height.toFloat().coerceAtLeast(dpToPx(260).toFloat())
-		binding.menuPanelContainer.animate().alpha(0f).setDuration(180).start()
+		binding.menuSheetContainer.pivotX = binding.menuSheetContainer.width.toFloat()
+		binding.menuSheetContainer.pivotY = 0f
+		binding.menuPanelContainer.animate().alpha(0f).setDuration(150).start()
 		binding.menuSheetContainer.animate()
-			.translationY(targetY)
-			.setDuration(200)
+			.scaleX(0.88f)
+			.scaleY(0.88f)
+			.translationY(-dpToPx(14).toFloat())
+			.setDuration(150)
 			.withEndAction {
 				binding.menuPanelContainer.isVisible = false
 				binding.menuPanelContainer.alpha = 1f
+				binding.menuSheetContainer.scaleX = 1f
+				binding.menuSheetContainer.scaleY = 1f
 				binding.menuSheetContainer.translationY = 0f
 				binding.menuContentWrapper.translationY = 0f
 				resetMenuButtonTimer()
@@ -1329,6 +1369,7 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 
 		attachLiquidGlassPressPhysics(binding.menuSheetContainer)
 		attachLiquidGlassPressPhysics(binding.topQuickDrawerPanel)
+		attachLiquidGlassPressPhysics(binding.btnMenuToggle)
 		attachLiquidGlassPressPhysics(binding.btnScanNoteFloat)
 		attachLiquidGlassPressPhysics(binding.btnSpeakNote)
 		attachLiquidGlassPressPhysics(binding.btnCloseNote)

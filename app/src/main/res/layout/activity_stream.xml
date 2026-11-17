@@ -426,6 +426,7 @@
         </LinearLayout>
 
         <ScrollView
+            android:id="@+id/noteScrollView"
             android:layout_width="match_parent"
             android:layout_height="wrap_content">
 
@@ -446,8 +447,7 @@
         android:layout_marginEnd="72dp"
         android:layout_marginBottom="18dp"
         android:background="@drawable/bg_circle_button"
-        android:src="@drawable/ic_crop_free"
-        app:tint="#FFFFFF"
+        android:src="@drawable/ic_translate_frame"
         android:contentDescription="แปลเฉพาะจุด"
         android:elevation="10dp"
         android:clickable="true"

@@ -1452,60 +1452,99 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 			binding.noteTranslationCard.y = dpToPx(40).toFloat()
 		}
 
-		// Render translated Thai blocks at their detected English boundingBox positions (no English clutter)
+		// Render translated Thai blocks: compact stacked at top in Text-Only mode, or positional in normal mode
 		binding.notePositionalCanvas.removeAllViews()
 		val innerW = (targetW - dpToPx(28)).coerceAtLeast(dpToPx(180))
-		val scaleRatio = if (bmpW > 0) innerW.toFloat() / bmpW.toFloat() else 1f
-		val placedRects = mutableListOf<Rect>()
-		var maxCanvasBottom = dpToPx(48)
+		var maxCanvasBottom = dpToPx(40)
 
-		for (item in blocks) {
-			if (item.thai.isBlank()) continue
-			val leftPx = (item.rect.left * scaleRatio).toInt().coerceIn(0, (innerW - dpToPx(80)).coerceAtLeast(0))
-			var topPx = (item.rect.top * scaleRatio).toInt().coerceAtLeast(0)
-			val maxW = (innerW - leftPx).coerceAtLeast(dpToPx(90))
-			val boxHeightPx = (item.rect.height() * scaleRatio).toInt()
-			val textSp = (boxHeightPx / resources.displayMetrics.density * 0.52f).coerceIn(13f, 18f)
-
-			val tv = android.widget.TextView(this).apply {
-				text = item.thai
-				setTextColor(Color.WHITE)
-				setTextSize(TypedValue.COMPLEX_UNIT_SP, textSp)
-				setTypeface(typeface, android.graphics.Typeface.BOLD)
-				setLineSpacing(dpToPx(2).toFloat(), 1.05f)
-				maxWidth = maxW
+		if (isTextOnlyMode) {
+			var curTop = 0
+			for (item in blocks) {
+				if (item.thai.isBlank()) continue
+				val tv = android.widget.TextView(this).apply {
+					text = item.thai
+					setTextColor(Color.WHITE)
+					setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+					setTypeface(typeface, android.graphics.Typeface.BOLD)
+					setLineSpacing(dpToPx(2).toFloat(), 1.08f)
+					maxWidth = innerW
+				}
+				tv.measure(
+					View.MeasureSpec.makeMeasureSpec(innerW, View.MeasureSpec.AT_MOST),
+					View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+				)
+				val lp = FrameLayout.LayoutParams(
+					FrameLayout.LayoutParams.WRAP_CONTENT,
+					FrameLayout.LayoutParams.WRAP_CONTENT
+				).apply {
+					leftMargin = 0
+					topMargin = curTop
+				}
+				binding.notePositionalCanvas.addView(tv, lp)
+				curTop += tv.measuredHeight + dpToPx(6)
 			}
+			maxCanvasBottom = curTop.coerceAtLeast(dpToPx(40))
+		} else {
+			val scaleRatio = if (bmpW > 0) innerW.toFloat() / bmpW.toFloat() else 1f
+			val placedRects = mutableListOf<Rect>()
 
-			tv.measure(
-				View.MeasureSpec.makeMeasureSpec(maxW, View.MeasureSpec.AT_MOST),
-				View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
-			)
-			val measuredW = tv.measuredWidth.coerceAtLeast(dpToPx(24))
-			val measuredH = tv.measuredHeight.coerceAtLeast(dpToPx(18))
+			for (item in blocks) {
+				if (item.thai.isBlank()) continue
+				val leftPx = (item.rect.left * scaleRatio).toInt().coerceIn(0, (innerW - dpToPx(80)).coerceAtLeast(0))
+				var topPx = (item.rect.top * scaleRatio).toInt().coerceAtLeast(0)
+				val maxW = (innerW - leftPx).coerceAtLeast(dpToPx(90))
+				val boxHeightPx = (item.rect.height() * scaleRatio).toInt()
+				val textSp = (boxHeightPx / resources.displayMetrics.density * 0.52f).coerceIn(13f, 18f)
 
-			// Avoid vertical overlap with any previously placed block on the same horizontal band
-			for (prev in placedRects) {
-				val horizOverlap = leftPx < prev.right && (leftPx + measuredW) > prev.left
-				if (horizOverlap && topPx < prev.bottom + dpToPx(4)) {
-					topPx = prev.bottom + dpToPx(4)
+				val tv = android.widget.TextView(this).apply {
+					text = item.thai
+					setTextColor(Color.WHITE)
+					setTextSize(TypedValue.COMPLEX_UNIT_SP, textSp)
+					setTypeface(typeface, android.graphics.Typeface.BOLD)
+					setLineSpacing(dpToPx(2).toFloat(), 1.05f)
+					maxWidth = maxW
+				}
+
+				tv.measure(
+					View.MeasureSpec.makeMeasureSpec(maxW, View.MeasureSpec.AT_MOST),
+					View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+				)
+				val measuredW = tv.measuredWidth.coerceAtLeast(dpToPx(24))
+				val measuredH = tv.measuredHeight.coerceAtLeast(dpToPx(18))
+
+				for (prev in placedRects) {
+					val horizOverlap = leftPx < prev.right && (leftPx + measuredW) > prev.left
+					if (horizOverlap && topPx < prev.bottom + dpToPx(4)) {
+						topPx = prev.bottom + dpToPx(4)
+					}
+				}
+
+				val lp = FrameLayout.LayoutParams(
+					FrameLayout.LayoutParams.WRAP_CONTENT,
+					FrameLayout.LayoutParams.WRAP_CONTENT
+				).apply {
+					leftMargin = leftPx
+					topMargin = topPx
+				}
+				binding.notePositionalCanvas.addView(tv, lp)
+				val finalRect = Rect(leftPx, topPx, leftPx + measuredW, topPx + measuredH)
+				placedRects.add(finalRect)
+				if (finalRect.bottom > maxCanvasBottom) {
+					maxCanvasBottom = finalRect.bottom
 				}
 			}
-
-			val lp = FrameLayout.LayoutParams(
-				FrameLayout.LayoutParams.WRAP_CONTENT,
-				FrameLayout.LayoutParams.WRAP_CONTENT
-			).apply {
-				leftMargin = leftPx
-				topMargin = topPx
-			}
-			binding.notePositionalCanvas.addView(tv, lp)
-			val finalRect = Rect(leftPx, topPx, leftPx + measuredW, topPx + measuredH)
-			placedRects.add(finalRect)
-			if (finalRect.bottom > maxCanvasBottom) {
-				maxCanvasBottom = finalRect.bottom
-			}
 		}
-		binding.notePositionalCanvas.minimumHeight = (maxCanvasBottom + dpToPx(8)).coerceAtLeast(dpToPx(48))
+
+		binding.notePositionalCanvas.minimumHeight = (maxCanvasBottom + dpToPx(8)).coerceAtLeast(dpToPx(40))
+		// Cap ScrollView height so card never overflows screen or covers bottom subtitles in DeX/Text-Only mode
+		val maxScrollH = if (isTextOnlyMode) {
+			(parentH * 0.40f).toInt().coerceAtLeast(dpToPx(120))
+		} else {
+			(parentH - binding.noteTranslationCard.y.toInt() - dpToPx(84)).coerceAtLeast(dpToPx(120))
+		}
+		val scrollLp = binding.noteScrollView.layoutParams
+		scrollLp.height = if (maxCanvasBottom + dpToPx(12) > maxScrollH) maxScrollH else android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+		binding.noteScrollView.layoutParams = scrollLp
 
 		binding.noteTranslationCard.isVisible = true
 		binding.noteTranslationCard.alpha = 0f

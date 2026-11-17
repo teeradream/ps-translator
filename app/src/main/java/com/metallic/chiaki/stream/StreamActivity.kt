@@ -1248,11 +1248,15 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		binding.btnScanNoteFloat.alpha = 0.45f
 		val wasTextOnlyVisible = isTextOnlyMode && binding.pureFullscreenLayout.isVisible
 		val wasNoteCardVisible = binding.noteTranslationCard.isVisible
+		val wasFloatingBoxVisible = binding.floatingNoteCropBox.isVisible
 		if (wasTextOnlyVisible) {
 			binding.pureFullscreenLayout.visibility = View.INVISIBLE
 		}
 		if (wasNoteCardVisible) {
 			binding.noteTranslationCard.visibility = View.INVISIBLE
+		}
+		if (wasFloatingBoxVisible) {
+			binding.floatingNoteCropBox.visibility = View.INVISIBLE
 		}
 
 		val runPixelCopy = {
@@ -1264,6 +1268,9 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 					}
 					if (wasNoteCardVisible && lastNoteThai.isNotEmpty()) {
 						binding.noteTranslationCard.visibility = View.VISIBLE
+					}
+					if (wasFloatingBoxVisible && isNoteCropBoxVisible && !isTextOnlyMode) {
+						binding.floatingNoteCropBox.visibility = View.VISIBLE
 					}
 					if (copyResult == PixelCopy.SUCCESS) {
 					try {
@@ -1332,13 +1339,16 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 				if (wasTextOnlyVisible && isTextOnlyMode) {
 					binding.pureFullscreenLayout.visibility = View.VISIBLE
 				}
+				if (wasFloatingBoxVisible && isNoteCropBoxVisible && !isTextOnlyMode) {
+					binding.floatingNoteCropBox.visibility = View.VISIBLE
+				}
 				isScanningNote = false
 				binding.btnScanNoteFloat.alpha = 1.0f
 				fullBitmap.recycle()
 			}
 		}
 
-		if (wasTextOnlyVisible || wasNoteCardVisible) {
+		if (wasTextOnlyVisible || wasNoteCardVisible || wasFloatingBoxVisible) {
 			uiVisibilityHandler.postDelayed(runPixelCopy, 40)
 		} else {
 			runPixelCopy()

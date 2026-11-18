@@ -107,6 +107,7 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 	private var lastSpokenTimeMs = 0L
 	private lateinit var cropPrefs: SharedPreferences
 	private var isFilterShortTextEnabled = true
+	private var isSkipSpeakerNameInTts = true
 	private var speechSpeedRate = 1.25f
 
 	// Gemini API settings (for natural translation & AI voice dubbing)
@@ -257,13 +258,17 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 
 		// TTS voice switch (persisted)
 		isTtsEnabled = cropPrefs.getBoolean("tts_voice_enabled", false)
+		isSkipSpeakerNameInTts = cropPrefs.getBoolean("skip_speaker_name_tts", true)
 		binding.ttsVoiceSwitch.isChecked = isTtsEnabled
+		binding.skipSpeakerNameInTtsSwitch.isChecked = isSkipSpeakerNameInTts
+		binding.skipSpeakerNameInTtsSwitch.isVisible = isTtsEnabled
 		binding.voiceGenderContainer.isVisible = isTtsEnabled
 		binding.speechSpeedContainer.isVisible = isTtsEnabled
 		binding.ttsQueueModeContainer.isVisible = isTtsEnabled
 		binding.ttsVoiceSwitch.setOnCheckedChangeListener { _, isChecked ->
 			isTtsEnabled = isChecked
 			cropPrefs.edit().putBoolean("tts_voice_enabled", isChecked).apply()
+			binding.skipSpeakerNameInTtsSwitch.isVisible = isChecked
 			binding.voiceGenderContainer.isVisible = isChecked
 			binding.speechSpeedContainer.isVisible = isChecked
 			binding.ttsQueueModeContainer.isVisible = isChecked
@@ -272,6 +277,11 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 				tts?.stop()
 				stopGeminiAudioPlayback()
 			}
+		}
+
+		binding.skipSpeakerNameInTtsSwitch.setOnCheckedChangeListener { _, isChecked ->
+			isSkipSpeakerNameInTts = isChecked
+			cropPrefs.edit().putBoolean("skip_speaker_name_tts", isChecked).apply()
 		}
 
 		val savedVoiceMode = cropPrefs.getString("voice_gender_mode", VoiceGenderMode.AUTO_AI.name)
@@ -2055,21 +2065,35 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 			VoiceGenderMode.MALE -> false
 		}
 
+		val spokenThai = if (isSkipSpeakerNameInTts) {
+			stripSpeakerPrefix(thaiText)
+		} else {
+			thaiText
+		}
+
 		if (geminiApiKey.isNotEmpty() && isGeminiTtsEnabled) {
 			ocrScope.launch {
 				val wavFile = withContext(Dispatchers.IO) {
-					synthesizeGeminiTts(thaiText, isFemale, now)
+					synthesizeGeminiTts(spokenThai, isFemale, now)
 				}
 				if (wavFile != null && isTtsEnabled && !isDestroyed && !isFinishing) {
 					enqueueGeminiAudio(wavFile)
 				} else if (isTtsEnabled && !isDestroyed && !isFinishing) {
-					speakWithLocalTts(thaiText, isFemale, now)
+					speakWithLocalTts(spokenThai, isFemale, now)
 				}
 			}
 			return
 		}
 
-		speakWithLocalTts(thaiText, isFemale, now)
+		speakWithLocalTts(spokenThai, isFemale, now)
+	}
+
+	private fun stripSpeakerPrefix(text: String): String {
+		val stripped = text
+			.replace(Regex("^\\[[^\\]]{1,26}\\]\\s*"), "")
+			.replace(Regex("^[^:\\n]{1,26}:\\s*"), "")
+			.trim()
+		return if (stripped.isNotEmpty()) stripped else text
 	}
 
 	private fun synthesizeGeminiTts(thaiText: String, isFemale: Boolean, timestamp: Long): java.io.File? {

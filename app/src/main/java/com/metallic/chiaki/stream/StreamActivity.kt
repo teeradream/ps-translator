@@ -278,14 +278,12 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		isSkipSpeakerNameInTts = cropPrefs.getBoolean("skip_speaker_name_tts", true)
 		binding.ttsVoiceSwitch.isChecked = isTtsEnabled
 		binding.skipSpeakerNameInTtsSwitch.isChecked = isSkipSpeakerNameInTts
-		binding.skipSpeakerNameInTtsSwitch.isVisible = isTtsEnabled
 		binding.voiceGenderContainer.isVisible = isTtsEnabled
 		binding.speechSpeedContainer.isVisible = isTtsEnabled
 		binding.ttsQueueModeContainer.isVisible = isTtsEnabled
 		binding.ttsVoiceSwitch.setOnCheckedChangeListener { _, isChecked ->
 			isTtsEnabled = isChecked
 			cropPrefs.edit().putBoolean("tts_voice_enabled", isChecked).apply()
-			binding.skipSpeakerNameInTtsSwitch.isVisible = isChecked
 			binding.voiceGenderContainer.isVisible = isChecked
 			binding.speechSpeedContainer.isVisible = isChecked
 			binding.ttsQueueModeContainer.isVisible = isChecked
@@ -495,7 +493,9 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 										android.util.Log.d("PSTranslatorOCR", "Detected dialogue: $text")
 										ocrScope.launch {
 											try {
-												val thai = translateToThai(text)
+												val englishForTranslate = if (isSkipSpeakerNameInTts) stripSpeakerPrefix(text) else text
+												val rawThai = translateToThai(englishForTranslate)
+												val thai = if (isSkipSpeakerNameInTts) stripSpeakerPrefix(rawThai) else rawThai
 												android.util.Log.d("PSTranslatorOCR", "Translated text: $thai")
 												val isDuplicateThai = isSimilarThai(thai, lastTranslatedThai) ||
 													subtitleHistory.take(2).any { isSimilarThai(thai, it.thai) }
@@ -503,7 +503,7 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 													lastTranslatedEnglish = text
 													lastTranslatedThai = thai
 													// Prepend newest subtitle at top
-													subtitleHistory.add(0, SubtitleHistoryItem(text, thai))
+													subtitleHistory.add(0, SubtitleHistoryItem(englishForTranslate, thai))
 													while (subtitleHistory.size > maxHistoryLines) {
 														subtitleHistory.removeAt(subtitleHistory.size - 1)
 													}
@@ -2284,8 +2284,10 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 
 	private fun stripSpeakerPrefix(text: String): String {
 		val stripped = text
-			.replace(Regex("^\\[[^\\]]{1,26}\\]\\s*"), "")
-			.replace(Regex("^[^:\\n]{1,26}:\\s*"), "")
+			.replace(Regex("^\\[[^\\]]{1,28}\\]\\s*"), "")
+			.replace(Regex("^\\([^)]{1,28}\\)\\s*"), "")
+			.replace(Regex("^[^:\\uFF1A\\n]{1,28}[:\\uFF1A]\\s*"), "")
+			.replace(Regex("^[A-Z][A-Za-z0-9\\s'.]{0,22}\\s-\\s+"), "")
 			.trim()
 		return if (stripped.isNotEmpty()) stripped else text
 	}

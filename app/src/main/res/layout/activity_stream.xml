@@ -1396,11 +1396,10 @@
                         android:id="@+id/skipSpeakerNameInTtsSwitch"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="ตัดชื่อตัวละครหน้า : (ไม่อ่านชื่อตอนพากย์)"
+                        android:text="ตัดชื่อตัวละครหน้าข้อความ (ไม่โชว์และไม่อ่านชื่อ)"
                         android:textColor="#CCCCCC"
                         android:textSize="13sp"
                         android:checked="true"
-                        android:visibility="gone"
                         android:layout_marginBottom="8dp"/>
 
                     <!-- Voice Gender Mode Selection (visible when TTS is enabled) -->

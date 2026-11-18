@@ -101,6 +101,7 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 	private var isCapturing = false
 	private var isTranslating = false
 	private var pendingOcrEnglish = ""
+	private var queuedLatestEnglish = ""
 	private var lastTranslatedEnglish = ""
 	private var lastTranslatedThai = ""
 	private var lastSpokenThai = ""
@@ -179,7 +180,7 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 			if (viewModel.session.state.value == StreamStateConnected && !isCapturing) {
 				captureAndProcessSubtitle()
 			}
-			uiVisibilityHandler.postDelayed(this, 600)
+			uiVisibilityHandler.postDelayed(this, 350)
 		}
 	}
 
@@ -450,6 +451,43 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		}
 	}
 
+	private fun startSubtitleTranslation(text: String) {
+		isTranslating = true
+		pendingOcrEnglish = text
+		android.util.Log.d("PSTranslatorOCR", "Detected dialogue: $text")
+		ocrScope.launch {
+			try {
+				val englishForTranslate = if (isSkipSpeakerNameInTts) stripSpeakerPrefix(text) else text
+				val rawThai = translateToThai(englishForTranslate)
+				val thai = if (isSkipSpeakerNameInTts) stripSpeakerPrefix(rawThai) else rawThai
+				android.util.Log.d("PSTranslatorOCR", "Translated text: $thai")
+				val isDuplicateThai = isSimilarThai(thai, lastTranslatedThai) ||
+					subtitleHistory.take(2).any { isSimilarThai(thai, it.thai) }
+				if (!isDuplicateThai) {
+					lastTranslatedEnglish = text
+					lastTranslatedThai = thai
+					subtitleHistory.add(0, SubtitleHistoryItem(englishForTranslate, thai))
+					while (subtitleHistory.size > maxHistoryLines) {
+						subtitleHistory.removeAt(subtitleHistory.size - 1)
+					}
+					renderSubtitles()
+					if (isTtsEnabled) {
+						speakTranslation(text, thai)
+					}
+				}
+			} finally {
+				isTranslating = false
+				val next = queuedLatestEnglish
+				if (next.isNotEmpty()) {
+					queuedLatestEnglish = ""
+					if (!isSimilarText(next, lastTranslatedEnglish)) {
+						startSubtitleTranslation(next)
+					}
+				}
+			}
+		}
+	}
+
 	private fun captureAndProcessSubtitle() {
 		val surfaceView = binding.surfaceView
 		if (surfaceView.holder?.surface?.isValid != true) return
@@ -484,37 +522,16 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 								val text = fixedText.replace(Regex("\\s+"), " ").trim()
 								if (text.isNotEmpty() && isDialogueSubtitle(text)) {
 									val isDuplicateOfPending = isTranslating && isSimilarText(text, pendingOcrEnglish)
+									val isDuplicateOfQueued = queuedLatestEnglish.isNotEmpty() && isSimilarText(text, queuedLatestEnglish)
 									val isDuplicateOfLast = isSimilarText(text, lastTranslatedEnglish)
 									val isDuplicateOfRecent = subtitleHistory.take(2).any { isSimilarText(text, it.english) }
 
-									if (!isTranslating && !isDuplicateOfPending && !isDuplicateOfLast && !isDuplicateOfRecent) {
-										isTranslating = true
-										pendingOcrEnglish = text
-										android.util.Log.d("PSTranslatorOCR", "Detected dialogue: $text")
-										ocrScope.launch {
-											try {
-												val englishForTranslate = if (isSkipSpeakerNameInTts) stripSpeakerPrefix(text) else text
-												val rawThai = translateToThai(englishForTranslate)
-												val thai = if (isSkipSpeakerNameInTts) stripSpeakerPrefix(rawThai) else rawThai
-												android.util.Log.d("PSTranslatorOCR", "Translated text: $thai")
-												val isDuplicateThai = isSimilarThai(thai, lastTranslatedThai) ||
-													subtitleHistory.take(2).any { isSimilarThai(thai, it.thai) }
-												if (!isDuplicateThai) {
-													lastTranslatedEnglish = text
-													lastTranslatedThai = thai
-													// Prepend newest subtitle at top
-													subtitleHistory.add(0, SubtitleHistoryItem(englishForTranslate, thai))
-													while (subtitleHistory.size > maxHistoryLines) {
-														subtitleHistory.removeAt(subtitleHistory.size - 1)
-													}
-													renderSubtitles()
-													if (isTtsEnabled) {
-														speakTranslation(text, thai)
-													}
-												}
-											} finally {
-												isTranslating = false
-											}
+									if (!isDuplicateOfPending && !isDuplicateOfQueued && !isDuplicateOfLast && !isDuplicateOfRecent) {
+										if (isTranslating) {
+											// Queue newest subtitle immediately instead of dropping it
+											queuedLatestEnglish = text
+										} else {
+											startSubtitleTranslation(text)
 										}
 									}
 								}

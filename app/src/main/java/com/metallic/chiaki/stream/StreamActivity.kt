@@ -69,6 +69,8 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 	private lateinit var binding: ActivityStreamBinding
 
 	private val uiVisibilityHandler = Handler(Looper.getMainLooper())
+	private val ocrHandlerThread = android.os.HandlerThread("PS-OCR-Thread").apply { start() }
+	private val ocrHandler by lazy { Handler(ocrHandlerThread.looper) }
 	private val ocrScope = CoroutineScope(Dispatchers.Main + Job())
 	private val textRecognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
 
@@ -499,7 +501,6 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 
 		try {
 			PixelCopy.request(surfaceView, fullBitmap, { copyResult ->
-				isCapturing = false
 				if (copyResult == PixelCopy.SUCCESS) {
 					try {
 						val cropLeftNorm = cropPrefs.getFloat("crop_left", 0.18f).coerceIn(0f, 0.85f)
@@ -513,8 +514,17 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 						val cropH = (1080 * cropHeightNorm).toInt().coerceIn(30, 1080 - cropY)
 
 						val subBitmap = Bitmap.createBitmap(fullBitmap, cropX, cropY, cropW, cropH)
-						val scaledSub = Bitmap.createScaledBitmap(subBitmap, cropW * 2, cropH * 2, true)
-						val image = InputImage.fromBitmap(scaledSub, 0)
+						fullBitmap.recycle()
+
+						val ocrBitmap = if (cropW < 700) {
+							val scaled = Bitmap.createScaledBitmap(subBitmap, cropW * 2, cropH * 2, true)
+							subBitmap.recycle()
+							scaled
+						} else {
+							subBitmap
+						}
+
+						val image = InputImage.fromBitmap(ocrBitmap, 0)
 						textRecognizer.process(image)
 							.addOnSuccessListener { visionText ->
 								val rawText = visionText.text.trim().replace("\n", " ")
@@ -539,14 +549,23 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 							.addOnFailureListener { e ->
 								android.util.Log.e("PSTranslatorOCR", "OCR recognition error", e)
 							}
+							.addOnCompleteListener {
+								ocrBitmap.recycle()
+								isCapturing = false
+							}
 					} catch (e: Exception) {
+						fullBitmap.recycle()
+						isCapturing = false
 						android.util.Log.e("PSTranslatorOCR", "Bitmap processing error", e)
 					}
 				} else {
+					fullBitmap.recycle()
+					isCapturing = false
 					android.util.Log.w("PSTranslatorOCR", "PixelCopy failed with status: $copyResult")
 				}
-			}, Handler(Looper.getMainLooper()))
+			}, ocrHandler)
 		} catch (e: Exception) {
+			fullBitmap.recycle()
 			isCapturing = false
 			android.util.Log.e("PSTranslatorOCR", "PixelCopy request error", e)
 		}
@@ -2557,6 +2576,7 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		activeUtterances.clear()
 		stopGeminiAudioPlayback()
 		ocrScope.cancel()
+		ocrHandlerThread.quitSafely()
 		tts?.stop()
 		tts?.shutdown()
 	}

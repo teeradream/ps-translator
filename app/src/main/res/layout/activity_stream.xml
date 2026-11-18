@@ -22,6 +22,16 @@
             android:layout_height="wrap_content"/>
     </com.metallic.chiaki.stream.AspectRatioFrameLayout>
 
+    <!-- Live Auto AR Full-Screen Green-Box Translation Overlay (non-blocking, excludes subtitle box) -->
+    <FrameLayout
+        android:id="@+id/arOverlayContainer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:elevation="4dp"
+        android:visibility="gone"
+        android:clickable="false"
+        android:focusable="false"/>
+
     <ProgressBar
         android:id="@+id/progressBar"
         android:layout_width="wrap_content"
@@ -555,6 +565,20 @@
             android:textStyle="bold"
             android:textColor="#FFFFFF"
             app:strokeColor="#66FFFFFF"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:layout_marginEnd="6dp"/>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnQuickArMode"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:text="โหมด: เฉพาะจุด"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:textColor="#00E5FF"
+            app:strokeColor="#00E5FF"
             android:insetTop="0dp"
             android:insetBottom="0dp"/>
     </LinearLayout>
@@ -1620,6 +1644,53 @@
                         app:iconTint="#00E676"
                         app:strokeColor="#00E676"
                         android:layout_marginBottom="8dp"/>
+
+                    <!-- Extra Screen Translation Mode Toggle (Spot Button vs Auto AR Green Boxes) -->
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="โหมดแปลข้อความอื่นๆ (นอกเหนือจากซับ):"
+                        android:textColor="#AAAAAA"
+                        android:textSize="12sp"
+                        android:layout_marginBottom="4dp"/>
+
+                    <com.google.android.material.button.MaterialButtonToggleGroup
+                        android:id="@+id/extraTranslateModeToggleGroup"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        app:singleSelection="true"
+                        app:selectionRequired="true"
+                        app:checkedButton="@id/btnModeSpot"
+                        android:layout_marginBottom="10dp">
+
+                        <com.google.android.material.button.MaterialButton
+                            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                            android:id="@+id/btnModeSpot"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="แปลเฉพาะจุด (ปุ่ม)"
+                            android:textSize="11sp"
+                            android:textStyle="bold"
+                            android:textColor="@color/toggle_btn_text_color"
+                            app:backgroundTint="@color/toggle_btn_bg_tint"
+                            app:strokeColor="@color/toggle_btn_stroke_color"
+                            app:strokeWidth="1.5dp"/>
+
+                        <com.google.android.material.button.MaterialButton
+                            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                            android:id="@+id/btnModeAutoAr"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="ทั้งจออัตโนมัติ (กรอบเขียว)"
+                            android:textSize="11sp"
+                            android:textStyle="bold"
+                            android:textColor="@color/toggle_btn_text_color"
+                            app:backgroundTint="@color/toggle_btn_bg_tint"
+                            app:strokeColor="@color/toggle_btn_stroke_color"
+                            app:strokeWidth="1.5dp"/>
+                    </com.google.android.material.button.MaterialButtonToggleGroup>
 
                     <!-- Adjust Note/Tutorial Crop Box Button -->
                     <com.google.android.material.button.MaterialButton

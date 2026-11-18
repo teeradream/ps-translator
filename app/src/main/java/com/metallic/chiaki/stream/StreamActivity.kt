@@ -123,12 +123,29 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		var thai: String = ""
 	)
 
-	// On-demand Note/Tutorial Crop Box & Top Quick Drawer
+	// On-demand Note/Tutorial Crop Box & Top Quick Drawer & Auto AR Mode
 	private var isEditingNoteCrop = false
 	private var isNoteCropBoxVisible = false
 	private var isScanningNote = false
+	private var isAutoArMode = false
+	private var isScanningAr = false
+	private var lastArSnapshot = ""
 	private var lastNoteThai = ""
 	private var lastNoteEnglish = ""
+
+	private val arScanRunnable = object : Runnable {
+		override fun run() {
+			if (isAutoArMode && viewModel.session.state.value == StreamStateConnected &&
+				!isTextOnlyMode && !isScanningNote && !isScanningAr &&
+				!binding.cropEditorOverlay.isVisible && !binding.menuPanelContainer.isVisible
+			) {
+				captureAndRenderAutoAr()
+			}
+			if (isAutoArMode) {
+				uiVisibilityHandler.postDelayed(this, 2000)
+			}
+		}
+	}
 
 	private val hideNoteCardRunnable = Runnable {
 		if (::binding.isInitialized && !isDestroyed && !isFinishing) {
@@ -402,14 +419,16 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 			binding.aspectRatioLayout.visibility = View.VISIBLE
 			binding.subtitleOverlayContainer.isVisible = false
 			binding.floatingNoteCropBox.isVisible = false
+			binding.arOverlayContainer.isVisible = false
 			binding.btnTextOnlyMode.text = "สลับเป็นโหมดสตรีมภาพ"
 			binding.btnTextOnlyFloat.setColorFilter(Color.parseColor("#00E5FF"))
 		} else {
 			binding.pureFullscreenLayout.isVisible = false
 			binding.aspectRatioLayout.visibility = View.VISIBLE
 			binding.subtitleOverlayContainer.isVisible = isSubtitleEnabled && subtitleHistory.isNotEmpty()
-			binding.floatingNoteCropBox.isVisible = isNoteCropBoxVisible
-			if (isNoteCropBoxVisible) syncFloatingNoteCropBox()
+			binding.floatingNoteCropBox.isVisible = !isAutoArMode && isNoteCropBoxVisible
+			if (!isAutoArMode && isNoteCropBoxVisible) syncFloatingNoteCropBox()
+			binding.arOverlayContainer.isVisible = isAutoArMode
 			binding.btnTextOnlyMode.text = "โหมดโชว์เฉพาะตัวหนังสือ (จอดำ)"
 			binding.btnTextOnlyFloat.setColorFilter(Color.parseColor("#FFFFFF"))
 		}
@@ -1059,7 +1078,16 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		}
 
 		binding.btnQuickNoteBox.setOnClickListener {
+			if (isAutoArMode) {
+				setAutoArMode(false)
+			}
 			setFloatingNoteCropBoxVisible(!isNoteCropBoxVisible)
+			updateQuickDrawerUI()
+			resetTopDrawerTimer()
+		}
+
+		binding.btnQuickArMode.setOnClickListener {
+			setAutoArMode(!isAutoArMode)
 			updateQuickDrawerUI()
 			resetTopDrawerTimer()
 		}
@@ -1128,15 +1156,23 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		binding.btnQuickNoteBox.text = if (isNoteCropBoxVisible) "กรอบ: แสดง" else "กรอบ: ซ่อน"
 		binding.btnQuickNoteBox.setTextColor(Color.parseColor(if (isNoteCropBoxVisible) "#00E5FF" else "#FFFFFF"))
 		binding.btnQuickNoteBox.strokeColor = android.content.res.ColorStateList.valueOf(Color.parseColor(if (isNoteCropBoxVisible) "#00E5FF" else "#66FFFFFF"))
+
+		binding.btnQuickArMode.text = if (isAutoArMode) "โหมด: กรอบเขียว" else "โหมด: เฉพาะจุด"
+		binding.btnQuickArMode.setTextColor(Color.parseColor(if (isAutoArMode) "#00E676" else "#00E5FF"))
+		binding.btnQuickArMode.strokeColor = android.content.res.ColorStateList.valueOf(Color.parseColor(if (isAutoArMode) "#00E676" else "#00E5FF"))
 	}
 
 	@SuppressLint("ClickableViewAccessibility")
 	private fun setupNoteTranslationFeature() {
 		isNoteCropBoxVisible = cropPrefs.getBoolean("note_crop_visible", false)
-		if (isNoteCropBoxVisible && !isTextOnlyMode) {
-			binding.floatingNoteCropBox.isVisible = true
-			syncFloatingNoteCropBox()
+		isAutoArMode = cropPrefs.getBoolean("auto_ar_mode", false)
+		binding.extraTranslateModeToggleGroup.check(if (isAutoArMode) R.id.btnModeAutoAr else R.id.btnModeSpot)
+		binding.extraTranslateModeToggleGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
+			if (isChecked) {
+				setAutoArMode(checkedId == R.id.btnModeAutoAr)
+			}
 		}
+		applyExtraTranslateModeUI()
 
 		binding.btnScanNoteFloat.setOnClickListener {
 			captureAndTranslateNote()
@@ -1576,6 +1612,164 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		binding.pureFullscreenInner.layoutParams = lp
 
 		uiVisibilityHandler.postDelayed(hideNoteCardRunnable, 20000)
+	}
+
+	private fun setAutoArMode(enable: Boolean) {
+		isAutoArMode = enable
+		cropPrefs.edit().putBoolean("auto_ar_mode", enable).apply()
+		binding.extraTranslateModeToggleGroup.check(if (enable) R.id.btnModeAutoAr else R.id.btnModeSpot)
+		applyExtraTranslateModeUI()
+	}
+
+	private fun applyExtraTranslateModeUI() {
+		uiVisibilityHandler.removeCallbacks(arScanRunnable)
+		if (isAutoArMode) {
+			// Auto AR Green-Box mode: hide floating spot translate icon & spot box
+			binding.btnScanNoteFloat.isVisible = false
+			binding.floatingNoteCropBox.isVisible = false
+			hideNoteTranslationCard()
+			binding.arOverlayContainer.isVisible = !isTextOnlyMode
+			uiVisibilityHandler.postDelayed(arScanRunnable, 600)
+		} else {
+			// On-demand Spot Translation mode: show floating translate icon
+			binding.arOverlayContainer.removeAllViews()
+			binding.arOverlayContainer.isVisible = false
+			lastArSnapshot = ""
+			binding.btnScanNoteFloat.isVisible = true
+			binding.floatingNoteCropBox.isVisible = isNoteCropBoxVisible && !isTextOnlyMode
+			if (isNoteCropBoxVisible && !isTextOnlyMode) {
+				syncFloatingNoteCropBox()
+			}
+		}
+		updateQuickDrawerUI()
+	}
+
+	private fun captureAndRenderAutoAr() {
+		val surfaceView = binding.surfaceView
+		if (surfaceView.holder?.surface?.isValid != true || surfaceView.width <= 100 || surfaceView.height <= 100) return
+		if (isScanningAr || isScanningNote) return
+
+		isScanningAr = true
+		val fullBitmap = Bitmap.createBitmap(1920, 1080, Bitmap.Config.ARGB_8888)
+		try {
+			PixelCopy.request(surfaceView, fullBitmap, { copyResult ->
+				if (copyResult == PixelCopy.SUCCESS && isAutoArMode && !isTextOnlyMode) {
+					val subLeft = cropPrefs.getFloat("crop_left", 0.18f) * 1920f
+					val subTop = cropPrefs.getFloat("crop_top", 0.72f) * 1080f
+					val subRight = subLeft + cropPrefs.getFloat("crop_width", 0.64f) * 1920f
+					val subBottom = subTop + cropPrefs.getFloat("crop_height", 0.22f) * 1080f
+
+					val image = InputImage.fromBitmap(fullBitmap, 0)
+					textRecognizer.process(image)
+						.addOnSuccessListener { visionText ->
+							val blocks = visionText.textBlocks.mapNotNull { block ->
+								val t = block.text.trim().replace(Regex("\\s+"), " ")
+								val box = block.boundingBox
+								if (t.length >= 2 && box != null && t.any { it in 'a'..'z' || it in 'A'..'Z' }) {
+									val cx = box.centerX().toFloat()
+									val cy = box.centerY().toFloat()
+									val insideSubtitle = cx in subLeft..subRight && cy in subTop..subBottom
+									if (!insideSubtitle) NoteBlockItem(t, Rect(box)) else null
+								} else null
+							}.take(14)
+
+							val snapshot = blocks.joinToString("|") { it.english }
+							if (blocks.isEmpty()) {
+								lastArSnapshot = ""
+								binding.arOverlayContainer.removeAllViews()
+								isScanningAr = false
+							} else if (snapshot == lastArSnapshot) {
+								isScanningAr = false
+							} else {
+								lastArSnapshot = snapshot
+								ocrScope.launch {
+									try {
+										val joinedEng = blocks.joinToString("\n|||\n") { it.english }
+										val joinedThai = translateGoogleFree(joinedEng)
+										val parts = joinedThai.split(Regex("\\s*\\|\\|\\|\\s*"))
+										if (parts.size == blocks.size) {
+											for (i in blocks.indices) blocks[i].thai = parts[i].trim()
+										} else {
+											for (b in blocks) b.thai = translateGoogleFree(b.english)
+										}
+										if (isAutoArMode && !isTextOnlyMode) {
+											renderArGreenBoxes(blocks, 1920, 1080)
+										}
+									} finally {
+										isScanningAr = false
+									}
+								}
+							}
+						}
+						.addOnFailureListener { isScanningAr = false }
+						.addOnCompleteListener { fullBitmap.recycle() }
+				} else {
+					isScanningAr = false
+					fullBitmap.recycle()
+				}
+			}, Handler(Looper.getMainLooper()))
+		} catch (_: Exception) {
+			isScanningAr = false
+			fullBitmap.recycle()
+		}
+	}
+
+	private fun renderArGreenBoxes(blocks: List<NoteBlockItem>, bmpW: Int, bmpH: Int) {
+		val container = binding.arOverlayContainer
+		val viewW = container.width
+		val viewH = container.height
+		if (viewW <= 0 || viewH <= 0) return
+
+		container.removeAllViews()
+		val sx = viewW.toFloat() / bmpW.toFloat()
+		val sy = viewH.toFloat() / bmpH.toFloat()
+
+		for (item in blocks) {
+			if (item.thai.isBlank()) continue
+			val leftPx = (item.rect.left * sx).toInt().coerceIn(0, (viewW - dpToPx(60)).coerceAtLeast(0))
+			val topPx = (item.rect.top * sy).toInt().coerceIn(0, (viewH - dpToPx(24)).coerceAtLeast(0))
+			val maxW = (viewW - leftPx - dpToPx(8)).coerceAtLeast(dpToPx(60))
+			val estSp = ((item.rect.height() * sy) / resources.displayMetrics.density * 0.50f).coerceIn(10f, 15f)
+
+			val tv = android.widget.TextView(this).apply {
+				text = item.thai
+				setTextColor(Color.WHITE)
+				setTextSize(TypedValue.COMPLEX_UNIT_SP, estSp)
+				setTypeface(typeface, android.graphics.Typeface.BOLD)
+				setBackgroundResource(R.drawable.bg_ar_green_pill)
+				setPadding(dpToPx(6), dpToPx(2), dpToPx(6), dpToPx(2))
+				maxWidth = maxW
+			}
+			val lp = FrameLayout.LayoutParams(
+				FrameLayout.LayoutParams.WRAP_CONTENT,
+				FrameLayout.LayoutParams.WRAP_CONTENT
+			).apply {
+				leftMargin = leftPx
+				topMargin = topPx
+			}
+			container.addView(tv, lp)
+		}
+	}
+
+	private suspend fun translateGoogleFree(englishText: String): String = withContext(Dispatchers.IO) {
+		try {
+			val url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=th&dt=t&q=" + URLEncoder.encode(englishText, "UTF-8")
+			val conn = URL(url).openConnection()
+			conn.setRequestProperty("User-Agent", "Mozilla/5.0")
+			conn.connectTimeout = 3000
+			conn.readTimeout = 3000
+			val res = conn.getInputStream().bufferedReader().use { it.readText() }
+			val json = JSONArray(res)
+			val sentences = json.getJSONArray(0)
+			val sb = StringBuilder()
+			for (i in 0 until sentences.length()) {
+				sb.append(sentences.getJSONArray(i).getString(0))
+			}
+			val result = sb.toString().trim()
+			if (result.isNotEmpty()) result else englishText
+		} catch (_: Exception) {
+			englishText
+		}
 	}
 
 	private fun hideNoteTranslationCard() {
@@ -2340,6 +2534,7 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		uiVisibilityHandler.removeCallbacks(hideMenuButtonRunnable)
 		uiVisibilityHandler.removeCallbacks(hideNoteCardRunnable)
 		uiVisibilityHandler.removeCallbacks(hideTopDrawerRunnable)
+		uiVisibilityHandler.removeCallbacks(arScanRunnable)
 		activeUtterances.clear()
 		stopGeminiAudioPlayback()
 		ocrScope.cancel()

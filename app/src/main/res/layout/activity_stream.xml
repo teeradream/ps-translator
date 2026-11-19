@@ -22,15 +22,144 @@
             android:layout_height="wrap_content"/>
     </com.metallic.chiaki.stream.AspectRatioFrameLayout>
 
-    <!-- Live Auto AR Full-Screen Green-Box Translation Overlay (non-blocking, excludes subtitle box) -->
-    <FrameLayout
-        android:id="@+id/arOverlayContainer"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:elevation="4dp"
+    <!-- Popup Zone Left Translation Card (Normal Mode: Tutorial / Help Tips on Left) -->
+    <LinearLayout
+        android:id="@+id/popupLeftCard"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="start|center_vertical"
+        android:layout_marginStart="14dp"
+        android:layout_marginEnd="14dp"
+        android:orientation="vertical"
+        android:background="@drawable/bg_popup_card_left"
+        android:paddingStart="12dp"
+        android:paddingEnd="10dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="10dp"
+        android:elevation="8dp"
         android:visibility="gone"
-        android:clickable="false"
-        android:focusable="false"/>
+        android:clickable="true"
+        android:focusable="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="4dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="💡 คำแนะนำ (ซ้าย)"
+                android:textColor="#FFB74D"
+                android:textSize="11sp"
+                android:textStyle="bold"/>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="🔊 แตะอ่าน"
+                android:textColor="#99FFFFFF"
+                android:textSize="10sp"
+                android:layout_marginEnd="6dp"/>
+
+            <TextView
+                android:id="@+id/btnClosePopupLeft"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="✕"
+                android:textColor="#CCFFFFFF"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:paddingStart="6dp"
+                android:paddingEnd="4dp"
+                android:clickable="true"
+                android:focusable="true"/>
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/tvPopupLeftText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:maxWidth="250dp"
+            android:textColor="#FFF8E1"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:lineSpacingExtra="2dp"
+            android:text=""/>
+    </LinearLayout>
+
+    <!-- Popup Zone Right Translation Card (Normal Mode: Phone / Messages on Right) -->
+    <LinearLayout
+        android:id="@+id/popupRightCard"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end|bottom"
+        android:layout_marginEnd="14dp"
+        android:layout_marginStart="14dp"
+        android:layout_marginBottom="86dp"
+        android:orientation="vertical"
+        android:background="@drawable/bg_popup_card_right"
+        android:paddingStart="12dp"
+        android:paddingEnd="10dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="10dp"
+        android:elevation="8dp"
+        android:visibility="gone"
+        android:clickable="true"
+        android:focusable="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="4dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="📱 ข้อความ (ขวา)"
+                android:textColor="#00E5FF"
+                android:textSize="11sp"
+                android:textStyle="bold"/>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="🔊 แตะอ่าน"
+                android:textColor="#99FFFFFF"
+                android:textSize="10sp"
+                android:layout_marginEnd="6dp"/>
+
+            <TextView
+                android:id="@+id/btnClosePopupRight"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="✕"
+                android:textColor="#CCFFFFFF"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:paddingStart="6dp"
+                android:paddingEnd="4dp"
+                android:clickable="true"
+                android:focusable="true"/>
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/tvPopupRightText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:maxWidth="250dp"
+            android:textColor="#E0F7FA"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:lineSpacingExtra="2dp"
+            android:text=""/>
+    </LinearLayout>
 
     <ProgressBar
         android:id="@+id/progressBar"
@@ -232,6 +361,127 @@
                 android:textSize="12sp"
                 android:layout_marginTop="24dp"
                 android:text="(แตะที่หน้าจอเพื่อสลับกลับสู่โหมดภาพเกม)"/>
+        </LinearLayout>
+
+        <!-- Pure Black Mode: Left Popup Card (mirrors Left source side) -->
+        <LinearLayout
+            android:id="@+id/purePopupLeftCard"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="start|center_vertical"
+            android:layout_marginStart="16dp"
+            android:orientation="vertical"
+            android:background="@drawable/bg_popup_card_left"
+            android:paddingStart="14dp"
+            android:paddingEnd="12dp"
+            android:paddingTop="10dp"
+            android:paddingBottom="12dp"
+            android:elevation="6dp"
+            android:visibility="gone"
+            android:clickable="true"
+            android:focusable="true">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="4dp">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="💡 คำแนะนำ"
+                    android:textColor="#FFB74D"
+                    android:textSize="12sp"
+                    android:textStyle="bold"/>
+
+                <TextView
+                    android:id="@+id/btnClosePurePopupLeft"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="✕"
+                    android:textColor="#CCFFFFFF"
+                    android:textSize="13sp"
+                    android:textStyle="bold"
+                    android:paddingStart="8dp"
+                    android:paddingEnd="4dp"
+                    android:clickable="true"
+                    android:focusable="true"/>
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/tvPurePopupLeftText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:maxWidth="240dp"
+                android:textColor="#FFF8E1"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:lineSpacingExtra="3dp"
+                android:text=""/>
+        </LinearLayout>
+
+        <!-- Pure Black Mode: Right Popup Card (mirrors Right/Bottom-Right source side) -->
+        <LinearLayout
+            android:id="@+id/purePopupRightCard"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="end|bottom"
+            android:layout_marginEnd="16dp"
+            android:layout_marginBottom="20dp"
+            android:orientation="vertical"
+            android:background="@drawable/bg_popup_card_right"
+            android:paddingStart="14dp"
+            android:paddingEnd="12dp"
+            android:paddingTop="10dp"
+            android:paddingBottom="12dp"
+            android:elevation="6dp"
+            android:visibility="gone"
+            android:clickable="true"
+            android:focusable="true">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="4dp">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="📱 ข้อความ"
+                    android:textColor="#00E5FF"
+                    android:textSize="12sp"
+                    android:textStyle="bold"/>
+
+                <TextView
+                    android:id="@+id/btnClosePurePopupRight"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="✕"
+                    android:textColor="#CCFFFFFF"
+                    android:textSize="13sp"
+                    android:textStyle="bold"
+                    android:paddingStart="8dp"
+                    android:paddingEnd="4dp"
+                    android:clickable="true"
+                    android:focusable="true"/>
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/tvPurePopupRightText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:maxWidth="240dp"
+                android:textColor="#E0F7FA"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:lineSpacingExtra="3dp"
+                android:text=""/>
         </LinearLayout>
     </FrameLayout>
 
@@ -570,7 +820,7 @@
             android:layout_marginEnd="6dp"/>
 
         <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnQuickArMode"
+            android:id="@+id/btnQuickPopupMode"
             style="@style/Widget.MaterialComponents.Button.OutlinedButton"
             android:layout_width="wrap_content"
             android:layout_height="36dp"
@@ -764,13 +1014,13 @@
                         app:backgroundTint="#1AFFFFFF"
                         android:layout_marginBottom="8dp"/>
 
-                    <!-- Sub-menu Category 4: Gemini AI API Key -->
+                    <!-- Sub-menu Category 4: Multi-Provider Translation & AI TTS API -->
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnOpenSubApi"
                         style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="ตั้งค่า Gemini API (แปล &amp; พากย์ AI)  ›"
+                        android:text="ตั้งค่า API แปล &amp; พากย์ (หลายค่าย)  ›"
                         android:textAlignment="viewStart"
                         android:textColor="#00E676"
                         android:textSize="13sp"
@@ -780,7 +1030,7 @@
                         android:layout_marginBottom="4dp"/>
                 </LinearLayout>
 
-                <!-- ================= SUB-PAGE 4: GEMINI API SETTINGS ================= -->
+                <!-- ================= SUB-PAGE 4: MULTI-PROVIDER API SETTINGS ================= -->
                 <LinearLayout
                     android:id="@+id/menuSubApiPage"
                     android:layout_width="match_parent"
@@ -800,72 +1050,260 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Gemini API Key (Google AI Studio):"
+                        android:text="เลือกค่าย API สำหรับแปลภาษา:"
                         android:textColor="#CCCCCC"
                         android:textSize="12sp"
-                        android:layout_marginBottom="4dp"/>
+                        android:layout_marginBottom="6dp"/>
 
-                    <EditText
-                        android:id="@+id/etGeminiApiKey"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:hint="AIzaSy..."
-                        android:textColor="#FFFFFF"
-                        android:textColorHint="#666666"
-                        android:textSize="13sp"
-                        android:inputType="textPassword"
-                        android:singleLine="true"
-                        android:background="#22FFFFFF"
-                        android:padding="10dp"
-                        android:layout_marginBottom="8dp"/>
-
+                    <!-- Row 1: Google Free + Gemini -->
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="horizontal"
-                        android:layout_marginBottom="12dp">
+                        android:layout_marginBottom="4dp">
 
                         <com.google.android.material.button.MaterialButton
-                            android:id="@+id/btnSaveGeminiApiKey"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:text="บันทึก API Key"
-                            android:textSize="12sp"
-                            android:textStyle="bold"
-                            android:textColor="#000000"
-                            app:backgroundTint="#00E676"
-                            android:layout_marginEnd="6dp"/>
-
-                        <com.google.android.material.button.MaterialButton
-                            android:id="@+id/btnClearGeminiApiKey"
+                            android:id="@+id/btnProviderGoogle"
                             style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="ล้างคีย์"
-                            android:textSize="12sp"
-                            android:textColor="#FF6B6B"
-                            app:strokeColor="#FF6B6B"/>
+                            android:layout_width="0dp"
+                            android:layout_height="38dp"
+                            android:layout_weight="1"
+                            android:text="Google ฟรี"
+                            android:textSize="11sp"
+                            android:textStyle="bold"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"
+                            android:layout_marginEnd="4dp"/>
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnProviderGemini"
+                            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                            android:layout_width="0dp"
+                            android:layout_height="38dp"
+                            android:layout_weight="1"
+                            android:text="Gemini AI"
+                            android:textSize="11sp"
+                            android:textStyle="bold"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"/>
                     </LinearLayout>
 
-                    <com.google.android.material.switchmaterial.SwitchMaterial
-                        android:id="@+id/useGeminiTranslateSwitch"
+                    <!-- Row 2: Groq + Cerebras -->
+                    <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="ใช้ Gemini แปลภาษา (สำนวนเกมธรรมชาติ)"
-                        android:textColor="#EEEEEE"
-                        android:textSize="13sp"
-                        android:checked="true"
+                        android:orientation="horizontal"
+                        android:layout_marginBottom="4dp">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnProviderGroq"
+                            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                            android:layout_width="0dp"
+                            android:layout_height="38dp"
+                            android:layout_weight="1"
+                            android:text="Groq (เร็วสุด)"
+                            android:textSize="11sp"
+                            android:textStyle="bold"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"
+                            android:layout_marginEnd="4dp"/>
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnProviderCerebras"
+                            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                            android:layout_width="0dp"
+                            android:layout_height="38dp"
+                            android:layout_weight="1"
+                            android:text="Cerebras"
+                            android:textSize="11sp"
+                            android:textStyle="bold"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"/>
+                    </LinearLayout>
+
+                    <!-- Row 3: OpenAI + OpenRouter + Custom -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:layout_marginBottom="10dp">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnProviderOpenAi"
+                            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                            android:layout_width="0dp"
+                            android:layout_height="38dp"
+                            android:layout_weight="1"
+                            android:text="OpenAI"
+                            android:textSize="10sp"
+                            android:textStyle="bold"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"
+                            android:layout_marginEnd="4dp"/>
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnProviderOpenRouter"
+                            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                            android:layout_width="0dp"
+                            android:layout_height="38dp"
+                            android:layout_weight="1.15"
+                            android:text="OpenRouter"
+                            android:textSize="10sp"
+                            android:textStyle="bold"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"
+                            android:layout_marginEnd="4dp"/>
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnProviderCustom"
+                            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                            android:layout_width="0dp"
+                            android:layout_height="38dp"
+                            android:layout_weight="1"
+                            android:text="Custom"
+                            android:textSize="10sp"
+                            android:textStyle="bold"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"/>
+                    </LinearLayout>
+
+                    <!-- Dynamic Provider Config Form (Hidden for Google Free) -->
+                    <LinearLayout
+                        android:id="@+id/providerConfigContainer"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:visibility="gone">
+
+                        <TextView
+                            android:id="@+id/tvProviderKeyLabel"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="API Key:"
+                            android:textColor="#CCCCCC"
+                            android:textSize="12sp"
+                            android:layout_marginBottom="4dp"/>
+
+                        <EditText
+                            android:id="@+id/etGeminiApiKey"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:hint="AIzaSy..."
+                            android:textColor="#FFFFFF"
+                            android:textColorHint="#666666"
+                            android:textSize="13sp"
+                            android:inputType="textPassword"
+                            android:singleLine="true"
+                            android:background="#22FFFFFF"
+                            android:padding="10dp"
+                            android:layout_marginBottom="8dp"/>
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="ชื่อโมเดล (Model ID — แก้ไขได้):"
+                            android:textColor="#CCCCCC"
+                            android:textSize="12sp"
+                            android:layout_marginBottom="4dp"/>
+
+                        <EditText
+                            android:id="@+id/etProviderModel"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:hint="gemini-3.5-flash-lite"
+                            android:textColor="#FFFFFF"
+                            android:textColorHint="#666666"
+                            android:textSize="13sp"
+                            android:inputType="textNoSuggestions"
+                            android:singleLine="true"
+                            android:background="#22FFFFFF"
+                            android:padding="10dp"
+                            android:layout_marginBottom="8dp"/>
+
+                        <LinearLayout
+                            android:id="@+id/layoutCustomEndpoint"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical"
+                            android:visibility="gone"
+                            android:layout_marginBottom="8dp">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Custom Endpoint URL (OpenAI-compatible):"
+                                android:textColor="#CCCCCC"
+                                android:textSize="12sp"
+                                android:layout_marginBottom="4dp"/>
+
+                            <EditText
+                                android:id="@+id/etCustomBaseUrl"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:hint="https://api.example.com/v1/chat/completions"
+                                android:textColor="#FFFFFF"
+                                android:textColorHint="#666666"
+                                android:textSize="12sp"
+                                android:inputType="textUri"
+                                android:singleLine="true"
+                                android:background="#22FFFFFF"
+                                android:padding="10dp"/>
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:layout_marginBottom="10dp">
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/btnSaveGeminiApiKey"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="บันทึก API"
+                                android:textSize="12sp"
+                                android:textStyle="bold"
+                                android:textColor="#000000"
+                                app:backgroundTint="#00E676"
+                                android:layout_marginEnd="6dp"/>
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/btnClearGeminiApiKey"
+                                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="ล้างคีย์"
+                                android:textSize="12sp"
+                                android:textColor="#FF6B6B"
+                                app:strokeColor="#FF6B6B"/>
+                        </LinearLayout>
+                    </LinearLayout>
+
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:background="#22FFFFFF"
+                        android:layout_marginTop="2dp"
                         android:layout_marginBottom="8dp"/>
 
                     <com.google.android.material.switchmaterial.SwitchMaterial
                         android:id="@+id/useGeminiTtsSwitch"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="ใช้ Gemini AI พากย์เสียง (เสียงสมจริง)"
+                        android:text="ใช้ Gemini AI พากย์เสียง (ใช้ Gemini Key)"
                         android:textColor="#EEEEEE"
                         android:textSize="13sp"
                         android:checked="true"
+                        android:layout_marginBottom="2dp"/>
+
+                    <TextView
+                        android:id="@+id/tvGeminiTtsKeyHint"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="หากใช้ค่ายอื่นแปล เช่น Groq สามารถบันทึก Gemini Key แยกไว้เพื่อใช้เสียงพากย์ Gemini ได้ด้วย"
+                        android:textColor="#88FFFFFF"
+                        android:textSize="11sp"
                         android:layout_marginBottom="4dp"/>
                 </LinearLayout>
 
@@ -1607,6 +2045,199 @@
                         </com.google.android.material.button.MaterialButtonToggleGroup>
                     </LinearLayout>
 
+                    <!-- Popup Audio Settings Divider -->
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:background="#26FFFFFF"
+                        android:layout_marginTop="4dp"
+                        android:layout_marginBottom="10dp"/>
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="ตั้งค่าเสียงพากย์ป๊อปอัพ (ซ้าย/ขวา):"
+                        android:textColor="#FFB74D"
+                        android:textSize="13sp"
+                        android:textStyle="bold"
+                        android:layout_marginBottom="4dp"/>
+
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/switchPopupTts"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="อ่านออกเสียงข้อความป๊อปอัพอัตโนมัติ"
+                        android:textColor="#EEEEEE"
+                        android:textSize="13sp"
+                        android:checked="true"
+                        android:layout_marginBottom="6dp"/>
+
+                    <LinearLayout
+                        android:id="@+id/popupVoiceSettingsContainer"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:visibility="visible"
+                        android:layout_marginBottom="10dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="โหมดจัดการเสียงเมื่อชนกับซับหลัก:"
+                            android:textColor="#AAAAAA"
+                            android:textSize="12sp"
+                            android:layout_marginBottom="4dp"/>
+
+                        <com.google.android.material.button.MaterialButtonToggleGroup
+                            android:id="@+id/popupTtsModeToggleGroup"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical"
+                            app:singleSelection="true"
+                            app:selectionRequired="true"
+                            app:checkedButton="@id/btnPopupTtsSmart"
+                            android:layout_marginBottom="8dp">
+
+                            <com.google.android.material.button.MaterialButton
+                                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                                android:id="@+id/btnPopupTtsSmart"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="คิวอัจฉริยะ (รอซับหลักจบค่อยแทรก)"
+                                android:textSize="11sp"
+                                android:textStyle="bold"
+                                android:textColor="@color/toggle_btn_text_color"
+                                app:backgroundTint="@color/toggle_btn_bg_tint"
+                                app:strokeColor="@color/toggle_btn_stroke_color"
+                                app:strokeWidth="1.5dp"/>
+
+                            <com.google.android.material.button.MaterialButton
+                                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                                android:id="@+id/btnPopupTtsDual"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="แยกช่องพูดพร้อมกันได้ (Dual Channel)"
+                                android:textSize="11sp"
+                                android:textStyle="bold"
+                                android:textColor="@color/toggle_btn_text_color"
+                                app:backgroundTint="@color/toggle_btn_bg_tint"
+                                app:strokeColor="@color/toggle_btn_stroke_color"
+                                app:strokeWidth="1.5dp"/>
+                        </com.google.android.material.button.MaterialButtonToggleGroup>
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="แยกโทนเสียงป๊อปอัพ (ต่างจากตัวละคร):"
+                            android:textColor="#AAAAAA"
+                            android:textSize="12sp"
+                            android:layout_marginBottom="4dp"/>
+
+                        <com.google.android.material.button.MaterialButtonToggleGroup
+                            android:id="@+id/popupVoiceToneToggleGroup"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            app:singleSelection="true"
+                            app:selectionRequired="true"
+                            app:checkedButton="@id/btnPopupToneBright"
+                            android:layout_marginBottom="8dp">
+
+                            <com.google.android.material.button.MaterialButton
+                                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                                android:id="@+id/btnPopupToneBright"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="ใส/แจ้งเตือน"
+                                android:textSize="10sp"
+                                android:textStyle="bold"
+                                android:textColor="@color/toggle_btn_text_color"
+                                app:backgroundTint="@color/toggle_btn_bg_tint"
+                                app:strokeColor="@color/toggle_btn_stroke_color"
+                                app:strokeWidth="1.5dp"/>
+
+                            <com.google.android.material.button.MaterialButton
+                                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                                android:id="@+id/btnPopupToneDeep"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="ทุ้ม/ระบบ"
+                                android:textSize="10sp"
+                                android:textStyle="bold"
+                                android:textColor="@color/toggle_btn_text_color"
+                                app:backgroundTint="@color/toggle_btn_bg_tint"
+                                app:strokeColor="@color/toggle_btn_stroke_color"
+                                app:strokeWidth="1.5dp"/>
+
+                            <com.google.android.material.button.MaterialButton
+                                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                                android:id="@+id/btnPopupToneNormal"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="ปกติ"
+                                android:textSize="10sp"
+                                android:textStyle="bold"
+                                android:textColor="@color/toggle_btn_text_color"
+                                app:backgroundTint="@color/toggle_btn_bg_tint"
+                                app:strokeColor="@color/toggle_btn_stroke_color"
+                                app:strokeWidth="1.5dp"/>
+                        </com.google.android.material.button.MaterialButtonToggleGroup>
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:gravity="center_vertical"
+                            android:layout_marginBottom="2dp">
+
+                            <TextView
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="ความดังเสียงป๊อปอัพ:"
+                                android:textColor="#AAAAAA"
+                                android:textSize="12sp"/>
+
+                            <TextView
+                                android:id="@+id/tvPopupVolume"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="75%"
+                                android:textColor="#00E5FF"
+                                android:textSize="12sp"
+                                android:textStyle="bold"/>
+                        </LinearLayout>
+
+                        <SeekBar
+                            android:id="@+id/popupVolumeSeekBar"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:max="70"
+                            android:progress="45"
+                            android:layout_marginBottom="6dp"/>
+
+                        <com.google.android.material.switchmaterial.SwitchMaterial
+                            android:id="@+id/switchPopupStereoPan"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="แยกหูซ้าย/ขวาตามฝั่งป๊อปอัพ (เหมาะกับหูฟัง)"
+                            android:textColor="#CCCCCC"
+                            android:textSize="12sp"
+                            android:checked="false"
+                            android:layout_marginBottom="4dp"/>
+
+                        <com.google.android.material.switchmaterial.SwitchMaterial
+                            android:id="@+id/switchPopupChime"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="เสียง 'ติ๊ง' เบาๆ นำหน้าข้อความป๊อปอัพ"
+                            android:textColor="#CCCCCC"
+                            android:textSize="12sp"
+                            android:checked="true"/>
+                    </LinearLayout>
+
                     <!-- Mute Phone Audio Button -->
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnMuteAudio"
@@ -1644,7 +2275,7 @@
                         app:strokeColor="#00E676"
                         android:layout_marginBottom="8dp"/>
 
-                    <!-- Extra Screen Translation Mode Toggle (Spot Button vs Auto AR Green Boxes) -->
+                    <!-- Extra Screen Translation Mode Toggle (Spot Button vs Auto Popup Zones) -->
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
@@ -1678,11 +2309,11 @@
 
                         <com.google.android.material.button.MaterialButton
                             style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                            android:id="@+id/btnModeAutoAr"
+                            android:id="@+id/btnModePopupZones"
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
-                            android:text="ทั้งจออัตโนมัติ (กรอบเขียว)"
+                            android:text="ป๊อปอัพอัตโนมัติ (ซ้าย/ขวา)"
                             android:textSize="11sp"
                             android:textStyle="bold"
                             android:textColor="@color/toggle_btn_text_color"
@@ -1690,6 +2321,162 @@
                             app:strokeColor="@color/toggle_btn_stroke_color"
                             app:strokeWidth="1.5dp"/>
                     </com.google.android.material.button.MaterialButtonToggleGroup>
+
+                    <!-- Popup Zones Settings Panel (visible when Popup Zones mode is selected) -->
+                    <LinearLayout
+                        android:id="@+id/popupZonesConfigContainer"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:background="#18FFFFFF"
+                        android:padding="10dp"
+                        android:layout_marginBottom="10dp"
+                        android:visibility="gone">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="ตั้งค่าโซนป๊อปอัพ (เช่น GTA คำแนะนำซ้าย + มือถือขวา)"
+                            android:textColor="#FFB74D"
+                            android:textSize="11sp"
+                            android:textStyle="bold"
+                            android:layout_marginBottom="6dp"/>
+
+                        <com.google.android.material.switchmaterial.SwitchMaterial
+                            android:id="@+id/switchPopupLeftZone"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="เปิดโซนซ้าย (คำแนะนำ / Tutorial)"
+                            android:textColor="#EEEEEE"
+                            android:textSize="12sp"
+                            android:checked="true"/>
+
+                        <com.google.android.material.switchmaterial.SwitchMaterial
+                            android:id="@+id/switchPopupRightZone"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="เปิดโซนขวา (มือถือ / แจ้งเตือน)"
+                            android:textColor="#EEEEEE"
+                            android:textSize="12sp"
+                            android:checked="true"
+                            android:layout_marginBottom="6dp"/>
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:layout_marginBottom="6dp">
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/btnAdjustPopupLeftBox"
+                                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="ปรับกรอบซ้าย"
+                                android:textColor="#FFB74D"
+                                android:textSize="11sp"
+                                android:textStyle="bold"
+                                app:strokeColor="#FFB74D"
+                                android:layout_marginEnd="6dp"/>
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/btnAdjustPopupRightBox"
+                                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="ปรับกรอบขวา"
+                                android:textColor="#00E5FF"
+                                android:textSize="11sp"
+                                android:textStyle="bold"
+                                app:strokeColor="#00E5FF"/>
+                        </LinearLayout>
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnPresetGtaPopup"
+                            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="ใช้ค่าแนะนำ GTA (ซ้ายกลาง + ขวาล่าง เหนือปุ่มกด)"
+                            android:textColor="#00E676"
+                            android:textSize="11sp"
+                            android:textStyle="bold"
+                            app:strokeColor="#00E676"
+                            android:layout_marginBottom="6dp"/>
+
+                        <com.google.android.material.switchmaterial.SwitchMaterial
+                            android:id="@+id/switchFilterPopupHud"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="กรองปุ่มกด Action / HUD มุมล่างขวาออก"
+                            android:textColor="#CCCCCC"
+                            android:textSize="12sp"
+                            android:checked="true"
+                            android:layout_marginBottom="6dp"/>
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="เวลาค้างข้อความป๊อปอัพบนจอ:"
+                            android:textColor="#AAAAAA"
+                            android:textSize="11sp"
+                            android:layout_marginBottom="4dp"/>
+
+                        <com.google.android.material.button.MaterialButtonToggleGroup
+                            android:id="@+id/popupHoldToggleGroup"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            app:singleSelection="true"
+                            app:selectionRequired="true"
+                            app:checkedButton="@id/btnPopupHold5">
+
+                            <com.google.android.material.button.MaterialButton
+                                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                                android:id="@+id/btnPopupHold3"
+                                android:layout_width="0dp"
+                                android:layout_height="36dp"
+                                android:layout_weight="1"
+                                android:text="3 วิ"
+                                android:textSize="11sp"
+                                android:insetTop="0dp"
+                                android:insetBottom="0dp"
+                                android:textColor="@color/toggle_btn_text_color"
+                                app:backgroundTint="@color/toggle_btn_bg_tint"
+                                app:strokeColor="@color/toggle_btn_stroke_color"
+                                app:strokeWidth="1.5dp"/>
+
+                            <com.google.android.material.button.MaterialButton
+                                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                                android:id="@+id/btnPopupHold5"
+                                android:layout_width="0dp"
+                                android:layout_height="36dp"
+                                android:layout_weight="1"
+                                android:text="5 วิ"
+                                android:textSize="11sp"
+                                android:insetTop="0dp"
+                                android:insetBottom="0dp"
+                                android:textColor="@color/toggle_btn_text_color"
+                                app:backgroundTint="@color/toggle_btn_bg_tint"
+                                app:strokeColor="@color/toggle_btn_stroke_color"
+                                app:strokeWidth="1.5dp"/>
+
+                            <com.google.android.material.button.MaterialButton
+                                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                                android:id="@+id/btnPopupHold8"
+                                android:layout_width="0dp"
+                                android:layout_height="36dp"
+                                android:layout_weight="1"
+                                android:text="8 วิ"
+                                android:textSize="11sp"
+                                android:insetTop="0dp"
+                                android:insetBottom="0dp"
+                                android:textColor="@color/toggle_btn_text_color"
+                                app:backgroundTint="@color/toggle_btn_bg_tint"
+                                app:strokeColor="@color/toggle_btn_stroke_color"
+                                app:strokeWidth="1.5dp"/>
+                        </com.google.android.material.button.MaterialButtonToggleGroup>
+                    </LinearLayout>
 
                     <!-- Adjust Note/Tutorial Crop Box Button -->
                     <com.google.android.material.button.MaterialButton

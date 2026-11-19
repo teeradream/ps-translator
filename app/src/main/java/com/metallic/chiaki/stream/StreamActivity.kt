@@ -16,6 +16,7 @@ import android.graphics.drawable.GradientDrawable
 import android.media.AudioManager
 import android.media.MediaPlayer
 import android.media.PlaybackParams
+import android.media.ToneGenerator
 import android.os.*
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
@@ -86,6 +87,52 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		SMART_QUEUE
 	}
 
+	enum class CropEditTarget {
+		SUBTITLE,
+		NOTE,
+		POPUP_LEFT,
+		POPUP_RIGHT
+	}
+
+	enum class PopupSide {
+		LEFT,
+		RIGHT
+	}
+
+	enum class PopupTtsMode {
+		SMART_QUEUE,
+		DUAL_CHANNEL
+	}
+
+	enum class PopupVoiceTone {
+		BRIGHT,
+		DEEP,
+		NORMAL
+	}
+
+	enum class TranslationProvider(
+		val displayName: String,
+		val defaultModel: String,
+		val defaultEndpoint: String,
+		val keyHint: String,
+		val keyLabel: String
+	) {
+		GOOGLE_FREE("Google ฟรี", "", "", "", ""),
+		GEMINI("Gemini AI", "gemini-3.5-flash-lite", "https://generativelanguage.googleapis.com/v1beta/interactions", "AIzaSy...", "Gemini API Key (Google AI Studio):"),
+		GROQ("Groq AI", "llama-3.3-70b-versatile", "https://api.groq.com/openai/v1/chat/completions", "gsk_...", "Groq API Key (console.groq.com):"),
+		CEREBRAS("Cerebras AI", "llama-3.3-70b", "https://api.cerebras.ai/v1/chat/completions", "csk-...", "Cerebras API Key (cloud.cerebras.ai):"),
+		OPENAI("OpenAI", "gpt-4.1-mini", "https://api.openai.com/v1/chat/completions", "sk-...", "OpenAI API Key (platform.openai.com):"),
+		OPENROUTER("OpenRouter", "google/gemini-2.5-flash-lite", "https://openrouter.ai/api/v1/chat/completions", "sk-or-...", "OpenRouter API Key (openrouter.ai):"),
+		CUSTOM("Custom API", "gpt-4o-mini", "https://api.openai.com/v1/chat/completions", "sk-...", "API Key (Bearer Token):")
+	}
+
+	data class PendingPopupSpeech(
+		val side: PopupSide,
+		val english: String,
+		val thai: String,
+		val createdAtMs: Long = System.currentTimeMillis()
+	)
+
 	data class SubtitleHistoryItem(
 		val english: String,
 		val thai: String,
@@ -93,6 +140,8 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 	)
 
 	private var tts: TextToSpeech? = null
+	private var popupTts: TextToSpeech? = null
+	private var isPopupTtsReady = false
 	private var isTtsEnabled = false
 	private var voiceGenderMode = VoiceGenderMode.AUTO_AI
 	private var ttsQueueMode = TtsQueueMode.SMART_QUEUE
@@ -101,6 +150,7 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 	private var isAudioMuted = false
 	private var isTextOnlyMode = false
 	private var isCapturing = false
+	private var captureFrameCounter = 0
 	private var isTranslating = false
 	private var pendingOcrEnglish = ""
 	private var queuedLatestEnglish = ""
@@ -113,12 +163,16 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 	private var isSkipSpeakerNameInTts = true
 	private var speechSpeedRate = 1.25f
 
-	// Gemini API settings (for natural translation & AI voice dubbing)
+	// Multi-Provider Translation API & Gemini AI TTS settings
+	private var activeTranslationProvider = TranslationProvider.GOOGLE_FREE
+	private var editingProvider = TranslationProvider.GOOGLE_FREE
 	private var geminiApiKey = ""
-	private var isGeminiTranslateEnabled = true
 	private var isGeminiTtsEnabled = true
 	private var geminiMediaPlayer: MediaPlayer? = null
 	private val geminiAudioQueue = java.util.ArrayDeque<java.io.File>()
+	private var popupMediaPlayer: MediaPlayer? = null
+	private val popupGeminiAudioQueue = java.util.ArrayDeque<Pair<java.io.File, PopupSide>>()
+	private var popupChimeToneGenerator: ToneGenerator? = null
 
 	data class NoteBlockItem(
 		val english: String,
@@ -126,27 +180,49 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		var thai: String = ""
 	)
 
-	// On-demand Note/Tutorial Crop Box & Top Quick Drawer & Auto AR Mode
-	private var isEditingNoteCrop = false
+	// On-demand Note/Tutorial Crop Box, Top Quick Drawer & Auto Popup Zones (Left / Right)
+	private var activeCropEditTarget = CropEditTarget.SUBTITLE
 	private var isNoteCropBoxVisible = false
 	private var isScanningNote = false
-	private var isAutoArMode = false
-	private var isScanningAr = false
-	private var lastArSnapshot = ""
+	private var isPopupZonesMode = false
+	private var isPopupLeftEnabled = true
+	private var isPopupRightEnabled = true
+	private var isFilterPopupHudEnabled = true
+	private var popupHoldDurationMs = 5000L
+
+	// Popup TTS & Audio Separation settings
+	private var isPopupTtsEnabled = true
+	private var popupTtsMode = PopupTtsMode.SMART_QUEUE
+	private var popupVoiceTone = PopupVoiceTone.BRIGHT
+	private var popupVolume = 0.75f
+	private var isPopupStereoPanEnabled = false
+	private var isPopupChimeEnabled = true
+	private var pendingSmartPopupSpeech: PendingPopupSpeech? = null
+
+	// Live Popup OCR & Card state (independent from main subtitle!)
+	@Volatile private var isScanningPopupLeft = false
+	@Volatile private var isScanningPopupRight = false
+	private var isTranslatingPopupLeft = false
+	private var isTranslatingPopupRight = false
+	private var lastPopupLeftEnglish = ""
+	private var lastPopupLeftThai = ""
+	private var isPopupLeftVisible = false
+	private var lastPopupRightEnglish = ""
+	private var lastPopupRightThai = ""
+	private var isPopupRightVisible = false
+
 	private var lastNoteThai = ""
 	private var lastNoteEnglish = ""
 
-	private val arScanRunnable = object : Runnable {
-		override fun run() {
-			if (isAutoArMode && viewModel.session.state.value == StreamStateConnected &&
-				!isTextOnlyMode && !isScanningNote && !isScanningAr &&
-				!binding.cropEditorOverlay.isVisible && !binding.menuPanelContainer.isVisible
-			) {
-				captureAndRenderAutoAr()
-			}
-			if (isAutoArMode) {
-				uiVisibilityHandler.postDelayed(this, 2000)
-			}
+	private val hidePopupLeftRunnable = Runnable {
+		if (::binding.isInitialized && !isDestroyed && !isFinishing) {
+			hidePopupCard(PopupSide.LEFT)
+		}
+	}
+
+	private val hidePopupRightRunnable = Runnable {
+		if (::binding.isInitialized && !isDestroyed && !isFinishing) {
+			hidePopupCard(PopupSide.RIGHT)
 		}
 	}
 
@@ -208,6 +284,12 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		window.decorView.setOnSystemUiVisibilityChangeListener(this)
 
 		tts = TextToSpeech(this, this)
+		popupTts = TextToSpeech(this) { status ->
+			if (status == TextToSpeech.SUCCESS) {
+				isPopupTtsReady = true
+				popupTts?.language = Locale("th", "TH")
+			}
+		}
 
 		cropPrefs = getSharedPreferences("ps_translator_crop", Context.MODE_PRIVATE)
 		isFilterShortTextEnabled = cropPrefs.getBoolean("filter_short_ui", true)
@@ -401,8 +483,10 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		adjustStreamViewAspect()
 
 		// Start periodic OCR capture loop
+		setupPopupAudioControls()
 		setupTopQuickDrawer()
 		setupNoteTranslationFeature()
+		setupPopupZonesControls()
 		updateQuickDrawerUI()
 		uiVisibilityHandler.postDelayed(captureRunnable, 1500)
 		resetMenuButtonTimer()
@@ -420,19 +504,18 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 			binding.aspectRatioLayout.visibility = View.VISIBLE
 			binding.subtitleOverlayContainer.isVisible = false
 			binding.floatingNoteCropBox.isVisible = false
-			binding.arOverlayContainer.isVisible = false
 			binding.btnTextOnlyMode.text = "สลับเป็นโหมดสตรีมภาพ"
 			binding.btnTextOnlyFloat.setColorFilter(Color.parseColor("#00E5FF"))
 		} else {
 			binding.pureFullscreenLayout.isVisible = false
 			binding.aspectRatioLayout.visibility = View.VISIBLE
 			binding.subtitleOverlayContainer.isVisible = isSubtitleEnabled && subtitleHistory.isNotEmpty()
-			binding.floatingNoteCropBox.isVisible = !isAutoArMode && isNoteCropBoxVisible
-			if (!isAutoArMode && isNoteCropBoxVisible) syncFloatingNoteCropBox()
-			binding.arOverlayContainer.isVisible = isAutoArMode
+			binding.floatingNoteCropBox.isVisible = !isPopupZonesMode && isNoteCropBoxVisible
+			if (!isPopupZonesMode && isNoteCropBoxVisible) syncFloatingNoteCropBox()
 			binding.btnTextOnlyMode.text = "โหมดโชว์เฉพาะตัวหนังสือ (จอดำ)"
 			binding.btnTextOnlyFloat.setColorFilter(Color.parseColor("#FFFFFF"))
 		}
+		syncPopupCardVisibility()
 	}
 
 	override fun onInit(status: Int) {
@@ -442,12 +525,15 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 				override fun onStart(utteranceId: String?) {}
 				override fun onDone(utteranceId: String?) {
 					if (utteranceId != null) activeUtterances.remove(utteranceId)
+					uiVisibilityHandler.post { tryFlushPendingSmartPopupSpeech() }
 				}
 				override fun onError(utteranceId: String?) {
 					if (utteranceId != null) activeUtterances.remove(utteranceId)
+					uiVisibilityHandler.post { tryFlushPendingSmartPopupSpeech() }
 				}
 				override fun onStop(utteranceId: String?, interrupted: Boolean) {
 					if (utteranceId != null) activeUtterances.remove(utteranceId)
+					uiVisibilityHandler.post { tryFlushPendingSmartPopupSpeech() }
 				}
 			})
 		}
@@ -496,12 +582,19 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		if (surfaceView.width <= 100 || surfaceView.height <= 100) return
 		if (isCapturing || isScanningNote) return
 
+		val shouldScanPopupsThisTick = isPopupZonesMode &&
+			(++captureFrameCounter % 2 == 0) &&
+			!binding.cropEditorOverlay.isVisible &&
+			!binding.menuPanelContainer.isVisible
+
 		val fullBitmap = Bitmap.createBitmap(1920, 1080, Bitmap.Config.ARGB_8888)
 		isCapturing = true
 
 		try {
 			PixelCopy.request(surfaceView, fullBitmap, { copyResult ->
 				if (copyResult == PixelCopy.SUCCESS) {
+					var leftPopupBmp: Bitmap? = null
+					var rightPopupBmp: Bitmap? = null
 					try {
 						val cropLeftNorm = cropPrefs.getFloat("crop_left", 0.18f).coerceIn(0f, 0.85f)
 						val cropTopNorm = cropPrefs.getFloat("crop_top", 0.72f).coerceIn(0f, 0.90f)
@@ -514,7 +607,25 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 						val cropH = (1080 * cropHeightNorm).toInt().coerceIn(30, 1080 - cropY)
 
 						val subBitmap = Bitmap.createBitmap(fullBitmap, cropX, cropY, cropW, cropH)
+
+						// Reuse the exact same captured frame for Left/Right Popup Zones (zero extra PixelCopy overhead!)
+						if (shouldScanPopupsThisTick) {
+							if (isPopupLeftEnabled && !isScanningPopupLeft) {
+								isScanningPopupLeft = true
+								leftPopupBmp = cropPopupZoneBitmap(fullBitmap, PopupSide.LEFT)
+								if (leftPopupBmp == null) isScanningPopupLeft = false
+							}
+							if (isPopupRightEnabled && !isScanningPopupRight) {
+								isScanningPopupRight = true
+								rightPopupBmp = cropPopupZoneBitmap(fullBitmap, PopupSide.RIGHT)
+								if (rightPopupBmp == null) isScanningPopupRight = false
+							}
+						}
+
 						fullBitmap.recycle()
+
+						leftPopupBmp?.let { processPopupZoneBitmap(PopupSide.LEFT, it) }
+						rightPopupBmp?.let { processPopupZoneBitmap(PopupSide.RIGHT, it) }
 
 						val ocrBitmap = if (cropW < 700) {
 							val scaled = Bitmap.createScaledBitmap(subBitmap, cropW * 2, cropH * 2, true)
@@ -554,7 +665,9 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 								isCapturing = false
 							}
 					} catch (e: Exception) {
-						fullBitmap.recycle()
+						if (!fullBitmap.isRecycled) fullBitmap.recycle()
+						leftPopupBmp?.let { if (!it.isRecycled) it.recycle(); isScanningPopupLeft = false }
+						rightPopupBmp?.let { if (!it.isRecycled) it.recycle(); isScanningPopupRight = false }
 						isCapturing = false
 						android.util.Log.e("PSTranslatorOCR", "Bitmap processing error", e)
 					}
@@ -796,62 +909,218 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 			"TEXT" -> "ปรับแต่งตัวหนังสือ"
 			"VOICE" -> "การออกเสียงพากย์"
 			"MODE" -> "โหมดและการแสดงผล"
-			"API" -> "ตั้งค่า Gemini API"
+			"API" -> "ตั้งค่า API แปล & พากย์"
 			else -> "ตั้งค่า PS Translator"
 		}
 	}
 
+	private fun getProviderKeyPrefName(provider: TranslationProvider): String {
+		return when (provider) {
+			TranslationProvider.GEMINI -> "gemini_api_key"
+			TranslationProvider.GROQ -> "api_key_groq"
+			TranslationProvider.CEREBRAS -> "api_key_cerebras"
+			TranslationProvider.OPENAI -> "api_key_openai"
+			TranslationProvider.OPENROUTER -> "api_key_openrouter"
+			TranslationProvider.CUSTOM -> "api_key_custom"
+			TranslationProvider.GOOGLE_FREE -> ""
+		}
+	}
+
+	private fun getProviderModelPrefName(provider: TranslationProvider): String {
+		return "api_model_${provider.name.lowercase()}"
+	}
+
+	private fun getProviderApiKey(provider: TranslationProvider): String {
+		val prefKey = getProviderKeyPrefName(provider)
+		if (prefKey.isEmpty()) return ""
+		return cropPrefs.getString(prefKey, "")?.trim() ?: ""
+	}
+
+	private fun getProviderModel(provider: TranslationProvider): String {
+		if (provider == TranslationProvider.GOOGLE_FREE) return ""
+		val saved = cropPrefs.getString(getProviderModelPrefName(provider), "")?.trim() ?: ""
+		return if (saved.isNotEmpty()) saved else provider.defaultModel
+	}
+
+	private fun getCustomEndpointUrl(): String {
+		val saved = cropPrefs.getString("api_custom_url", "")?.trim() ?: ""
+		return if (saved.isNotEmpty()) saved else TranslationProvider.CUSTOM.defaultEndpoint
+	}
+
 	private fun setupGeminiApiControls() {
-		geminiApiKey = cropPrefs.getString("gemini_api_key", "")?.trim() ?: ""
-		isGeminiTranslateEnabled = cropPrefs.getBoolean("gemini_translate_enabled", true)
+		geminiApiKey = getProviderApiKey(TranslationProvider.GEMINI)
 		isGeminiTtsEnabled = cropPrefs.getBoolean("gemini_tts_enabled", true)
 
-		binding.etGeminiApiKey.setText(geminiApiKey)
-		binding.useGeminiTranslateSwitch.isChecked = isGeminiTranslateEnabled
+		val savedProviderName = cropPrefs.getString("translation_provider", null)
+		activeTranslationProvider = if (savedProviderName != null) {
+			try {
+				TranslationProvider.valueOf(savedProviderName)
+			} catch (_: Exception) {
+				TranslationProvider.GOOGLE_FREE
+			}
+		} else {
+			// Seamless migration from older Gemini-only setting
+			val oldGeminiEnabled = cropPrefs.getBoolean("gemini_translate_enabled", true)
+			if (geminiApiKey.isNotEmpty() && oldGeminiEnabled) TranslationProvider.GEMINI else TranslationProvider.GOOGLE_FREE
+		}
+		editingProvider = activeTranslationProvider
+
 		binding.useGeminiTtsSwitch.isChecked = isGeminiTtsEnabled
+
+		val providerButtons = mapOf(
+			TranslationProvider.GOOGLE_FREE to binding.btnProviderGoogle,
+			TranslationProvider.GEMINI to binding.btnProviderGemini,
+			TranslationProvider.GROQ to binding.btnProviderGroq,
+			TranslationProvider.CEREBRAS to binding.btnProviderCerebras,
+			TranslationProvider.OPENAI to binding.btnProviderOpenAi,
+			TranslationProvider.OPENROUTER to binding.btnProviderOpenRouter,
+			TranslationProvider.CUSTOM to binding.btnProviderCustom
+		)
+
+		for ((provider, btn) in providerButtons) {
+			btn.setOnClickListener {
+				selectProviderInUi(provider)
+				if (provider == TranslationProvider.GOOGLE_FREE) {
+					activeTranslationProvider = TranslationProvider.GOOGLE_FREE
+					cropPrefs.edit().putString("translation_provider", activeTranslationProvider.name).apply()
+					updateGeminiApiStatusUI()
+					Toast.makeText(this, "สลับเป็น Google Translate (ฟรี / เร็ว)", Toast.LENGTH_SHORT).show()
+				} else if (getProviderApiKey(provider).isNotEmpty()) {
+					activeTranslationProvider = provider
+					cropPrefs.edit().putString("translation_provider", activeTranslationProvider.name).apply()
+					updateGeminiApiStatusUI()
+					Toast.makeText(this, "สลับค่ายแปลเป็น ${provider.displayName} แล้ว", Toast.LENGTH_SHORT).show()
+				}
+			}
+		}
+
+		selectProviderInUi(activeTranslationProvider)
 		updateGeminiApiStatusUI()
 
 		binding.btnSaveGeminiApiKey.setOnClickListener {
+			val target = editingProvider
+			if (target == TranslationProvider.GOOGLE_FREE) {
+				activeTranslationProvider = TranslationProvider.GOOGLE_FREE
+				cropPrefs.edit().putString("translation_provider", activeTranslationProvider.name).apply()
+				updateGeminiApiStatusUI()
+				return@setOnClickListener
+			}
+
 			val key = binding.etGeminiApiKey.text?.toString()?.trim() ?: ""
-			geminiApiKey = key
-			cropPrefs.edit().putString("gemini_api_key", key).apply()
-			updateGeminiApiStatusUI()
+			val model = binding.etProviderModel.text?.toString()?.trim().orEmpty().ifEmpty { target.defaultModel }
+			val editor = cropPrefs.edit()
+				.putString(getProviderKeyPrefName(target), key)
+				.putString(getProviderModelPrefName(target), model)
+
+			if (target == TranslationProvider.CUSTOM) {
+				val customUrl = binding.etCustomBaseUrl.text?.toString()?.trim().orEmpty().ifEmpty { target.defaultEndpoint }
+				editor.putString("api_custom_url", customUrl)
+			}
+
+			if (target == TranslationProvider.GEMINI) {
+				geminiApiKey = key
+			}
+
 			if (key.isNotEmpty()) {
-				Toast.makeText(this, "บันทึก Gemini API Key เรียบร้อยแล้ว", Toast.LENGTH_SHORT).show()
+				activeTranslationProvider = target
+				editor.putString("translation_provider", activeTranslationProvider.name)
+				editor.apply()
+				updateGeminiApiStatusUI()
+				Toast.makeText(this, "บันทึก ${target.displayName} ($model) เรียบร้อยแล้ว", Toast.LENGTH_SHORT).show()
 			} else {
-				Toast.makeText(this, "ยังไม่ได้กรอก API Key (ใช้ระบบฟรีเดิม)", Toast.LENGTH_SHORT).show()
+				editor.apply()
+				if (activeTranslationProvider == target) {
+					activeTranslationProvider = TranslationProvider.GOOGLE_FREE
+					cropPrefs.edit().putString("translation_provider", activeTranslationProvider.name).apply()
+				}
+				updateGeminiApiStatusUI()
+				Toast.makeText(this, "ยังไม่ได้กรอก API Key (ใช้ Google ฟรีชั่วคราว)", Toast.LENGTH_SHORT).show()
 			}
 		}
 
 		binding.btnClearGeminiApiKey.setOnClickListener {
-			geminiApiKey = ""
+			val target = editingProvider
+			if (target == TranslationProvider.GOOGLE_FREE) return@setOnClickListener
+			cropPrefs.edit().remove(getProviderKeyPrefName(target)).apply()
 			binding.etGeminiApiKey.setText("")
-			cropPrefs.edit().remove("gemini_api_key").apply()
+			if (target == TranslationProvider.GEMINI) {
+				geminiApiKey = ""
+			}
+			if (activeTranslationProvider == target) {
+				activeTranslationProvider = TranslationProvider.GOOGLE_FREE
+				cropPrefs.edit().putString("translation_provider", activeTranslationProvider.name).apply()
+			}
+			selectProviderInUi(target)
 			updateGeminiApiStatusUI()
-			Toast.makeText(this, "ล้าง API Key แล้ว (กลับไปใช้ระบบฟรีเดิม)", Toast.LENGTH_SHORT).show()
-		}
-
-		binding.useGeminiTranslateSwitch.setOnCheckedChangeListener { _, isChecked ->
-			isGeminiTranslateEnabled = isChecked
-			cropPrefs.edit().putBoolean("gemini_translate_enabled", isChecked).apply()
+			Toast.makeText(this, "ล้าง API Key ของ ${target.displayName} แล้ว", Toast.LENGTH_SHORT).show()
 		}
 
 		binding.useGeminiTtsSwitch.setOnCheckedChangeListener { _, isChecked ->
 			isGeminiTtsEnabled = isChecked
 			cropPrefs.edit().putBoolean("gemini_tts_enabled", isChecked).apply()
+			updateGeminiApiStatusUI()
 			if (!isChecked) {
 				stopGeminiAudioPlayback()
+				stopPopupGeminiAudioPlayback()
+			}
+		}
+	}
+
+	private fun selectProviderInUi(provider: TranslationProvider) {
+		editingProvider = provider
+		val buttons = mapOf(
+			TranslationProvider.GOOGLE_FREE to binding.btnProviderGoogle,
+			TranslationProvider.GEMINI to binding.btnProviderGemini,
+			TranslationProvider.GROQ to binding.btnProviderGroq,
+			TranslationProvider.CEREBRAS to binding.btnProviderCerebras,
+			TranslationProvider.OPENAI to binding.btnProviderOpenAi,
+			TranslationProvider.OPENROUTER to binding.btnProviderOpenRouter,
+			TranslationProvider.CUSTOM to binding.btnProviderCustom
+		)
+		for ((p, btn) in buttons) {
+			val selected = (p == provider)
+			val color = if (selected) Color.parseColor("#00E676") else Color.parseColor("#CCCCCC")
+			val stroke = if (selected) Color.parseColor("#00E676") else Color.parseColor("#44FFFFFF")
+			val bg = if (selected) Color.parseColor("#2600E676") else Color.TRANSPARENT
+			btn.setTextColor(color)
+			btn.strokeColor = android.content.res.ColorStateList.valueOf(stroke)
+			btn.backgroundTintList = android.content.res.ColorStateList.valueOf(bg)
+		}
+
+		if (provider == TranslationProvider.GOOGLE_FREE) {
+			binding.providerConfigContainer.isVisible = false
+		} else {
+			binding.providerConfigContainer.isVisible = true
+			binding.tvProviderKeyLabel.text = provider.keyLabel
+			binding.etGeminiApiKey.hint = provider.keyHint
+			binding.etGeminiApiKey.setText(getProviderApiKey(provider))
+			binding.etProviderModel.hint = provider.defaultModel
+			binding.etProviderModel.setText(getProviderModel(provider))
+			binding.layoutCustomEndpoint.isVisible = (provider == TranslationProvider.CUSTOM)
+			if (provider == TranslationProvider.CUSTOM) {
+				binding.etCustomBaseUrl.setText(getCustomEndpointUrl())
 			}
 		}
 	}
 
 	private fun updateGeminiApiStatusUI() {
-		if (geminiApiKey.isNotEmpty()) {
-			binding.tvGeminiApiStatus.text = "สถานะ: เชื่อมต่อ Gemini API แล้ว (พร้อมใช้งาน)"
+		val keyReady = activeTranslationProvider == TranslationProvider.GOOGLE_FREE ||
+			getProviderApiKey(activeTranslationProvider).isNotEmpty()
+		val ttsLabel = if (isGeminiTtsEnabled && geminiApiKey.isNotEmpty()) "Gemini AI TTS" else "TTS ในเครื่อง"
+
+		if (activeTranslationProvider != TranslationProvider.GOOGLE_FREE && keyReady) {
+			val model = getProviderModel(activeTranslationProvider)
+			binding.tvGeminiApiStatus.text = "กำลังใช้แปล: ${activeTranslationProvider.displayName} ($model) • พากย์: $ttsLabel"
 			binding.tvGeminiApiStatus.setTextColor(Color.parseColor("#00E676"))
 		} else {
-			binding.tvGeminiApiStatus.text = "สถานะ: ใช้ระบบแปลฟรี + TTS ในเครื่อง"
+			binding.tvGeminiApiStatus.text = "กำลังใช้แปล: Google Translate (ฟรี) • พากย์: $ttsLabel"
 			binding.tvGeminiApiStatus.setTextColor(Color.parseColor("#AAAAAA"))
+		}
+
+		binding.tvGeminiTtsKeyHint.text = if (geminiApiKey.isNotEmpty()) {
+			"✓ พบ Gemini Key ที่บันทึกไว้ (ใช้พากย์เสียง Gemini AI ได้แม้เลือกแปลค่ายอื่น)"
+		} else {
+			"หากอยากใช้เสียงพากย์ Gemini AI ให้เลือกแท็บ Gemini AI แล้วบันทึก Gemini Key ไว้ก่อน"
 		}
 	}
 
@@ -913,13 +1182,25 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 	private fun setupCropEditor() {
 		binding.btnAdjustCropBox.setOnClickListener {
 			binding.menuPanelContainer.isVisible = false
-			isEditingNoteCrop = false
+			activeCropEditTarget = CropEditTarget.SUBTITLE
 			openCropEditor()
 		}
 
 		binding.btnAdjustNoteCropBox.setOnClickListener {
 			binding.menuPanelContainer.isVisible = false
-			isEditingNoteCrop = true
+			activeCropEditTarget = CropEditTarget.NOTE
+			openCropEditor()
+		}
+
+		binding.btnAdjustPopupLeftBox.setOnClickListener {
+			binding.menuPanelContainer.isVisible = false
+			activeCropEditTarget = CropEditTarget.POPUP_LEFT
+			openCropEditor()
+		}
+
+		binding.btnAdjustPopupRightBox.setOnClickListener {
+			binding.menuPanelContainer.isVisible = false
+			activeCropEditTarget = CropEditTarget.POPUP_RIGHT
 			openCropEditor()
 		}
 
@@ -981,9 +1262,9 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 					val frameY = binding.cropBoxFrame.y.toInt()
 
 					val newW = (initialWidth + (event.rawX - initialTouchX).toInt())
-						.coerceIn(dpToPx(120), (overlayW - frameX).coerceAtLeast(dpToPx(120)))
+						.coerceIn(dpToPx(80), (overlayW - frameX).coerceAtLeast(dpToPx(80)))
 					val newH = (initialHeight + (event.rawY - initialTouchY).toInt())
-						.coerceIn(dpToPx(40), (overlayH - frameY).coerceAtLeast(dpToPx(40)))
+						.coerceIn(dpToPx(36), (overlayH - frameY).coerceAtLeast(dpToPx(36)))
 
 					val params = binding.cropBoxFrame.layoutParams
 					params.width = newW
@@ -996,28 +1277,64 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		}
 	}
 
+	private fun getCropDefaults(target: CropEditTarget): FloatArray {
+		return when (target) {
+			CropEditTarget.SUBTITLE -> floatArrayOf(0.18f, 0.72f, 0.64f, 0.22f)
+			CropEditTarget.NOTE -> floatArrayOf(0.20f, 0.15f, 0.60f, 0.65f)
+			CropEditTarget.POPUP_LEFT -> floatArrayOf(0.02f, 0.22f, 0.30f, 0.34f)
+			CropEditTarget.POPUP_RIGHT -> floatArrayOf(0.66f, 0.42f, 0.31f, 0.34f)
+		}
+	}
+
+	private fun getCropPrefix(target: CropEditTarget): String {
+		return when (target) {
+			CropEditTarget.SUBTITLE -> "crop_"
+			CropEditTarget.NOTE -> "note_crop_"
+			CropEditTarget.POPUP_LEFT -> "popup_left_"
+			CropEditTarget.POPUP_RIGHT -> "popup_right_"
+		}
+	}
+
 	private fun openCropEditor() {
-		if (isEditingNoteCrop) {
-			binding.cropEditorTitle.text = "ลากกรอบสีฟ้าไปวางตรงพื้นที่เอกสาร/คำแนะนำ"
-			binding.cropBoxGuideText.text = "กรอบแปลเฉพาะจุด (ลากเพื่อย้าย)"
-			binding.cropBoxGuideText.setTextColor(Color.parseColor("#00E5FF"))
-		} else {
-			binding.cropEditorTitle.text = "ลากกรอบสีเขียวไปวางตรงพื้นที่ซับไตเติ้ลเกม"
-			binding.cropBoxGuideText.text = "กรอบอ่านซับ (ลากเพื่อย้าย)"
-			binding.cropBoxGuideText.setTextColor(Color.parseColor("#00E676"))
+		when (activeCropEditTarget) {
+			CropEditTarget.NOTE -> {
+				binding.cropEditorTitle.text = "ลากกรอบสีฟ้าไปวางตรงพื้นที่เอกสาร/คำแนะนำ"
+				binding.cropBoxGuideText.text = "กรอบแปลเฉพาะจุด (ลากเพื่อย้าย)"
+				binding.cropBoxGuideText.setTextColor(Color.parseColor("#00E5FF"))
+				binding.cropBoxFrame.setBackgroundResource(R.drawable.bg_note_crop_box)
+			}
+			CropEditTarget.POPUP_LEFT -> {
+				binding.cropEditorTitle.text = "ลากกรอบสีทองไปวางตรงพื้นที่ป๊อปอัพด้านซ้าย (คำแนะนำ)"
+				binding.cropBoxGuideText.text = "โซนป๊อปอัพซ้าย (คำแนะนำ/Tutorial)"
+				binding.cropBoxGuideText.setTextColor(Color.parseColor("#FFB74D"))
+				binding.cropBoxFrame.setBackgroundResource(R.drawable.bg_popup_crop_left)
+			}
+			CropEditTarget.POPUP_RIGHT -> {
+				binding.cropEditorTitle.text = "ลากกรอบสีฟ้าไปวางตรงมือถือ/แจ้งเตือนด้านขวา (เว้นปุ่มกดล่างขวา)"
+				binding.cropBoxGuideText.text = "โซนป๊อปอัพขวา (มือถือ/แจ้งเตือน)"
+				binding.cropBoxGuideText.setTextColor(Color.parseColor("#00E5FF"))
+				binding.cropBoxFrame.setBackgroundResource(R.drawable.bg_popup_crop_right)
+			}
+			CropEditTarget.SUBTITLE -> {
+				binding.cropEditorTitle.text = "ลากกรอบสีเขียวไปวางตรงพื้นที่ซับไตเติ้ลเกม"
+				binding.cropBoxGuideText.text = "กรอบอ่านซับ (ลากเพื่อย้าย)"
+				binding.cropBoxGuideText.setTextColor(Color.parseColor("#00E676"))
+				binding.cropBoxFrame.setBackgroundResource(R.drawable.bg_crop_box)
+			}
 		}
 		binding.cropEditorOverlay.isVisible = true
 		binding.cropEditorOverlay.post {
 			val overlayW = binding.cropEditorOverlay.width
 			val overlayH = binding.cropEditorOverlay.height
-			val prefix = if (isEditingNoteCrop) "note_crop_" else "crop_"
-			val leftNorm = cropPrefs.getFloat("${prefix}left", if (isEditingNoteCrop) 0.20f else 0.18f)
-			val topNorm = cropPrefs.getFloat("${prefix}top", if (isEditingNoteCrop) 0.15f else 0.72f)
-			val widthNorm = cropPrefs.getFloat("${prefix}width", if (isEditingNoteCrop) 0.60f else 0.64f)
-			val heightNorm = cropPrefs.getFloat("${prefix}height", if (isEditingNoteCrop) 0.65f else 0.22f)
+			val prefix = getCropPrefix(activeCropEditTarget)
+			val defs = getCropDefaults(activeCropEditTarget)
+			val leftNorm = cropPrefs.getFloat("${prefix}left", defs[0])
+			val topNorm = cropPrefs.getFloat("${prefix}top", defs[1])
+			val widthNorm = cropPrefs.getFloat("${prefix}width", defs[2])
+			val heightNorm = cropPrefs.getFloat("${prefix}height", defs[3])
 
-			val w = (overlayW * widthNorm).toInt().coerceAtLeast(dpToPx(120))
-			val h = (overlayH * heightNorm).toInt().coerceAtLeast(dpToPx(40))
+			val w = (overlayW * widthNorm).toInt().coerceAtLeast(dpToPx(80))
+			val h = (overlayH * heightNorm).toInt().coerceAtLeast(dpToPx(36))
 			val x = (overlayW * leftNorm).coerceIn(0f, (overlayW - w).toFloat().coerceAtLeast(0f))
 			val y = (overlayH * topNorm).coerceIn(binding.cropTopBar.height.toFloat(), (overlayH - h).toFloat().coerceAtLeast(binding.cropTopBar.height.toFloat()))
 
@@ -1034,15 +1351,11 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		val overlayW = binding.cropEditorOverlay.width
 		val overlayH = binding.cropEditorOverlay.height
 
-		val defW = if (isEditingNoteCrop) 0.60f else 0.64f
-		val defH = if (isEditingNoteCrop) 0.65f else 0.22f
-		val defX = if (isEditingNoteCrop) 0.20f else 0.18f
-		val defY = if (isEditingNoteCrop) 0.15f else 0.72f
-
-		val w = (overlayW * defW).toInt().coerceAtLeast(dpToPx(120))
-		val h = (overlayH * defH).toInt().coerceAtLeast(dpToPx(40))
-		val x = overlayW * defX
-		val y = overlayH * defY
+		val defs = getCropDefaults(activeCropEditTarget)
+		val w = (overlayW * defs[2]).toInt().coerceAtLeast(dpToPx(80))
+		val h = (overlayH * defs[3]).toInt().coerceAtLeast(dpToPx(36))
+		val x = overlayW * defs[0]
+		val y = (overlayH * defs[1]).coerceAtLeast(binding.cropTopBar.height.toFloat())
 
 		val params = binding.cropBoxFrame.layoutParams
 		params.width = w
@@ -1053,15 +1366,15 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 	}
 
 	private fun saveCropBoxSettings() {
-		val overlayW = binding.cropEditorOverlay.width.toFloat()
-		val overlayH = binding.cropEditorOverlay.height.toFloat()
+		val overlayW = binding.cropEditorOverlay.width.toFloat().coerceAtLeast(1f)
+		val overlayH = binding.cropEditorOverlay.height.toFloat().coerceAtLeast(1f)
 
-		val leftNorm = (binding.cropBoxFrame.x / overlayW).coerceIn(0f, 0.85f)
+		val leftNorm = (binding.cropBoxFrame.x / overlayW).coerceIn(0f, 0.90f)
 		val topNorm = (binding.cropBoxFrame.y / overlayH).coerceIn(0f, 0.90f)
-		val widthNorm = (binding.cropBoxFrame.width / overlayW).coerceIn(0.10f, 1f - leftNorm)
+		val widthNorm = (binding.cropBoxFrame.width / overlayW).coerceIn(0.08f, 1f - leftNorm)
 		val heightNorm = (binding.cropBoxFrame.height / overlayH).coerceIn(0.06f, 1f - topNorm)
 
-		val prefix = if (isEditingNoteCrop) "note_crop_" else "crop_"
+		val prefix = getCropPrefix(activeCropEditTarget)
 		cropPrefs.edit()
 			.putFloat("${prefix}left", leftNorm)
 			.putFloat("${prefix}top", topNorm)
@@ -1071,7 +1384,12 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 
 		binding.cropEditorOverlay.isVisible = false
 		resetMenuButtonTimer()
-		val msg = if (isEditingNoteCrop) "บันทึกกรอบแปลเฉพาะจุด (เอกสาร/คำแนะนำ) แล้ว" else "บันทึกกรอบพื้นที่อ่านซับเรียบร้อยแล้ว"
+		val msg = when (activeCropEditTarget) {
+			CropEditTarget.NOTE -> "บันทึกกรอบแปลเฉพาะจุด (เอกสาร/คำแนะนำ) แล้ว"
+			CropEditTarget.POPUP_LEFT -> "บันทึกกรอบป๊อปอัพซ้ายเรียบร้อยแล้ว"
+			CropEditTarget.POPUP_RIGHT -> "บันทึกกรอบป๊อปอัพขวาเรียบร้อยแล้ว"
+			CropEditTarget.SUBTITLE -> "บันทึกกรอบพื้นที่อ่านซับเรียบร้อยแล้ว"
+		}
 		Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
 	}
 
@@ -1114,16 +1432,16 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		}
 
 		binding.btnQuickNoteBox.setOnClickListener {
-			if (isAutoArMode) {
-				setAutoArMode(false)
+			if (isPopupZonesMode) {
+				setPopupZonesMode(false)
 			}
 			setFloatingNoteCropBoxVisible(!isNoteCropBoxVisible)
 			updateQuickDrawerUI()
 			resetTopDrawerTimer()
 		}
 
-		binding.btnQuickArMode.setOnClickListener {
-			setAutoArMode(!isAutoArMode)
+		binding.btnQuickPopupMode.setOnClickListener {
+			setPopupZonesMode(!isPopupZonesMode)
 			updateQuickDrawerUI()
 			resetTopDrawerTimer()
 		}
@@ -1193,19 +1511,19 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		binding.btnQuickNoteBox.setTextColor(Color.parseColor(if (isNoteCropBoxVisible) "#00E5FF" else "#FFFFFF"))
 		binding.btnQuickNoteBox.strokeColor = android.content.res.ColorStateList.valueOf(Color.parseColor(if (isNoteCropBoxVisible) "#00E5FF" else "#66FFFFFF"))
 
-		binding.btnQuickArMode.text = if (isAutoArMode) "โหมด: กรอบเขียว" else "โหมด: เฉพาะจุด"
-		binding.btnQuickArMode.setTextColor(Color.parseColor(if (isAutoArMode) "#00E676" else "#00E5FF"))
-		binding.btnQuickArMode.strokeColor = android.content.res.ColorStateList.valueOf(Color.parseColor(if (isAutoArMode) "#00E676" else "#00E5FF"))
+		binding.btnQuickPopupMode.text = if (isPopupZonesMode) "โหมด: ป๊อปอัพ" else "โหมด: เฉพาะจุด"
+		binding.btnQuickPopupMode.setTextColor(Color.parseColor(if (isPopupZonesMode) "#FFB74D" else "#00E5FF"))
+		binding.btnQuickPopupMode.strokeColor = android.content.res.ColorStateList.valueOf(Color.parseColor(if (isPopupZonesMode) "#FFB74D" else "#00E5FF"))
 	}
 
 	@SuppressLint("ClickableViewAccessibility")
 	private fun setupNoteTranslationFeature() {
 		isNoteCropBoxVisible = cropPrefs.getBoolean("note_crop_visible", false)
-		isAutoArMode = cropPrefs.getBoolean("auto_ar_mode", false)
-		binding.extraTranslateModeToggleGroup.check(if (isAutoArMode) R.id.btnModeAutoAr else R.id.btnModeSpot)
+		isPopupZonesMode = cropPrefs.getBoolean("popup_zones_mode", false)
+		binding.extraTranslateModeToggleGroup.check(if (isPopupZonesMode) R.id.btnModePopupZones else R.id.btnModeSpot)
 		binding.extraTranslateModeToggleGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
 			if (isChecked) {
-				setAutoArMode(checkedId == R.id.btnModeAutoAr)
+				setPopupZonesMode(checkedId == R.id.btnModePopupZones)
 			}
 		}
 		applyExtraTranslateModeUI()
@@ -1650,140 +1968,577 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		uiVisibilityHandler.postDelayed(hideNoteCardRunnable, 20000)
 	}
 
-	private fun setAutoArMode(enable: Boolean) {
-		isAutoArMode = enable
-		cropPrefs.edit().putBoolean("auto_ar_mode", enable).apply()
-		binding.extraTranslateModeToggleGroup.check(if (enable) R.id.btnModeAutoAr else R.id.btnModeSpot)
+	private fun setupPopupZonesControls() {
+		isPopupLeftEnabled = cropPrefs.getBoolean("popup_left_enabled", true)
+		isPopupRightEnabled = cropPrefs.getBoolean("popup_right_enabled", true)
+		isFilterPopupHudEnabled = cropPrefs.getBoolean("popup_filter_hud", true)
+		popupHoldDurationMs = cropPrefs.getLong("popup_hold_duration_ms", 5000L)
+
+		binding.switchPopupLeftZone.isChecked = isPopupLeftEnabled
+		binding.switchPopupRightZone.isChecked = isPopupRightEnabled
+		binding.switchFilterPopupHud.isChecked = isFilterPopupHudEnabled
+
+		when (popupHoldDurationMs) {
+			3000L -> binding.popupHoldToggleGroup.check(R.id.btnPopupHold3)
+			8000L -> binding.popupHoldToggleGroup.check(R.id.btnPopupHold8)
+			else -> binding.popupHoldToggleGroup.check(R.id.btnPopupHold5)
+		}
+
+		binding.switchPopupLeftZone.setOnCheckedChangeListener { _, isChecked ->
+			isPopupLeftEnabled = isChecked
+			cropPrefs.edit().putBoolean("popup_left_enabled", isChecked).apply()
+			if (!isChecked) hidePopupCard(PopupSide.LEFT)
+		}
+
+		binding.switchPopupRightZone.setOnCheckedChangeListener { _, isChecked ->
+			isPopupRightEnabled = isChecked
+			cropPrefs.edit().putBoolean("popup_right_enabled", isChecked).apply()
+			if (!isChecked) hidePopupCard(PopupSide.RIGHT)
+		}
+
+		binding.switchFilterPopupHud.setOnCheckedChangeListener { _, isChecked ->
+			isFilterPopupHudEnabled = isChecked
+			cropPrefs.edit().putBoolean("popup_filter_hud", isChecked).apply()
+		}
+
+		binding.popupHoldToggleGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
+			if (isChecked) {
+				popupHoldDurationMs = when (checkedId) {
+					R.id.btnPopupHold3 -> 3000L
+					R.id.btnPopupHold8 -> 8000L
+					else -> 5000L
+				}
+				cropPrefs.edit().putLong("popup_hold_duration_ms", popupHoldDurationMs).apply()
+			}
+		}
+
+		// One-tap GTA / Open-World Preset: Left-Middle Tutorial + Bottom-Right Phone (safely above action prompts!)
+		binding.btnPresetGtaPopup.setOnClickListener {
+			cropPrefs.edit()
+				.putFloat("popup_left_left", 0.02f)
+				.putFloat("popup_left_top", 0.22f)
+				.putFloat("popup_left_width", 0.30f)
+				.putFloat("popup_left_height", 0.34f)
+				.putFloat("popup_right_left", 0.66f)
+				.putFloat("popup_right_top", 0.42f)
+				.putFloat("popup_right_width", 0.31f)
+				.putFloat("popup_right_height", 0.34f)
+				.putBoolean("popup_left_enabled", true)
+				.putBoolean("popup_right_enabled", true)
+				.putBoolean("popup_filter_hud", true)
+				.apply()
+			isPopupLeftEnabled = true
+			isPopupRightEnabled = true
+			isFilterPopupHudEnabled = true
+			binding.switchPopupLeftZone.isChecked = true
+			binding.switchPopupRightZone.isChecked = true
+			binding.switchFilterPopupHud.isChecked = true
+			Toast.makeText(this, "ตั้งค่า Preset GTA (ซ้ายกลาง + ขวาล่าง เหนือปุ่ม Action) แล้ว", Toast.LENGTH_SHORT).show()
+		}
+
+		// Tap-to-read & Close buttons on both Normal & Pure Black popup cards
+		binding.popupLeftCard.setOnClickListener {
+			if (lastPopupLeftThai.isNotEmpty()) speakPopupNow(PopupSide.LEFT, lastPopupLeftThai)
+		}
+		binding.purePopupLeftCard.setOnClickListener {
+			if (lastPopupLeftThai.isNotEmpty()) speakPopupNow(PopupSide.LEFT, lastPopupLeftThai)
+		}
+		binding.popupRightCard.setOnClickListener {
+			if (lastPopupRightThai.isNotEmpty()) speakPopupNow(PopupSide.RIGHT, lastPopupRightThai)
+		}
+		binding.purePopupRightCard.setOnClickListener {
+			if (lastPopupRightThai.isNotEmpty()) speakPopupNow(PopupSide.RIGHT, lastPopupRightThai)
+		}
+
+		binding.btnClosePopupLeft.setOnClickListener { hidePopupCard(PopupSide.LEFT) }
+		binding.btnClosePurePopupLeft.setOnClickListener { hidePopupCard(PopupSide.LEFT) }
+		binding.btnClosePopupRight.setOnClickListener { hidePopupCard(PopupSide.RIGHT) }
+		binding.btnClosePurePopupRight.setOnClickListener { hidePopupCard(PopupSide.RIGHT) }
+
+		binding.popupZonesConfigContainer.isVisible = isPopupZonesMode
+	}
+
+	private fun setupPopupAudioControls() {
+		isPopupTtsEnabled = cropPrefs.getBoolean("popup_tts_enabled", true)
+		popupTtsMode = try {
+			PopupTtsMode.valueOf(cropPrefs.getString("popup_tts_mode", PopupTtsMode.SMART_QUEUE.name) ?: PopupTtsMode.SMART_QUEUE.name)
+		} catch (_: Exception) {
+			PopupTtsMode.SMART_QUEUE
+		}
+		popupVoiceTone = try {
+			PopupVoiceTone.valueOf(cropPrefs.getString("popup_voice_tone", PopupVoiceTone.BRIGHT.name) ?: PopupVoiceTone.BRIGHT.name)
+		} catch (_: Exception) {
+			PopupVoiceTone.BRIGHT
+		}
+		popupVolume = cropPrefs.getFloat("popup_volume", 0.75f).coerceIn(0.30f, 1.0f)
+		isPopupStereoPanEnabled = cropPrefs.getBoolean("popup_stereo_pan", false)
+		isPopupChimeEnabled = cropPrefs.getBoolean("popup_chime", true)
+
+		binding.switchPopupTts.isChecked = isPopupTtsEnabled
+		binding.popupVoiceSettingsContainer.isVisible = isPopupTtsEnabled
+		binding.switchPopupStereoPan.isChecked = isPopupStereoPanEnabled
+		binding.switchPopupChime.isChecked = isPopupChimeEnabled
+
+		binding.popupTtsModeToggleGroup.check(
+			if (popupTtsMode == PopupTtsMode.DUAL_CHANNEL) R.id.btnPopupTtsDual else R.id.btnPopupTtsSmart
+		)
+		binding.popupVoiceToneToggleGroup.check(
+			when (popupVoiceTone) {
+				PopupVoiceTone.DEEP -> R.id.btnPopupToneDeep
+				PopupVoiceTone.NORMAL -> R.id.btnPopupToneNormal
+				else -> R.id.btnPopupToneBright
+			}
+		)
+
+		val volPct = (popupVolume * 100).toInt().coerceIn(30, 100)
+		binding.popupVolumeSeekBar.progress = volPct - 30
+		binding.tvPopupVolume.text = "$volPct%"
+
+		binding.switchPopupTts.setOnCheckedChangeListener { _, isChecked ->
+			isPopupTtsEnabled = isChecked
+			cropPrefs.edit().putBoolean("popup_tts_enabled", isChecked).apply()
+			binding.popupVoiceSettingsContainer.isVisible = isChecked
+			if (!isChecked) {
+				pendingSmartPopupSpeech = null
+				popupTts?.stop()
+				stopPopupGeminiAudioPlayback()
+			}
+		}
+
+		binding.popupTtsModeToggleGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
+			if (isChecked) {
+				popupTtsMode = if (checkedId == R.id.btnPopupTtsDual) PopupTtsMode.DUAL_CHANNEL else PopupTtsMode.SMART_QUEUE
+				cropPrefs.edit().putString("popup_tts_mode", popupTtsMode.name).apply()
+			}
+		}
+
+		binding.popupVoiceToneToggleGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
+			if (isChecked) {
+				popupVoiceTone = when (checkedId) {
+					R.id.btnPopupToneDeep -> PopupVoiceTone.DEEP
+					R.id.btnPopupToneNormal -> PopupVoiceTone.NORMAL
+					else -> PopupVoiceTone.BRIGHT
+				}
+				cropPrefs.edit().putString("popup_voice_tone", popupVoiceTone.name).apply()
+			}
+		}
+
+		binding.popupVolumeSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+			override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+				val pct = (progress + 30).coerceIn(30, 100)
+				popupVolume = pct / 100f
+				binding.tvPopupVolume.text = "$pct%"
+			}
+			override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+			override fun onStopTrackingTouch(seekBar: SeekBar?) {
+				cropPrefs.edit().putFloat("popup_volume", popupVolume).apply()
+			}
+		})
+
+		binding.switchPopupStereoPan.setOnCheckedChangeListener { _, isChecked ->
+			isPopupStereoPanEnabled = isChecked
+			cropPrefs.edit().putBoolean("popup_stereo_pan", isChecked).apply()
+		}
+
+		binding.switchPopupChime.setOnCheckedChangeListener { _, isChecked ->
+			isPopupChimeEnabled = isChecked
+			cropPrefs.edit().putBoolean("popup_chime", isChecked).apply()
+		}
+	}
+
+	private fun setPopupZonesMode(enable: Boolean) {
+		isPopupZonesMode = enable
+		cropPrefs.edit().putBoolean("popup_zones_mode", enable).apply()
+		binding.extraTranslateModeToggleGroup.check(if (enable) R.id.btnModePopupZones else R.id.btnModeSpot)
 		applyExtraTranslateModeUI()
 	}
 
 	private fun applyExtraTranslateModeUI() {
-		uiVisibilityHandler.removeCallbacks(arScanRunnable)
-		if (isAutoArMode) {
-			// Auto AR Green-Box mode: hide floating spot translate icon & spot box
+		binding.popupZonesConfigContainer.isVisible = isPopupZonesMode
+		if (isPopupZonesMode) {
+			// Auto Popup Zones mode: hide floating spot translate icon & spot box
 			binding.btnScanNoteFloat.isVisible = false
 			binding.floatingNoteCropBox.isVisible = false
 			hideNoteTranslationCard()
-			binding.arOverlayContainer.isVisible = !isTextOnlyMode
-			uiVisibilityHandler.postDelayed(arScanRunnable, 600)
 		} else {
-			// On-demand Spot Translation mode: show floating translate icon
-			binding.arOverlayContainer.removeAllViews()
-			binding.arOverlayContainer.isVisible = false
-			lastArSnapshot = ""
+			// On-demand Spot Translation mode: hide popup cards and show floating translate icon
+			hidePopupCard(PopupSide.LEFT)
+			hidePopupCard(PopupSide.RIGHT)
+			lastPopupLeftEnglish = ""
+			lastPopupRightEnglish = ""
 			binding.btnScanNoteFloat.isVisible = true
 			binding.floatingNoteCropBox.isVisible = isNoteCropBoxVisible && !isTextOnlyMode
 			if (isNoteCropBoxVisible && !isTextOnlyMode) {
 				syncFloatingNoteCropBox()
 			}
 		}
+		syncPopupCardVisibility()
 		updateQuickDrawerUI()
 	}
 
-	private fun captureAndRenderAutoAr() {
-		val surfaceView = binding.surfaceView
-		if (surfaceView.holder?.surface?.isValid != true || surfaceView.width <= 100 || surfaceView.height <= 100) return
-		if (isScanningAr || isScanningNote) return
+	private fun cropPopupZoneBitmap(fullBitmap: Bitmap, side: PopupSide): Bitmap? {
+		return try {
+			val target = if (side == PopupSide.LEFT) CropEditTarget.POPUP_LEFT else CropEditTarget.POPUP_RIGHT
+			val prefix = getCropPrefix(target)
+			val defs = getCropDefaults(target)
+			val leftNorm = cropPrefs.getFloat("${prefix}left", defs[0]).coerceIn(0f, 0.90f)
+			val topNorm = cropPrefs.getFloat("${prefix}top", defs[1]).coerceIn(0f, 0.90f)
+			val widthNorm = cropPrefs.getFloat("${prefix}width", defs[2]).coerceIn(0.08f, 1f - leftNorm)
+			val heightNorm = cropPrefs.getFloat("${prefix}height", defs[3]).coerceIn(0.06f, 1f - topNorm)
 
-		isScanningAr = true
-		val fullBitmap = Bitmap.createBitmap(1920, 1080, Bitmap.Config.ARGB_8888)
-		try {
-			PixelCopy.request(surfaceView, fullBitmap, { copyResult ->
-				if (copyResult == PixelCopy.SUCCESS && isAutoArMode && !isTextOnlyMode) {
-					val subLeft = cropPrefs.getFloat("crop_left", 0.18f) * 1920f
-					val subTop = cropPrefs.getFloat("crop_top", 0.72f) * 1080f
-					val subRight = subLeft + cropPrefs.getFloat("crop_width", 0.64f) * 1920f
-					val subBottom = subTop + cropPrefs.getFloat("crop_height", 0.22f) * 1080f
+			val cropX = (1920 * leftNorm).toInt().coerceIn(0, 1919)
+			val cropY = (1080 * topNorm).toInt().coerceIn(0, 1079)
+			val cropW = (1920 * widthNorm).toInt().coerceIn(40, 1920 - cropX)
+			val cropH = (1080 * heightNorm).toInt().coerceIn(30, 1080 - cropY)
 
-					val image = InputImage.fromBitmap(fullBitmap, 0)
-					textRecognizer.process(image)
-						.addOnSuccessListener { visionText ->
-							val blocks = visionText.textBlocks.mapNotNull { block ->
-								val t = block.text.trim().replace(Regex("\\s+"), " ")
-								val box = block.boundingBox
-								if (t.length >= 2 && box != null && t.any { it in 'a'..'z' || it in 'A'..'Z' }) {
-									val cx = box.centerX().toFloat()
-									val cy = box.centerY().toFloat()
-									val insideSubtitle = cx in subLeft..subRight && cy in subTop..subBottom
-									if (!insideSubtitle) NoteBlockItem(t, Rect(box)) else null
-								} else null
-							}.take(14)
-
-							val snapshot = blocks.joinToString("|") { it.english }
-							if (blocks.isEmpty()) {
-								lastArSnapshot = ""
-								binding.arOverlayContainer.removeAllViews()
-								isScanningAr = false
-							} else if (snapshot == lastArSnapshot) {
-								isScanningAr = false
-							} else {
-								lastArSnapshot = snapshot
-								ocrScope.launch {
-									try {
-										val joinedEng = blocks.joinToString("\n|||\n") { it.english }
-										val joinedThai = translateGoogleFree(joinedEng)
-										val parts = joinedThai.split(Regex("\\s*\\|\\|\\|\\s*"))
-										if (parts.size == blocks.size) {
-											for (i in blocks.indices) blocks[i].thai = parts[i].trim()
-										} else {
-											for (b in blocks) b.thai = translateGoogleFree(b.english)
-										}
-										if (isAutoArMode && !isTextOnlyMode) {
-											renderArGreenBoxes(blocks, 1920, 1080)
-										}
-									} finally {
-										isScanningAr = false
-									}
-								}
-							}
-						}
-						.addOnFailureListener { isScanningAr = false }
-						.addOnCompleteListener { fullBitmap.recycle() }
-				} else {
-					isScanningAr = false
-					fullBitmap.recycle()
-				}
-			}, Handler(Looper.getMainLooper()))
-		} catch (_: Exception) {
-			isScanningAr = false
-			fullBitmap.recycle()
+			val cropped = Bitmap.createBitmap(fullBitmap, cropX, cropY, cropW, cropH)
+			if (cropW < 520) {
+				val scaled = Bitmap.createScaledBitmap(cropped, (cropW * 1.5f).toInt(), (cropH * 1.5f).toInt(), true)
+				cropped.recycle()
+				scaled
+			} else {
+				cropped
+			}
+		} catch (e: Exception) {
+			android.util.Log.w("PSTranslatorPopup", "Crop error ($side): ${e.message}")
+			null
 		}
 	}
 
-	private fun renderArGreenBoxes(blocks: List<NoteBlockItem>, bmpW: Int, bmpH: Int) {
-		val container = binding.arOverlayContainer
-		val viewW = container.width
-		val viewH = container.height
-		if (viewW <= 0 || viewH <= 0) return
+	private fun processPopupZoneBitmap(side: PopupSide, ocrBitmap: Bitmap) {
+		val image = InputImage.fromBitmap(ocrBitmap, 0)
+		textRecognizer.process(image)
+			.addOnSuccessListener { visionText ->
+				if (!isPopupZonesMode) return@addOnSuccessListener
+				val rawText = visionText.text.trim().replace("\n", " ")
+				val fixedText = fixOcrText(rawText)
+				val text = fixedText.replace(Regex("\\s+"), " ").trim()
 
-		container.removeAllViews()
-		val sx = viewW.toFloat() / bmpW.toFloat()
-		val sy = viewH.toFloat() / bmpH.toFloat()
+				if (text.isEmpty() || !isValidPopupText(text)) return@addOnSuccessListener
 
-		for (item in blocks) {
-			if (item.thai.isBlank()) continue
-			val leftPx = (item.rect.left * sx).toInt().coerceIn(0, (viewW - dpToPx(60)).coerceAtLeast(0))
-			val topPx = (item.rect.top * sy).toInt().coerceIn(0, (viewH - dpToPx(24)).coerceAtLeast(0))
-			val maxW = (viewW - leftPx - dpToPx(8)).coerceAtLeast(dpToPx(60))
-			val estSp = ((item.rect.height() * sy) / resources.displayMetrics.density * 0.50f).coerceIn(10f, 15f)
+				// Skip if identical to current main subtitle
+				if (lastTranslatedEnglish.isNotEmpty() && isSimilarText(text, lastTranslatedEnglish)) return@addOnSuccessListener
 
-			val tv = android.widget.TextView(this).apply {
-				text = item.thai
-				setTextColor(Color.WHITE)
-				setTextSize(TypedValue.COMPLEX_UNIT_SP, estSp)
-				setTypeface(typeface, android.graphics.Typeface.BOLD)
-				setBackgroundResource(R.drawable.bg_ar_green_pill)
-				setPadding(dpToPx(6), dpToPx(2), dpToPx(6), dpToPx(2))
-				maxWidth = maxW
+				if (side == PopupSide.LEFT) {
+					if (isPopupLeftVisible && isSimilarText(text, lastPopupLeftEnglish)) {
+						// Still visible on game screen -> extend hold timer smoothly without re-translating
+						uiVisibilityHandler.removeCallbacks(hidePopupLeftRunnable)
+						uiVisibilityHandler.postDelayed(hidePopupLeftRunnable, popupHoldDurationMs)
+						return@addOnSuccessListener
+					}
+					if (!isTranslatingPopupLeft && !isSimilarText(text, lastPopupLeftEnglish)) {
+						translateAndShowPopup(PopupSide.LEFT, text)
+					}
+				} else {
+					if (isPopupRightVisible && isSimilarText(text, lastPopupRightEnglish)) {
+						uiVisibilityHandler.removeCallbacks(hidePopupRightRunnable)
+						uiVisibilityHandler.postDelayed(hidePopupRightRunnable, popupHoldDurationMs)
+						return@addOnSuccessListener
+					}
+					if (!isTranslatingPopupRight && !isSimilarText(text, lastPopupRightEnglish)) {
+						translateAndShowPopup(PopupSide.RIGHT, text)
+					}
+				}
 			}
-			val lp = FrameLayout.LayoutParams(
-				FrameLayout.LayoutParams.WRAP_CONTENT,
-				FrameLayout.LayoutParams.WRAP_CONTENT
-			).apply {
-				leftMargin = leftPx
-				topMargin = topPx
+			.addOnFailureListener { e ->
+				android.util.Log.w("PSTranslatorPopup", "OCR error ($side): ${e.message}")
 			}
-			container.addView(tv, lp)
+			.addOnCompleteListener {
+				if (!ocrBitmap.isRecycled) ocrBitmap.recycle()
+				if (side == PopupSide.LEFT) isScanningPopupLeft = false else isScanningPopupRight = false
+			}
+	}
+
+	private fun isValidPopupText(text: String): Boolean {
+		val letterCount = text.count { it.isLetter() }
+		if (!isFilterPopupHudEnabled) {
+			return letterCount >= 4
+		}
+
+		val nonSpaceCount = text.count { !it.isWhitespace() }.coerceAtLeast(1)
+		// Reject counters, ammo, speedometers, timers, money ($12,400, 24/120, 85 MPH, 02:45)
+		if (letterCount < 10) return false
+		if (letterCount.toFloat() / nonSpaceCount < 0.55f) return false
+
+		val rawWords = text.split(Regex("\\s+")).filter { it.isNotEmpty() }
+		val alphaWords = rawWords.map { it.lowercase().replace(Regex("[^a-z0-9-]"), "") }.filter { it.isNotEmpty() }
+		val realWords = alphaWords.filter { it.length >= 2 && it.any { c -> c in 'a'..'z' } }
+		if (realWords.size < 3 && letterCount < 16) return false
+
+		// PlayStation button icons & short bottom-right HUD action prompt tokens
+		val buttonTokens = setOf(
+			"x", "o", "l1", "l2", "l3", "r1", "r2", "r3", "ps", "ls", "rs",
+			"dpad", "d-pad", "pad", "touchpad", "options", "share", "create",
+			"triangle", "square", "circle", "cross", "up", "down", "left", "right"
+		)
+		val hudActionWords = setOf(
+			"hold", "press", "tap", "aim", "fire", "shoot", "reload", "sprint", "run",
+			"jump", "crouch", "dodge", "roll", "block", "parry", "melee", "cover", "take",
+			"interact", "talk", "open", "close", "back", "cancel", "confirm", "select", "skip",
+			"map", "menu", "pause", "camera", "zoom", "horn", "brake", "handbrake", "boost",
+			"radio", "weapon", "wheel", "inventory", "skills", "craft", "heal", "use", "drop",
+			"equip", "pick", "enter", "exit", "climb", "mount", "whistle", "focus", "scan",
+			"photo", "hud", "mph", "kmh", "fps", "ammo", "health", "armor", "stamina", "to", "for"
+		)
+
+		val hudHitCount = alphaWords.count { it in buttonTokens || it in hudActionWords }
+		val hudRatio = hudHitCount.toFloat() / alphaWords.size.coerceAtLeast(1)
+
+		// Short/medium action prompt clusters (e.g. "Hold X to Sprint", "L2 Aim R2 Fire", "Press O Cancel")
+		if (alphaWords.size <= 6 && hudRatio >= 0.45f) return false
+		// Even multi-line stacked bottom-right HUD clusters (e.g. "[X] Jump [O] Crouch [R2] Fire [L2] Aim")
+		if (alphaWords.size > 6 && hudRatio >= 0.60f) return false
+
+		// Reject short prompt starting with Hold/Press/Tap + button
+		if (alphaWords.size <= 5 && alphaWords.firstOrNull() in setOf("hold", "press", "tap") &&
+			alphaWords.any { it in buttonTokens }
+		) {
+			return false
+		}
+
+		return true
+	}
+
+	private fun translateAndShowPopup(side: PopupSide, englishText: String) {
+		if (side == PopupSide.LEFT) {
+			isTranslatingPopupLeft = true
+		} else {
+			isTranslatingPopupRight = true
+		}
+
+		ocrScope.launch {
+			try {
+				val thai = translateToThai(englishText, isPopup = true).trim()
+				if (thai.isEmpty() || !isPopupZonesMode) return@launch
+
+				if (side == PopupSide.LEFT) {
+					if (isPopupLeftVisible && isSimilarThai(thai, lastPopupLeftThai)) return@launch
+					lastPopupLeftEnglish = englishText
+					lastPopupLeftThai = thai
+					showPopupCard(PopupSide.LEFT, thai)
+				} else {
+					if (isPopupRightVisible && isSimilarThai(thai, lastPopupRightThai)) return@launch
+					lastPopupRightEnglish = englishText
+					lastPopupRightThai = thai
+					showPopupCard(PopupSide.RIGHT, thai)
+				}
+
+				if (isPopupTtsEnabled) {
+					speakPopupTranslation(side, englishText, thai)
+				}
+			} finally {
+				if (side == PopupSide.LEFT) {
+					isTranslatingPopupLeft = false
+				} else {
+					isTranslatingPopupRight = false
+				}
+			}
+		}
+	}
+
+	private fun showPopupCard(side: PopupSide, thaiText: String) {
+		if (side == PopupSide.LEFT) {
+			isPopupLeftVisible = true
+			binding.tvPopupLeftText.text = thaiText
+			binding.tvPurePopupLeftText.text = thaiText
+			uiVisibilityHandler.removeCallbacks(hidePopupLeftRunnable)
+			uiVisibilityHandler.postDelayed(hidePopupLeftRunnable, popupHoldDurationMs)
+		} else {
+			isPopupRightVisible = true
+			binding.tvPopupRightText.text = thaiText
+			binding.tvPurePopupRightText.text = thaiText
+			uiVisibilityHandler.removeCallbacks(hidePopupRightRunnable)
+			uiVisibilityHandler.postDelayed(hidePopupRightRunnable, popupHoldDurationMs)
+		}
+		syncPopupCardVisibility()
+	}
+
+	private fun hidePopupCard(side: PopupSide) {
+		if (side == PopupSide.LEFT) {
+			isPopupLeftVisible = false
+			uiVisibilityHandler.removeCallbacks(hidePopupLeftRunnable)
+			binding.popupLeftCard.isVisible = false
+			binding.purePopupLeftCard.isVisible = false
+		} else {
+			isPopupRightVisible = false
+			uiVisibilityHandler.removeCallbacks(hidePopupRightRunnable)
+			binding.popupRightCard.isVisible = false
+			binding.purePopupRightCard.isVisible = false
+		}
+	}
+
+	private fun syncPopupCardVisibility() {
+		if (!::binding.isInitialized) return
+		val showLeft = isPopupZonesMode && isPopupLeftEnabled && isPopupLeftVisible && lastPopupLeftThai.isNotEmpty()
+		val showRight = isPopupZonesMode && isPopupRightEnabled && isPopupRightVisible && lastPopupRightThai.isNotEmpty()
+		binding.popupLeftCard.isVisible = showLeft && !isTextOnlyMode
+		binding.popupRightCard.isVisible = showRight && !isTextOnlyMode
+		binding.purePopupLeftCard.isVisible = showLeft && isTextOnlyMode
+		binding.purePopupRightCard.isVisible = showRight && isTextOnlyMode
+	}
+
+	private fun isMainTtsBusy(): Boolean {
+		return tts?.isSpeaking == true ||
+			activeUtterances.isNotEmpty() ||
+			geminiMediaPlayer != null ||
+			geminiAudioQueue.isNotEmpty()
+	}
+
+	private fun playPopupChime() {
+		if (!isPopupChimeEnabled) return
+		try {
+			if (popupChimeToneGenerator == null) {
+				popupChimeToneGenerator = ToneGenerator(AudioManager.STREAM_MUSIC, 38)
+			}
+			popupChimeToneGenerator?.startTone(ToneGenerator.TONE_PROP_BEEP, 55)
+		} catch (_: Exception) {}
+	}
+
+	private fun speakPopupTranslation(side: PopupSide, englishText: String, thaiText: String) {
+		if (popupTtsMode == PopupTtsMode.SMART_QUEUE && isMainTtsBusy()) {
+			pendingSmartPopupSpeech = PendingPopupSpeech(side, englishText, thaiText, System.currentTimeMillis())
+			// Safety fallback check in case local TTS engine misses onDone callback
+			uiVisibilityHandler.postDelayed({ tryFlushPendingSmartPopupSpeech() }, 2800)
+			return
+		}
+		speakPopupNow(side, thaiText)
+	}
+
+	private fun tryFlushPendingSmartPopupSpeech() {
+		val pending = pendingSmartPopupSpeech ?: return
+		if (isMainTtsBusy()) return
+		pendingSmartPopupSpeech = null
+		if (!isPopupTtsEnabled || isDestroyed || isFinishing) return
+		if (System.currentTimeMillis() - pending.createdAtMs <= 6500L) {
+			speakPopupNow(pending.side, pending.thai)
+		}
+	}
+
+	private fun speakPopupNow(side: PopupSide, thaiText: String) {
+		if (thaiText.isBlank() || isDestroyed || isFinishing) return
+		playPopupChime()
+		val now = System.currentTimeMillis()
+
+		if (geminiApiKey.isNotEmpty() && isGeminiTtsEnabled) {
+			val popupVoiceName = when (popupVoiceTone) {
+				PopupVoiceTone.BRIGHT -> "Puck"
+				PopupVoiceTone.DEEP -> "Fenrir"
+				PopupVoiceTone.NORMAL -> "Aoede"
+			}
+			ocrScope.launch {
+				val wavFile = withContext(Dispatchers.IO) {
+					synthesizeGeminiTts(thaiText, popupVoiceName, now + 17)
+				}
+				if (wavFile != null && !isDestroyed && !isFinishing) {
+					enqueuePopupGeminiAudio(wavFile, side)
+				} else if (!isDestroyed && !isFinishing) {
+					speakPopupWithLocalTts(side, thaiText, now)
+				}
+			}
+			return
+		}
+
+		speakPopupWithLocalTts(side, thaiText, now)
+	}
+
+	private fun speakPopupWithLocalTts(side: PopupSide, thaiText: String, now: Long) {
+		val engine = if (isPopupTtsReady && popupTts != null) popupTts else tts
+		if (engine == null) return
+
+		val pitch = when (popupVoiceTone) {
+			PopupVoiceTone.BRIGHT -> 1.24f
+			PopupVoiceTone.DEEP -> 0.78f
+			PopupVoiceTone.NORMAL -> 1.02f
+		}
+		val rate = (speechSpeedRate * 1.05f).coerceIn(1.0f, 1.75f)
+		engine.setPitch(pitch)
+		engine.setSpeechRate(rate)
+
+		val params = Bundle().apply {
+			putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, popupVolume)
+			if (isPopupStereoPanEnabled) {
+				putFloat(TextToSpeech.Engine.KEY_PARAM_PAN, if (side == PopupSide.LEFT) -0.65f else 0.65f)
+			} else {
+				putFloat(TextToSpeech.Engine.KEY_PARAM_PAN, 0.0f)
+			}
+		}
+
+		// Flush previous stale popup on the dedicated popup channel so popups stay snappy
+		val queueMode = if (engine === popupTts) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD
+		engine.speak(thaiText, queueMode, params, "popup_${side.name}_$now")
+	}
+
+	private fun enqueuePopupGeminiAudio(wavFile: java.io.File, side: PopupSide) {
+		// Replace older queued popup audio so popup narration stays current
+		while (popupGeminiAudioQueue.size >= 1) {
+			popupGeminiAudioQueue.pollFirst()?.first?.delete()
+		}
+		popupGeminiAudioQueue.addLast(Pair(wavFile, side))
+		if (popupMediaPlayer == null) {
+			playNextPopupGeminiAudio()
+		}
+	}
+
+	private fun playNextPopupGeminiAudio() {
+		if (isDestroyed || isFinishing) {
+			stopPopupGeminiAudioPlayback()
+			return
+		}
+		val nextItem = popupGeminiAudioQueue.pollFirst() ?: return
+		val nextFile = nextItem.first
+		val side = nextItem.second
+		try {
+			val mp = MediaPlayer()
+			mp.setDataSource(nextFile.absolutePath)
+			mp.prepare()
+			val leftVol = if (isPopupStereoPanEnabled) {
+				if (side == PopupSide.LEFT) popupVolume else popupVolume * 0.30f
+			} else {
+				popupVolume
+			}
+			val rightVol = if (isPopupStereoPanEnabled) {
+				if (side == PopupSide.RIGHT) popupVolume else popupVolume * 0.30f
+			} else {
+				popupVolume
+			}
+			mp.setVolume(leftVol, rightVol)
+			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+				try {
+					mp.playbackParams = PlaybackParams().setSpeed((speechSpeedRate * 1.04f).coerceIn(1.0f, 1.65f))
+				} catch (_: Exception) {}
+			}
+			mp.setOnCompletionListener {
+				it.release()
+				if (popupMediaPlayer == it) popupMediaPlayer = null
+				nextFile.delete()
+				playNextPopupGeminiAudio()
+			}
+			mp.setOnErrorListener { player, _, _ ->
+				player.release()
+				if (popupMediaPlayer == player) popupMediaPlayer = null
+				nextFile.delete()
+				playNextPopupGeminiAudio()
+				true
+			}
+			popupMediaPlayer = mp
+			mp.start()
+		} catch (_: Exception) {
+			nextFile.delete()
+			popupMediaPlayer = null
+			playNextPopupGeminiAudio()
+		}
+	}
+
+	private fun stopPopupGeminiAudioPlayback() {
+		try {
+			popupMediaPlayer?.stop()
+		} catch (_: Exception) {}
+		try {
+			popupMediaPlayer?.release()
+		} catch (_: Exception) {}
+		popupMediaPlayer = null
+		while (popupGeminiAudioQueue.isNotEmpty()) {
+			popupGeminiAudioQueue.pollFirst()?.first?.delete()
 		}
 	}
 
@@ -2033,49 +2788,150 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		return (dp * resources.displayMetrics.density).toInt()
 	}
 
-	private suspend fun translateToThai(englishText: String): String = withContext(Dispatchers.IO) {
-		if (geminiApiKey.isNotEmpty() && isGeminiTranslateEnabled) {
+	private suspend fun translateToThai(englishText: String, isPopup: Boolean = false): String = withContext(Dispatchers.IO) {
+		val provider = activeTranslationProvider
+		val apiKey = getProviderApiKey(provider)
+		if (provider != TranslationProvider.GOOGLE_FREE && apiKey.isNotEmpty()) {
 			try {
-				val geminiRes = translateWithGemini(englishText)
-				if (!geminiRes.isNullOrBlank()) {
-					return@withContext geminiRes
+				val aiResult = when (provider) {
+					TranslationProvider.GEMINI -> translateWithGemini(englishText, apiKey, getProviderModel(provider), isPopup)
+					TranslationProvider.GROQ,
+					TranslationProvider.CEREBRAS,
+					TranslationProvider.OPENAI,
+					TranslationProvider.OPENROUTER,
+					TranslationProvider.CUSTOM -> {
+						val endpoint = if (provider == TranslationProvider.CUSTOM) getCustomEndpointUrl() else provider.defaultEndpoint
+						translateWithOpenAiCompatible(
+							englishText = englishText,
+							endpoint = endpoint,
+							apiKey = apiKey,
+							model = getProviderModel(provider),
+							provider = provider,
+							isPopup = isPopup
+						)
+					}
+					TranslationProvider.GOOGLE_FREE -> null
+				}
+				if (!aiResult.isNullOrBlank()) {
+					return@withContext aiResult
 				}
 			} catch (e: Exception) {
-				android.util.Log.w("PSTranslatorGemini", "Gemini translate fallback: ${e.message}")
+				android.util.Log.w("PSTranslatorAPI", "${provider.displayName} fallback to Google Free: ${e.message}")
 			}
 		}
-		try {
-			val url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=th&dt=t&q=" + URLEncoder.encode(englishText, "UTF-8")
-			val conn = URL(url).openConnection()
-			conn.setRequestProperty("User-Agent", "Mozilla/5.0")
-			conn.connectTimeout = 3000
-			conn.readTimeout = 3000
-			val res = conn.getInputStream().bufferedReader().use { it.readText() }
-			val json = JSONArray(res)
-			val sentences = json.getJSONArray(0)
-			val sb = StringBuilder()
-			for (i in 0 until sentences.length()) {
-				sb.append(sentences.getJSONArray(i).getString(0))
-			}
-			val result = sb.toString().trim()
-			if (result.isNotEmpty()) result else englishText
-		} catch (e: Exception) {
-			englishText
+		translateGoogleFree(englishText)
+	}
+
+	private fun buildTranslationPrompt(englishText: String, isPopup: Boolean): String {
+		return if (isPopup) {
+			"Translate this in-game HUD popup, tutorial tip, or in-game phone message from English to clear, concise, natural Thai. Return ONLY the Thai translation without notes or quotes:\n$englishText"
+		} else {
+			"Translate this video game subtitle from English to natural, punchy spoken Thai (movie/game subtitle style). Accurately translate slang, idioms, and profanity/swear words matching the character's raw emotion without censoring or making it overly polite. Return ONLY the Thai translation:\n$englishText"
 		}
 	}
 
-	private fun translateWithGemini(englishText: String): String? {
-		val endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" +
-			URLEncoder.encode(geminiApiKey, "UTF-8")
+	private fun cleanAiTranslationOutput(raw: String): String? {
+		val cleaned = raw
+			.replace(Regex("(?s)<think>.*?</think>"), "")
+			.trim()
+			.removeSurrounding("\"")
+			.removeSurrounding("'")
+			.trim()
+		return cleaned.ifEmpty { null }
+	}
+
+	private fun translateWithGemini(englishText: String, apiKey: String, model: String, isPopup: Boolean): String? {
+		val prompt = buildTranslationPrompt(englishText, isPopup)
+		val lowerModel = model.lowercase()
+
+		// Primary fast path: Gemini Interactions API (store=false + minimal/off thinking for lowest latency)
+		try {
+			val conn = (URL("https://generativelanguage.googleapis.com/v1beta/interactions").openConnection() as java.net.HttpURLConnection).apply {
+				requestMethod = "POST"
+				setRequestProperty("x-goog-api-key", apiKey)
+				setRequestProperty("Content-Type", "application/json")
+				setRequestProperty("Api-Revision", "2026-05-20")
+				connectTimeout = 4000
+				readTimeout = 5000
+				doOutput = true
+			}
+
+			val genConfig = org.json.JSONObject().apply {
+				put("max_output_tokens", 240)
+				when {
+					lowerModel.contains("2.5-flash-lite") -> {
+						// Thinking is Off by default on gemini-2.5-flash-lite
+					}
+					lowerModel.contains("3.5-flash-lite") || lowerModel.contains("3.6-flash") || lowerModel.contains("3-flash") -> {
+						put("thinking_level", "minimal")
+					}
+					lowerModel.contains("3.8-flash") || lowerModel.contains("2.5-flash") || lowerModel.contains("4-argon") -> {
+						put("thinking_level", "low")
+					}
+				}
+			}
+
+			val body = org.json.JSONObject().apply {
+				put("model", model)
+				put("store", false)
+				put("input", prompt)
+				put("generation_config", genConfig)
+			}
+
+			conn.outputStream.bufferedWriter().use { it.write(body.toString()) }
+			if (conn.responseCode in 200..299) {
+				val resText = conn.inputStream.bufferedReader().use { it.readText() }
+				conn.disconnect()
+				val json = org.json.JSONObject(resText)
+
+				val sb = StringBuilder()
+				val steps = json.optJSONArray("steps")
+				if (steps != null) {
+					for (i in 0 until steps.length()) {
+						val step = steps.getJSONObject(i)
+						if (step.optString("type") == "model_output") {
+							val content = step.optJSONArray("content") ?: continue
+							for (j in 0 until content.length()) {
+								val item = content.getJSONObject(j)
+								if (item.optString("type") == "text") {
+									sb.append(item.optString("text", ""))
+								}
+							}
+						}
+					}
+				}
+				if (sb.isEmpty()) {
+					val outputs = json.optJSONArray("outputs")
+					if (outputs != null) {
+						for (i in 0 until outputs.length()) {
+							val out = outputs.getJSONObject(i)
+							if (out.optString("type") == "text") {
+								sb.append(out.optString("text", ""))
+							}
+						}
+					}
+				}
+				val parsed = cleanAiTranslationOutput(sb.toString())
+				if (parsed != null) return parsed
+			} else {
+				conn.disconnect()
+			}
+		} catch (e: Exception) {
+			android.util.Log.w("PSTranslatorAPI", "Gemini Interactions fallback to generateContent: ${e.message}")
+		}
+
+		// Secondary fallback path: classic generateContent endpoint with thinkingBudget=0 for 2.5 models
+		val endpoint = "https://generativelanguage.googleapis.com/v1beta/models/" +
+			URLEncoder.encode(model, "UTF-8") +
+			":generateContent?key=" + URLEncoder.encode(apiKey, "UTF-8")
 		val conn = (URL(endpoint).openConnection() as java.net.HttpURLConnection).apply {
 			requestMethod = "POST"
 			setRequestProperty("Content-Type", "application/json")
-			connectTimeout = 5000
-			readTimeout = 6000
+			connectTimeout = 4000
+			readTimeout = 5000
 			doOutput = true
 		}
 
-		val prompt = "Translate this video game subtitle from English to natural, punchy spoken Thai (movie/game subtitle style). Accurately translate slang, idioms, and profanity/swear words matching the character's raw emotion without censoring or making it overly polite. Return ONLY the Thai translation:\n$englishText"
 		val safetyCategories = listOf(
 			"HARM_CATEGORY_HARASSMENT",
 			"HARM_CATEGORY_HATE_SPEECH",
@@ -2090,6 +2946,13 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 				})
 			}
 		}
+		val genConfig = org.json.JSONObject().apply {
+			put("temperature", 0.30)
+			put("maxOutputTokens", 240)
+			if (lowerModel.contains("2.5-flash")) {
+				put("thinkingConfig", org.json.JSONObject().put("thinkingBudget", 0))
+			}
+		}
 		val body = org.json.JSONObject().apply {
 			put("contents", JSONArray().put(
 				org.json.JSONObject().put("parts", JSONArray().put(
@@ -2097,10 +2960,7 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 				))
 			))
 			put("safetySettings", safetyArray)
-			put("generationConfig", org.json.JSONObject().apply {
-				put("temperature", 0.35)
-				put("maxOutputTokens", 200)
-			})
+			put("generationConfig", genConfig)
 		}
 
 		conn.outputStream.bufferedWriter().use { it.write(body.toString()) }
@@ -2116,7 +2976,67 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		if (candidates.length() == 0) return null
 		val parts = candidates.getJSONObject(0).optJSONObject("content")?.optJSONArray("parts") ?: return null
 		if (parts.length() == 0) return null
-		return parts.getJSONObject(0).optString("text", "").trim().ifEmpty { null }
+		return cleanAiTranslationOutput(parts.getJSONObject(0).optString("text", ""))
+	}
+
+	private fun translateWithOpenAiCompatible(
+		englishText: String,
+		endpoint: String,
+		apiKey: String,
+		model: String,
+		provider: TranslationProvider,
+		isPopup: Boolean
+	): String? {
+		val systemPrompt = if (isPopup) {
+			"You are a fast video game translator. Translate the given English HUD popup, tutorial tip, or in-game phone message into clear, concise natural Thai. Return ONLY the Thai text."
+		} else {
+			"You are a fast video game subtitle translator. Translate the given English subtitle into natural, punchy spoken Thai (movie/game style). Accurately translate slang, idioms, and profanity matching the character's raw emotion without censoring. Return ONLY the Thai text."
+		}
+
+		val conn = (URL(endpoint).openConnection() as java.net.HttpURLConnection).apply {
+			requestMethod = "POST"
+			setRequestProperty("Authorization", "Bearer $apiKey")
+			setRequestProperty("Content-Type", "application/json")
+			if (provider == TranslationProvider.OPENROUTER) {
+				setRequestProperty("HTTP-Referer", "https://github.com/teeradream/ps-translator")
+				setRequestProperty("X-Title", "PS Translator")
+			}
+			connectTimeout = 3500
+			readTimeout = 4500
+			doOutput = true
+		}
+
+		val messages = JSONArray().apply {
+			put(org.json.JSONObject().apply {
+				put("role", "system")
+				put("content", systemPrompt)
+			})
+			put(org.json.JSONObject().apply {
+				put("role", "user")
+				put("content", englishText)
+			})
+		}
+
+		val body = org.json.JSONObject().apply {
+			put("model", model)
+			put("temperature", 0.3)
+			put("max_tokens", 200)
+			put("messages", messages)
+		}
+
+		conn.outputStream.bufferedWriter().use { it.write(body.toString()) }
+		if (conn.responseCode !in 200..299) {
+			conn.disconnect()
+			return null
+		}
+		val resText = conn.inputStream.bufferedReader().use { it.readText() }
+		conn.disconnect()
+
+		val json = org.json.JSONObject(resText)
+		val choices = json.optJSONArray("choices") ?: return null
+		if (choices.length() == 0) return null
+		val message = choices.getJSONObject(0).optJSONObject("message") ?: return null
+		return cleanAiTranslationOutput(message.optString("content", ""))
 	}
 
 	private fun isFemaleCharacter(englishText: String, thaiText: String): Boolean {
@@ -2329,6 +3249,10 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 	}
 
 	private fun synthesizeGeminiTts(thaiText: String, isFemale: Boolean, timestamp: Long): java.io.File? {
+		return synthesizeGeminiTts(thaiText, if (isFemale) "Kore" else "Charon", timestamp)
+	}
+
+	private fun synthesizeGeminiTts(thaiText: String, voiceName: String, timestamp: Long): java.io.File? {
 		return try {
 			val conn = (URL("https://generativelanguage.googleapis.com/v1beta/interactions").openConnection() as java.net.HttpURLConnection).apply {
 				requestMethod = "POST"
@@ -2339,7 +3263,6 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 				doOutput = true
 			}
 
-			val voiceName = if (isFemale) "Kore" else "Charon"
 			val body = org.json.JSONObject().apply {
 				put("model", "gemini-3.8-flash-lite-tts")
 				put("input", JSONArray().put(
@@ -2429,7 +3352,11 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 			stopGeminiAudioPlayback()
 			return
 		}
-		val nextFile = geminiAudioQueue.pollFirst() ?: return
+		val nextFile = geminiAudioQueue.pollFirst()
+		if (nextFile == null) {
+			tryFlushPendingSmartPopupSpeech()
+			return
+		}
 		try {
 			val mp = MediaPlayer()
 			mp.setDataSource(nextFile.absolutePath)
@@ -2572,13 +3499,20 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		uiVisibilityHandler.removeCallbacks(hideMenuButtonRunnable)
 		uiVisibilityHandler.removeCallbacks(hideNoteCardRunnable)
 		uiVisibilityHandler.removeCallbacks(hideTopDrawerRunnable)
-		uiVisibilityHandler.removeCallbacks(arScanRunnable)
+		uiVisibilityHandler.removeCallbacks(hidePopupLeftRunnable)
+		uiVisibilityHandler.removeCallbacks(hidePopupRightRunnable)
 		activeUtterances.clear()
+		pendingSmartPopupSpeech = null
 		stopGeminiAudioPlayback()
+		stopPopupGeminiAudioPlayback()
+		try { popupChimeToneGenerator?.release() } catch (_: Exception) {}
+		popupChimeToneGenerator = null
 		ocrScope.cancel()
 		ocrHandlerThread.quitSafely()
 		tts?.stop()
 		tts?.shutdown()
+		popupTts?.stop()
+		popupTts?.shutdown()
 	}
 
 	private fun reconnect()

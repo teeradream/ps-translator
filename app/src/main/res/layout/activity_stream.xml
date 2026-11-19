@@ -27,6 +27,7 @@
         android:id="@+id/popupLeftCard"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:minWidth="150dp"
         android:layout_gravity="start|center_vertical"
         android:layout_marginStart="14dp"
         android:layout_marginEnd="14dp"
@@ -52,18 +53,11 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="💡 คำแนะนำ (ซ้าย)"
+                android:text="💡 คำแนะนำ"
                 android:textColor="#FFB74D"
                 android:textSize="11sp"
-                android:textStyle="bold"/>
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="🔊 แตะอ่าน"
-                android:textColor="#99FFFFFF"
-                android:textSize="10sp"
-                android:layout_marginEnd="6dp"/>
+                android:textStyle="bold"
+                android:singleLine="true"/>
 
             <TextView
                 android:id="@+id/btnClosePopupLeft"
@@ -73,7 +67,7 @@
                 android:textColor="#CCFFFFFF"
                 android:textSize="12sp"
                 android:textStyle="bold"
-                android:paddingStart="6dp"
+                android:paddingStart="8dp"
                 android:paddingEnd="4dp"
                 android:clickable="true"
                 android:focusable="true"/>
@@ -96,6 +90,7 @@
         android:id="@+id/popupRightCard"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:minWidth="150dp"
         android:layout_gravity="end|bottom"
         android:layout_marginEnd="14dp"
         android:layout_marginStart="14dp"
@@ -122,18 +117,11 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="📱 ข้อความ (ขวา)"
+                android:text="📱 ข้อความ"
                 android:textColor="#00E5FF"
                 android:textSize="11sp"
-                android:textStyle="bold"/>
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="🔊 แตะอ่าน"
-                android:textColor="#99FFFFFF"
-                android:textSize="10sp"
-                android:layout_marginEnd="6dp"/>
+                android:textStyle="bold"
+                android:singleLine="true"/>
 
             <TextView
                 android:id="@+id/btnClosePopupRight"
@@ -143,7 +131,7 @@
                 android:textColor="#CCFFFFFF"
                 android:textSize="12sp"
                 android:textStyle="bold"
-                android:paddingStart="6dp"
+                android:paddingStart="8dp"
                 android:paddingEnd="4dp"
                 android:clickable="true"
                 android:focusable="true"/>
@@ -2336,7 +2324,7 @@
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="ตั้งค่าโซนป๊อปอัพ (เช่น GTA คำแนะนำซ้าย + มือถือขวา)"
+                            android:text="ตั้งค่าโซนป๊อปอัพอัตโนมัติ (ซ้าย / ขวา)"
                             android:textColor="#FFB74D"
                             android:textSize="11sp"
                             android:textStyle="bold"
@@ -2357,6 +2345,15 @@
                             android:layout_height="wrap_content"
                             android:text="เปิดโซนขวา (มือถือ / แจ้งเตือน)"
                             android:textColor="#EEEEEE"
+                            android:textSize="12sp"
+                            android:checked="true"/>
+
+                        <com.google.android.material.switchmaterial.SwitchMaterial
+                            android:id="@+id/switchPopupTtsQuick"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="อ่านออกเสียงป๊อปอัพ (ปิด = แปลโชว์อย่างเดียว)"
+                            android:textColor="#00E676"
                             android:textSize="12sp"
                             android:checked="true"
                             android:layout_marginBottom="6dp"/>
@@ -2393,23 +2390,11 @@
                                 app:strokeColor="#00E5FF"/>
                         </LinearLayout>
 
-                        <com.google.android.material.button.MaterialButton
-                            android:id="@+id/btnPresetGtaPopup"
-                            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:text="ใช้ค่าแนะนำ GTA (ซ้ายกลาง + ขวาล่าง เหนือปุ่มกด)"
-                            android:textColor="#00E676"
-                            android:textSize="11sp"
-                            android:textStyle="bold"
-                            app:strokeColor="#00E676"
-                            android:layout_marginBottom="6dp"/>
-
                         <com.google.android.material.switchmaterial.SwitchMaterial
                             android:id="@+id/switchFilterPopupHud"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="กรองปุ่มกด Action / HUD มุมล่างขวาออก"
+                            android:text="กรองปุ่มกด Action / HUD มุมจอออก (แนะนำ)"
                             android:textColor="#CCCCCC"
                             android:textSize="12sp"
                             android:checked="true"

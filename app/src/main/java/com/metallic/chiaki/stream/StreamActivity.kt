@@ -1282,7 +1282,7 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 			CropEditTarget.SUBTITLE -> floatArrayOf(0.18f, 0.72f, 0.64f, 0.22f)
 			CropEditTarget.NOTE -> floatArrayOf(0.20f, 0.15f, 0.60f, 0.65f)
 			CropEditTarget.POPUP_LEFT -> floatArrayOf(0.02f, 0.22f, 0.30f, 0.34f)
-			CropEditTarget.POPUP_RIGHT -> floatArrayOf(0.66f, 0.42f, 0.31f, 0.34f)
+			CropEditTarget.POPUP_RIGHT -> floatArrayOf(0.66f, 0.26f, 0.31f, 0.34f)
 		}
 	}
 
@@ -2012,28 +2012,9 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 			}
 		}
 
-		// One-tap GTA / Open-World Preset: Left-Middle Tutorial + Bottom-Right Phone (safely above action prompts!)
-		binding.btnPresetGtaPopup.setOnClickListener {
-			cropPrefs.edit()
-				.putFloat("popup_left_left", 0.02f)
-				.putFloat("popup_left_top", 0.22f)
-				.putFloat("popup_left_width", 0.30f)
-				.putFloat("popup_left_height", 0.34f)
-				.putFloat("popup_right_left", 0.66f)
-				.putFloat("popup_right_top", 0.42f)
-				.putFloat("popup_right_width", 0.31f)
-				.putFloat("popup_right_height", 0.34f)
-				.putBoolean("popup_left_enabled", true)
-				.putBoolean("popup_right_enabled", true)
-				.putBoolean("popup_filter_hud", true)
-				.apply()
-			isPopupLeftEnabled = true
-			isPopupRightEnabled = true
-			isFilterPopupHudEnabled = true
-			binding.switchPopupLeftZone.isChecked = true
-			binding.switchPopupRightZone.isChecked = true
-			binding.switchFilterPopupHud.isChecked = true
-			Toast.makeText(this, "ตั้งค่า Preset GTA (ซ้ายกลาง + ขวาล่าง เหนือปุ่ม Action) แล้ว", Toast.LENGTH_SHORT).show()
+		binding.switchPopupTtsQuick.isChecked = isPopupTtsEnabled
+		binding.switchPopupTtsQuick.setOnCheckedChangeListener { _, isChecked ->
+			setPopupTtsEnabled(isChecked)
 		}
 
 		// Tap-to-read & Close buttons on both Normal & Pure Black popup cards
@@ -2095,14 +2076,7 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		binding.tvPopupVolume.text = "$volPct%"
 
 		binding.switchPopupTts.setOnCheckedChangeListener { _, isChecked ->
-			isPopupTtsEnabled = isChecked
-			cropPrefs.edit().putBoolean("popup_tts_enabled", isChecked).apply()
-			binding.popupVoiceSettingsContainer.isVisible = isChecked
-			if (!isChecked) {
-				pendingSmartPopupSpeech = null
-				popupTts?.stop()
-				stopPopupGeminiAudioPlayback()
-			}
+			setPopupTtsEnabled(isChecked)
 		}
 
 		binding.popupTtsModeToggleGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
@@ -2143,6 +2117,29 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		binding.switchPopupChime.setOnCheckedChangeListener { _, isChecked ->
 			isPopupChimeEnabled = isChecked
 			cropPrefs.edit().putBoolean("popup_chime", isChecked).apply()
+		}
+	}
+
+	private fun setPopupTtsEnabled(enabled: Boolean) {
+		if (isPopupTtsEnabled == enabled &&
+			binding.switchPopupTts.isChecked == enabled &&
+			binding.switchPopupTtsQuick.isChecked == enabled
+		) {
+			return
+		}
+		isPopupTtsEnabled = enabled
+		cropPrefs.edit().putBoolean("popup_tts_enabled", enabled).apply()
+		if (binding.switchPopupTts.isChecked != enabled) {
+			binding.switchPopupTts.isChecked = enabled
+		}
+		if (binding.switchPopupTtsQuick.isChecked != enabled) {
+			binding.switchPopupTtsQuick.isChecked = enabled
+		}
+		binding.popupVoiceSettingsContainer.isVisible = enabled
+		if (!enabled) {
+			pendingSmartPopupSpeech = null
+			popupTts?.stop()
+			stopPopupGeminiAudioPlayback()
 		}
 	}
 
@@ -2265,10 +2262,26 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		val realWords = alphaWords.filter { it.length >= 2 && it.any { c -> c in 'a'..'z' } }
 		if (realWords.size < 3 && letterCount < 16) return false
 
-		// PlayStation button icons & short bottom-right HUD action prompt tokens
+		// 1. Reject HUD item/ammo counters like "WATER (2/2)", "24/120", "1/3" in short/medium HUD stacks
+		val hasCounterFraction = Regex("\\b\\d+\\s*/\\s*\\d+\\b").containsMatchIn(text)
+		if (hasCounterFraction && alphaWords.size <= 9) return false
+
+		// 2. Reject bracketed/parenthesized controller button tags including OCR misreads like (R1), (RI), (L1), (LI), (O), [X]
+		val hasButtonTag = Regex("[(\\[{]\\s*(?:r1|r2|r3|ri|rl|l1|l2|l3|li|ll|x|o|0|a)\\s*[)\\]}]", RegexOption.IGNORE_CASE)
+			.containsMatchIn(text)
+		if (hasButtonTag && alphaWords.size <= 8) return false
+
+		// 3. Reject ALL-CAPS HUD action menus like "DRINK (RI) PUT DOWN WATER" / "OPEN DOOR" / "HOLD X TO SPRINT"
+		val upperCount = text.count { it.isUpperCase() }
+		val upperRatio = upperCount.toFloat() / letterCount.coerceAtLeast(1)
+		if (upperRatio >= 0.85f && (alphaWords.size <= 6 || hasButtonTag || hasCounterFraction)) {
+			return false
+		}
+
+		// PlayStation button icons & OCR misreads (RI/LI/RL/LL) + short HUD action prompt tokens
 		val buttonTokens = setOf(
-			"x", "o", "l1", "l2", "l3", "r1", "r2", "r3", "ps", "ls", "rs",
-			"dpad", "d-pad", "pad", "touchpad", "options", "share", "create",
+			"x", "o", "a", "l1", "l2", "l3", "li", "ll", "r1", "r2", "r3", "ri", "rl",
+			"ps", "ls", "rs", "dpad", "d-pad", "pad", "touchpad", "options", "share", "create",
 			"triangle", "square", "circle", "cross", "up", "down", "left", "right"
 		)
 		val hudActionWords = setOf(
@@ -2278,16 +2291,19 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 			"map", "menu", "pause", "camera", "zoom", "horn", "brake", "handbrake", "boost",
 			"radio", "weapon", "wheel", "inventory", "skills", "craft", "heal", "use", "drop",
 			"equip", "pick", "enter", "exit", "climb", "mount", "whistle", "focus", "scan",
-			"photo", "hud", "mph", "kmh", "fps", "ammo", "health", "armor", "stamina", "to", "for"
+			"photo", "hud", "mph", "kmh", "fps", "ammo", "health", "armor", "stamina", "to", "for",
+			"drink", "drinks", "eat", "put", "water", "beer", "sit", "stand", "sleep", "smoke",
+			"grab", "carry", "throw", "inspect", "search", "loot", "buy", "sell", "leave", "park",
+			"drive", "lights", "light", "door", "trunk", "hood", "engine", "seat", "call", "answer"
 		)
 
 		val hudHitCount = alphaWords.count { it in buttonTokens || it in hudActionWords }
 		val hudRatio = hudHitCount.toFloat() / alphaWords.size.coerceAtLeast(1)
 
-		// Short/medium action prompt clusters (e.g. "Hold X to Sprint", "L2 Aim R2 Fire", "Press O Cancel")
-		if (alphaWords.size <= 6 && hudRatio >= 0.45f) return false
-		// Even multi-line stacked bottom-right HUD clusters (e.g. "[X] Jump [O] Crouch [R2] Fire [L2] Aim")
-		if (alphaWords.size > 6 && hudRatio >= 0.60f) return false
+		// Short/medium action prompt clusters (e.g. "DRINK RI PUT DOWN WATER", "Hold X to Sprint", "L2 Aim R2 Fire")
+		if (alphaWords.size <= 7 && hudRatio >= 0.45f) return false
+		// Multi-line stacked bottom-right HUD clusters
+		if (alphaWords.size > 7 && hudRatio >= 0.58f) return false
 
 		// Reject short prompt starting with Hold/Press/Tap + button
 		if (alphaWords.size <= 5 && alphaWords.firstOrNull() in setOf("hold", "press", "tap") &&
@@ -2769,19 +2785,47 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 	}
 
 	private fun isDialogueSubtitle(text: String): Boolean {
-		if (!isFilterShortTextEnabled) return text.length >= 3 && text.any { it.isLetter() }
+		val letterCount = text.count { it.isLetter() }
+		if (letterCount == 0) return false
+		if (!isFilterShortTextEnabled) return text.length >= 3
 
-		val words = text.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
-		// Exclude single word prompts under 8 characters
-		if (words.size < 2 && text.length < 8) return false
+		val rawWords = text.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
+		val cleanWords = rawWords.map { it.lowercase().replace(Regex("[^a-z0-9-]"), "") }.filter { it.isNotEmpty() }
+		// Ignore isolated single-letter button icon OCR artifacts like "A O DRINKS" / "△ ○ DRINKS" / "X OPEN"
+		val meaningfulWords = cleanWords.filter { it.length >= 2 }
 
-		// Exclude common prompt words
-		val lower = text.lowercase()
-		val promptWords = setOf("talk", "skip", "attack", "dodge", "interact", "examine", "open", "back", "next", "continue", "menu", "cancel", "r1", "r2", "l1", "l2", "r3", "l3")
-		if (words.size == 1 && promptWords.contains(lower)) return false
-		if (words.size == 2 && words.any { it.lowercase() in listOf("r1", "r2", "l1", "l2") }) return false
+		if (meaningfulWords.isEmpty()) return false
+		val hasSentencePunctuation = text.any { it == '.' || it == '?' || it == '!' || it == ',' }
 
-		return text.any { it.isLetter() }
+		// Reject single-word HUD prompts (even with leading icon symbols like "A O DRINKS", "RADIO", "RAIN")
+		if (meaningfulWords.size == 1 && (meaningfulWords[0].length < 10 || !hasSentencePunctuation)) {
+			return false
+		}
+
+		// Reject ALL-CAPS short/medium HUD interaction prompts (e.g. "DRINKS", "PUT DOWN", "DRINK (RI) PUT DOWN WATER")
+		val upperCount = text.count { it.isUpperCase() }
+		val upperRatio = upperCount.toFloat() / letterCount.coerceAtLeast(1)
+		if (upperRatio >= 0.85f && meaningfulWords.size <= 5) {
+			return false
+		}
+
+		// Reject HUD button tags & counters like "(R1)", "(RI)", "(2/2)" in short strings
+		if (cleanWords.size <= 6 && (
+			Regex("\\b\\d+\\s*/\\s*\\d+\\b").containsMatchIn(text) ||
+			Regex("[(\\[{]\\s*(?:r1|r2|r3|ri|rl|l1|l2|l3|li|ll|x|o|0|a)\\s*[)\\]}]", RegexOption.IGNORE_CASE).containsMatchIn(text)
+		)) {
+			return false
+		}
+
+		val promptWords = setOf(
+			"talk", "skip", "attack", "dodge", "interact", "examine", "open", "back", "next",
+			"continue", "menu", "cancel", "r1", "r2", "l1", "l2", "r3", "l3", "ri", "li",
+			"drink", "drinks", "radio", "water", "put", "down", "hold", "press", "use", "pick"
+		)
+		if (meaningfulWords.size <= 2 && meaningfulWords.all { it in promptWords }) return false
+		if (cleanWords.size <= 3 && cleanWords.any { it in setOf("r1", "r2", "l1", "l2", "r3", "l3", "ri", "li") }) return false
+
+		return true
 	}
 
 	private fun dpToPx(dp: Int): Int {

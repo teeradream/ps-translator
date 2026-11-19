@@ -362,21 +362,17 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		isTtsEnabled = cropPrefs.getBoolean("tts_voice_enabled", false)
 		isSkipSpeakerNameInTts = cropPrefs.getBoolean("skip_speaker_name_tts", true)
 		binding.ttsVoiceSwitch.isChecked = isTtsEnabled
+		binding.switchApiMasterTts.isChecked = isTtsEnabled
+		binding.useGeminiTtsSwitch.isVisible = isTtsEnabled
 		binding.skipSpeakerNameInTtsSwitch.isChecked = isSkipSpeakerNameInTts
 		binding.voiceGenderContainer.isVisible = isTtsEnabled
 		binding.speechSpeedContainer.isVisible = isTtsEnabled
 		binding.ttsQueueModeContainer.isVisible = isTtsEnabled
 		binding.ttsVoiceSwitch.setOnCheckedChangeListener { _, isChecked ->
-			isTtsEnabled = isChecked
-			cropPrefs.edit().putBoolean("tts_voice_enabled", isChecked).apply()
-			binding.voiceGenderContainer.isVisible = isChecked
-			binding.speechSpeedContainer.isVisible = isChecked
-			binding.ttsQueueModeContainer.isVisible = isChecked
-			if (!isChecked) {
-				activeUtterances.clear()
-				tts?.stop()
-				stopGeminiAudioPlayback()
-			}
+			setMasterTtsEnabled(isChecked)
+		}
+		binding.switchApiMasterTts.setOnCheckedChangeListener { _, isChecked ->
+			setMasterTtsEnabled(isChecked)
 		}
 
 		binding.skipSpeakerNameInTtsSwitch.setOnCheckedChangeListener { _, isChecked ->
@@ -488,6 +484,7 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		setupNoteTranslationFeature()
 		setupPopupZonesControls()
 		updateQuickDrawerUI()
+		updateGeminiApiStatusUI()
 		uiVisibilityHandler.postDelayed(captureRunnable, 1500)
 		resetMenuButtonTimer()
 	}
@@ -1104,9 +1101,16 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 	}
 
 	private fun updateGeminiApiStatusUI() {
+		if (!::binding.isInitialized) return
 		val keyReady = activeTranslationProvider == TranslationProvider.GOOGLE_FREE ||
 			getProviderApiKey(activeTranslationProvider).isNotEmpty()
-		val ttsLabel = if (isGeminiTtsEnabled && geminiApiKey.isNotEmpty()) "Gemini AI TTS" else "TTS ในเครื่อง"
+
+		val ttsLabel = when {
+			!isTtsEnabled && !(isPopupZonesMode && isPopupTtsEnabled) -> "ปิด (แปลอย่างเดียว)"
+			!isTtsEnabled && isPopupZonesMode && isPopupTtsEnabled -> "เฉพาะป๊อปอัพ"
+			isGeminiTtsEnabled && geminiApiKey.isNotEmpty() -> "Gemini AI TTS"
+			else -> "TTS ในเครื่อง"
+		}
 
 		if (activeTranslationProvider != TranslationProvider.GOOGLE_FREE && keyReady) {
 			val model = getProviderModel(activeTranslationProvider)
@@ -1117,11 +1121,36 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 			binding.tvGeminiApiStatus.setTextColor(Color.parseColor("#AAAAAA"))
 		}
 
-		binding.tvGeminiTtsKeyHint.text = if (geminiApiKey.isNotEmpty()) {
-			"✓ พบ Gemini Key ที่บันทึกไว้ (ใช้พากย์เสียง Gemini AI ได้แม้เลือกแปลค่ายอื่น)"
-		} else {
-			"หากอยากใช้เสียงพากย์ Gemini AI ให้เลือกแท็บ Gemini AI แล้วบันทึก Gemini Key ไว้ก่อน"
+		binding.useGeminiTtsSwitch.isVisible = isTtsEnabled
+		binding.tvGeminiTtsKeyHint.text = when {
+			!isTtsEnabled -> "เสียงพากย์ปิดอยู่ — แอปจะใช้ API ที่เลือกสำหรับแปลตัวหนังสืออย่างเดียว"
+			geminiApiKey.isNotEmpty() -> "✓ พบ Gemini Key ที่บันทึกไว้ (เปิดสวิตช์ด้านบนเพื่อใช้เสียงพากย์ Gemini AI หรือปิดเพื่อใช้ TTS ในเครื่อง)"
+			else -> "หากอยากใช้เสียงพากย์ Gemini AI ให้เลือกแท็บ Gemini AI แล้วบันทึก Gemini Key ไว้ก่อน"
 		}
+	}
+
+	private fun setMasterTtsEnabled(enabled: Boolean) {
+		isTtsEnabled = enabled
+		cropPrefs.edit().putBoolean("tts_voice_enabled", enabled).apply()
+		if (binding.ttsVoiceSwitch.isChecked != enabled) {
+			binding.ttsVoiceSwitch.isChecked = enabled
+		}
+		if (binding.switchApiMasterTts.isChecked != enabled) {
+			binding.switchApiMasterTts.isChecked = enabled
+		}
+		binding.voiceGenderContainer.isVisible = enabled
+		binding.speechSpeedContainer.isVisible = enabled
+		binding.ttsQueueModeContainer.isVisible = enabled
+		binding.useGeminiTtsSwitch.isVisible = enabled
+		if (!enabled) {
+			activeUtterances.clear()
+			tts?.stop()
+			stopGeminiAudioPlayback()
+			// Also silence popup dubbing when master dubbing is turned OFF so "แปลอย่างเดียว" is truly silent
+			setPopupTtsEnabled(false)
+		}
+		updateQuickDrawerUI()
+		updateGeminiApiStatusUI()
 	}
 
 	private fun renderSubtitles() {
@@ -2141,6 +2170,7 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 			popupTts?.stop()
 			stopPopupGeminiAudioPlayback()
 		}
+		updateGeminiApiStatusUI()
 	}
 
 	private fun setPopupZonesMode(enable: Boolean) {
@@ -2964,63 +2994,77 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 			android.util.Log.w("PSTranslatorAPI", "Gemini Interactions fallback to generateContent: ${e.message}")
 		}
 
-		// Secondary fallback path: classic generateContent endpoint with thinkingBudget=0 for 2.5 models
-		val endpoint = "https://generativelanguage.googleapis.com/v1beta/models/" +
-			URLEncoder.encode(model, "UTF-8") +
-			":generateContent?key=" + URLEncoder.encode(apiKey, "UTF-8")
-		val conn = (URL(endpoint).openConnection() as java.net.HttpURLConnection).apply {
-			requestMethod = "POST"
-			setRequestProperty("Content-Type", "application/json")
-			connectTimeout = 4000
-			readTimeout = 5000
-			doOutput = true
+		// Secondary fallback path: classic generateContent endpoint (try selected model, then gemini-2.5-flash-lite with thinkingBudget=0)
+		val modelsToTry = if (lowerModel == "gemini-2.5-flash-lite") {
+			listOf(model)
+		} else {
+			listOf(model, "gemini-2.5-flash-lite")
 		}
 
-		val safetyCategories = listOf(
-			"HARM_CATEGORY_HARASSMENT",
-			"HARM_CATEGORY_HATE_SPEECH",
-			"HARM_CATEGORY_SEXUALLY_EXPLICIT",
-			"HARM_CATEGORY_DANGEROUS_CONTENT"
-		)
-		val safetyArray = JSONArray().apply {
-			for (cat in safetyCategories) {
-				put(org.json.JSONObject().apply {
-					put("category", cat)
-					put("threshold", "BLOCK_NONE")
-				})
+		for (candidateModel in modelsToTry) {
+			try {
+				val endpoint = "https://generativelanguage.googleapis.com/v1beta/models/" +
+					URLEncoder.encode(candidateModel, "UTF-8") +
+					":generateContent?key=" + URLEncoder.encode(apiKey, "UTF-8")
+				val conn = (URL(endpoint).openConnection() as java.net.HttpURLConnection).apply {
+					requestMethod = "POST"
+					setRequestProperty("Content-Type", "application/json")
+					connectTimeout = 4000
+					readTimeout = 5000
+					doOutput = true
+				}
+
+				val safetyCategories = listOf(
+					"HARM_CATEGORY_HARASSMENT",
+					"HARM_CATEGORY_HATE_SPEECH",
+					"HARM_CATEGORY_SEXUALLY_EXPLICIT",
+					"HARM_CATEGORY_DANGEROUS_CONTENT"
+				)
+				val safetyArray = JSONArray().apply {
+					for (cat in safetyCategories) {
+						put(org.json.JSONObject().apply {
+							put("category", cat)
+							put("threshold", "BLOCK_NONE")
+						})
+					}
+				}
+				val genConfig = org.json.JSONObject().apply {
+					put("temperature", 0.30)
+					put("maxOutputTokens", 240)
+					if (candidateModel.lowercase().contains("2.5-flash")) {
+						put("thinkingConfig", org.json.JSONObject().put("thinkingBudget", 0))
+					}
+				}
+				val body = org.json.JSONObject().apply {
+					put("contents", JSONArray().put(
+						org.json.JSONObject().put("parts", JSONArray().put(
+							org.json.JSONObject().put("text", prompt)
+						))
+					))
+					put("safetySettings", safetyArray)
+					put("generationConfig", genConfig)
+				}
+
+				conn.outputStream.bufferedWriter().use { it.write(body.toString()) }
+				if (conn.responseCode !in 200..299) {
+					conn.disconnect()
+					continue
+				}
+				val resText = conn.inputStream.bufferedReader().use { it.readText() }
+				conn.disconnect()
+
+				val json = org.json.JSONObject(resText)
+				val candidates = json.optJSONArray("candidates") ?: continue
+				if (candidates.length() == 0) continue
+				val parts = candidates.getJSONObject(0).optJSONObject("content")?.optJSONArray("parts") ?: continue
+				if (parts.length() == 0) continue
+				val parsed = cleanAiTranslationOutput(parts.getJSONObject(0).optString("text", ""))
+				if (parsed != null) return parsed
+			} catch (_: Exception) {
+				continue
 			}
 		}
-		val genConfig = org.json.JSONObject().apply {
-			put("temperature", 0.30)
-			put("maxOutputTokens", 240)
-			if (lowerModel.contains("2.5-flash")) {
-				put("thinkingConfig", org.json.JSONObject().put("thinkingBudget", 0))
-			}
-		}
-		val body = org.json.JSONObject().apply {
-			put("contents", JSONArray().put(
-				org.json.JSONObject().put("parts", JSONArray().put(
-					org.json.JSONObject().put("text", prompt)
-				))
-			))
-			put("safetySettings", safetyArray)
-			put("generationConfig", genConfig)
-		}
-
-		conn.outputStream.bufferedWriter().use { it.write(body.toString()) }
-		if (conn.responseCode !in 200..299) {
-			conn.disconnect()
-			return null
-		}
-		val resText = conn.inputStream.bufferedReader().use { it.readText() }
-		conn.disconnect()
-
-		val json = org.json.JSONObject(resText)
-		val candidates = json.optJSONArray("candidates") ?: return null
-		if (candidates.length() == 0) return null
-		val parts = candidates.getJSONObject(0).optJSONObject("content")?.optJSONArray("parts") ?: return null
-		if (parts.length() == 0) return null
-		return cleanAiTranslationOutput(parts.getJSONObject(0).optString("text", ""))
+		return null
 	}
 
 	private fun translateWithOpenAiCompatible(

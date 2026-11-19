@@ -1276,20 +1276,30 @@
                         android:layout_marginBottom="8dp"/>
 
                     <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/switchApiMasterTts"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="เปิดเสียงพากย์ (ปิด = แปลตัวหนังสืออย่างเดียว)"
+                        android:textColor="#FFFFFF"
+                        android:textSize="13sp"
+                        android:checked="false"
+                        android:layout_marginBottom="4dp"/>
+
+                    <com.google.android.material.switchmaterial.SwitchMaterial
                         android:id="@+id/useGeminiTtsSwitch"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="ใช้ Gemini AI พากย์เสียง (ใช้ Gemini Key)"
-                        android:textColor="#EEEEEE"
-                        android:textSize="13sp"
-                        android:checked="true"
+                        android:text="ใช้เสียงพากย์ Gemini AI (ปิด = ใช้ TTS ในเครื่อง)"
+                        android:textColor="#00E676"
+                        android:textSize="12sp"
+                        android:checked="false"
                         android:layout_marginBottom="2dp"/>
 
                     <TextView
                         android:id="@+id/tvGeminiTtsKeyHint"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="หากใช้ค่ายอื่นแปล เช่น Groq สามารถบันทึก Gemini Key แยกไว้เพื่อใช้เสียงพากย์ Gemini ได้ด้วย"
+                        android:text="หากปิดเสียงพากย์ แอปจะใช้ API ที่เลือกสำหรับแปลตัวหนังสืออย่างเดียว"
                         android:textColor="#88FFFFFF"
                         android:textSize="11sp"
                         android:layout_marginBottom="4dp"/>

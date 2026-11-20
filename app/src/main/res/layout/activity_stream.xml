@@ -1302,7 +1302,194 @@
                         android:text="หากปิดเสียงพากย์ แอปจะใช้ API ที่เลือกสำหรับแปลตัวหนังสืออย่างเดียว"
                         android:textColor="#88FFFFFF"
                         android:textSize="11sp"
+                        android:layout_marginBottom="8dp"/>
+
+                    <!-- Translation Naturalness, Game Context / Glossary & Local Cache -->
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:background="#22FFFFFF"
+                        android:layout_marginBottom="8dp"/>
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="ความเนียนของการแปล &amp; บริบทเกม (Glossary):"
+                        android:textColor="#00E5FF"
+                        android:textSize="12sp"
+                        android:textStyle="bold"
                         android:layout_marginBottom="4dp"/>
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="โทนภาษาแปล (สำหรับ AI API):"
+                        android:textColor="#AAAAAA"
+                        android:textSize="11sp"
+                        android:layout_marginBottom="4dp"/>
+
+                    <com.google.android.material.button.MaterialButtonToggleGroup
+                        android:id="@+id/translationStyleToggleGroup"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        app:singleSelection="true"
+                        app:selectionRequired="true"
+                        app:checkedButton="@id/btnStyleNatural"
+                        android:layout_marginBottom="8dp">
+
+                        <com.google.android.material.button.MaterialButton
+                            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                            android:id="@+id/btnStyleNatural"
+                            android:layout_width="0dp"
+                            android:layout_height="36dp"
+                            android:layout_weight="1"
+                            android:text="ธรรมชาติ"
+                            android:textSize="10sp"
+                            android:textStyle="bold"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"
+                            android:textColor="@color/toggle_btn_text_color"
+                            app:backgroundTint="@color/toggle_btn_bg_tint"
+                            app:strokeColor="@color/toggle_btn_stroke_color"
+                            app:strokeWidth="1.5dp"/>
+
+                        <com.google.android.material.button.MaterialButton
+                            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                            android:id="@+id/btnStyleGritty"
+                            android:layout_width="0dp"
+                            android:layout_height="36dp"
+                            android:layout_weight="1.15"
+                            android:text="ดิบ/อาชญากรรม"
+                            android:textSize="10sp"
+                            android:textStyle="bold"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"
+                            android:textColor="@color/toggle_btn_text_color"
+                            app:backgroundTint="@color/toggle_btn_bg_tint"
+                            app:strokeColor="@color/toggle_btn_stroke_color"
+                            app:strokeWidth="1.5dp"/>
+
+                        <com.google.android.material.button.MaterialButton
+                            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                            android:id="@+id/btnStyleFormal"
+                            android:layout_width="0dp"
+                            android:layout_height="36dp"
+                            android:layout_weight="1.1"
+                            android:text="แฟนตาซี/จริงจัง"
+                            android:textSize="10sp"
+                            android:textStyle="bold"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"
+                            android:textColor="@color/toggle_btn_text_color"
+                            app:backgroundTint="@color/toggle_btn_bg_tint"
+                            app:strokeColor="@color/toggle_btn_stroke_color"
+                            app:strokeWidth="1.5dp"/>
+                    </com.google.android.material.button.MaterialButtonToggleGroup>
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="บริบทเกม / ชื่อตัวละคร / คำเฉพาะ (กันแปลชื่อเพี้ยน):"
+                        android:textColor="#CCCCCC"
+                        android:textSize="11sp"
+                        android:layout_marginBottom="4dp"/>
+
+                    <EditText
+                        android:id="@+id/etGameContext"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:minLines="2"
+                        android:maxLines="4"
+                        android:gravity="top|start"
+                        android:hint="เช่น GTA6: Jason=เจสัน(ชาย), Lucia=ลูเซีย(หญิง), Brian=ไบรอัน, Vice City=ไวซ์ซิตี้"
+                        android:textColor="#FFFFFF"
+                        android:textColorHint="#666666"
+                        android:textSize="12sp"
+                        android:inputType="textMultiLine"
+                        android:background="#22FFFFFF"
+                        android:padding="10dp"
+                        android:layout_marginBottom="6dp"/>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:layout_marginBottom="8dp">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnSaveGameContext"
+                            android:layout_width="0dp"
+                            android:layout_height="36dp"
+                            android:layout_weight="1"
+                            android:text="บันทึกบริบทเกม"
+                            android:textSize="11sp"
+                            android:textStyle="bold"
+                            android:textColor="#000000"
+                            app:backgroundTint="#00E5FF"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"
+                            android:layout_marginEnd="6dp"/>
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnClearGameContext"
+                            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                            android:layout_width="wrap_content"
+                            android:layout_height="36dp"
+                            android:text="ล้าง"
+                            android:textSize="11sp"
+                            android:textColor="#FF6B6B"
+                            app:strokeColor="#FF6B6B"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"/>
+                    </LinearLayout>
+
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/switchRollingContext"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="จำบริบท 2 ประโยคก่อนหน้า (สรรพนามต่อเนื่องเนียน)"
+                        android:textColor="#EEEEEE"
+                        android:textSize="12sp"
+                        android:checked="true"/>
+
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/switchLocalCache"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="เปิด Local Cache (จำคำแปลในเครื่อง 0ms)"
+                        android:textColor="#EEEEEE"
+                        android:textSize="12sp"
+                        android:checked="true"
+                        android:layout_marginBottom="4dp"/>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:layout_marginBottom="4dp">
+
+                        <TextView
+                            android:id="@+id/tvCacheStats"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="แคชในเครื่อง: 0 ประโยค"
+                            android:textColor="#99FFFFFF"
+                            android:textSize="11sp"/>
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnClearTranslationCache"
+                            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                            android:layout_width="wrap_content"
+                            android:layout_height="32dp"
+                            android:text="ล้างแคช"
+                            android:textSize="10sp"
+                            android:textColor="#FFB74D"
+                            app:strokeColor="#FFB74D"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"/>
+                    </LinearLayout>
                 </LinearLayout>
 
                 <!-- ================= SUB-PAGE 1: TEXT & SUBTITLE STYLING ================= -->

@@ -15,10 +15,11 @@ import kotlin.math.min
 
 /**
  * High-speed on-device SQLite translation cache with:
- * 1. Exact provider/style key lookup (0ms)
- * 2. Universal preloaded game database lookup (auto-seeded from assets/preload_gta6_cache.tsv)
+ * 1. Strict separation between Popup/Tutorial tips (*_pop) and Dialogue Subtitles (*_sub)
+ *    so subtitle translations are NEVER used for tutorial/popup boxes.
+ * 2. Exact normalized text lookup (0ms)
  * 3. OCR-invariant skeleton lookup (collapses I/l/1, O/0, punctuation & spacing differences in O(1))
- * 4. Length-bucketed fuzzy matching (>= 86% similarity for minor live-OCR character noise)
+ * 4. Exact full-row Levenshtein fuzzy matching (>= 90% similarity, length >= 15) for minor live-OCR character noise
  * 5. Speaker-prefix decomposition ("Lucia: ..." <-> bare dialogue)
  * 6. External .db / .tsv file import support
  */
@@ -35,7 +36,7 @@ class TranslationCacheDb(private val appContext: Context) : SQLiteOpenHelper(
 		const val PRELOAD_KEY = "preload_sub"
 		private const val ASSET_PRELOAD_FILE = "preload_gta6_cache.tsv"
 		private const val PRELOAD_PREFS = "ps_translator_cache_meta"
-		private const val PREF_PRELOAD_COUNT = "seeded_asset_line_count_v2"
+		private const val PREF_PRELOAD_COUNT = "seeded_asset_line_count_v3"
 		private const val MAX_ROWS = 60000
 		private const val MAX_SKELETON_BUCKET = 260
 
@@ -59,6 +60,12 @@ class TranslationCacheDb(private val appContext: Context) : SQLiteOpenHelper(
 			"drequan" to "เดรควอน",
 			"raul" to "ราอูล",
 			"raul bautista" to "ราอูล",
+			"donnie" to "ดอนนี",
+			"ronda" to "รอนดา",
+			"sam" to "แซม",
+			"kai" to "ไค",
+			"shanese" to "ชานีส",
+			"bobby" to "บ็อบบี",
 			"local" to "ชาวบ้าน",
 			"cop" to "ตำรวจ",
 			"police" to "ตำรวจ",
@@ -105,10 +112,10 @@ class TranslationCacheDb(private val appContext: Context) : SQLiteOpenHelper(
 		}
 
 		/**
-		 * Bounded normalized Levenshtein similarity in [0.0, 1.0].
-		 * Aborts early and returns 0.0 if edit distance cannot satisfy minSimilarity.
+		 * Exact full-row normalized Levenshtein similarity in [0.0, 1.0] with early row-minimum abort.
+		 * Fills every column 1..lenB on each row so uninitialized values can never cause false matches.
 		 */
-		fun similarityAtLeast(a: String, b: String, minSimilarity: Double = 0.86): Double {
+		fun exactSimilarityAtLeast(a: String, b: String, minSimilarity: Double = 0.90): Double {
 			val lenA = a.length
 			val lenB = b.length
 			val maxLen = max(lenA, lenB)
@@ -123,16 +130,12 @@ class TranslationCacheDb(private val appContext: Context) : SQLiteOpenHelper(
 				curr[0] = i
 				var rowMin = curr[0]
 				val ca = a[i - 1]
-				val jStart = max(1, i - maxAllowedDist - 1)
-				val jEnd = min(lenB, i + maxAllowedDist + 1)
-				if (jStart > 1) curr[jStart - 1] = maxAllowedDist + 5
-				for (j in jStart..jEnd) {
+				for (j in 1..lenB) {
 					val cost = if (ca == b[j - 1]) 0 else 1
 					val d = min(min(curr[j - 1] + 1, prev[j] + 1), prev[j - 1] + cost)
 					curr[j] = d
 					if (d < rowMin) rowMin = d
 				}
-				if (jEnd < lenB) curr[jEnd] = min(curr[jEnd], maxAllowedDist + 5)
 				if (rowMin > maxAllowedDist) return 0.0
 				val tmp = prev
 				prev = curr
@@ -187,7 +190,7 @@ class TranslationCacheDb(private val appContext: Context) : SQLiteOpenHelper(
 
 	private fun seedFromAssetsIfNeeded() {
 		try {
-			val assetLines = ArrayList<Pair<String, String>>(4096)
+			val assetLines = ArrayList<Pair<String, String>>(6000)
 			appContext.assets.open(ASSET_PRELOAD_FILE).use { input ->
 				BufferedReader(InputStreamReader(input, Charsets.UTF_8)).useLines { lines ->
 					lines.forEach { rawLine ->
@@ -197,7 +200,8 @@ class TranslationCacheDb(private val appContext: Context) : SQLiteOpenHelper(
 						if (tabIdx > 0 && tabIdx < line.length - 1) {
 							val en = line.substring(0, tabIdx).trim()
 							val th = line.substring(tabIdx + 1).trim()
-							if (en.isNotEmpty() && th.any { it in '\u0E00'..'\u0E7F' }) {
+							// Skip overly short single-word fragments (< 4 chars) from asset seed to avoid false matches
+							if (en.length >= 4 && th.any { it in '\u0E00'..'\u0E7F' }) {
 								assetLines.add(en to th)
 							}
 						}
@@ -217,12 +221,14 @@ class TranslationCacheDb(private val appContext: Context) : SQLiteOpenHelper(
 			val now = System.currentTimeMillis()
 			db.beginTransaction()
 			try {
+				// Clear older preloaded rows before re-seeding clean v3 pack
+				db.delete(TABLE_NAME, "cache_key = ?", arrayOf(PRELOAD_KEY))
 				val stmt = db.compileStatement(
 					"INSERT OR REPLACE INTO $TABLE_NAME (cache_key, normalized_en, thai_text, updated_at) VALUES (?, ?, ?, ?)"
 				)
 				for ((en, th) in assetLines) {
 					val norm = normalizeEnglish(en)
-					if (norm.isNotEmpty()) {
+					if (norm.length >= 4) {
 						stmt.clearBindings()
 						stmt.bindString(1, PRELOAD_KEY)
 						stmt.bindString(2, norm)
@@ -261,9 +267,9 @@ class TranslationCacheDb(private val appContext: Context) : SQLiteOpenHelper(
 		for (bucket in lengthBuckets) bucket.clear()
 
 		try {
-			// Load PRELOAD_KEY first, then user keys so user overrides win if both exist
+			// Only index dialogue subtitles (never index *_pop into subtitle memory map)
 			readableDatabase.rawQuery(
-				"SELECT normalized_en, thai_text FROM $TABLE_NAME ORDER BY CASE WHEN cache_key = ? THEN 0 ELSE 1 END ASC, updated_at ASC",
+				"SELECT normalized_en, thai_text FROM $TABLE_NAME WHERE cache_key NOT LIKE '%_pop' ORDER BY CASE WHEN cache_key = ? THEN 0 ELSE 1 END ASC, updated_at ASC",
 				arrayOf(PRELOAD_KEY)
 			).use { cursor ->
 				while (cursor.moveToNext()) {
@@ -276,12 +282,12 @@ class TranslationCacheDb(private val appContext: Context) : SQLiteOpenHelper(
 	}
 
 	private fun indexInMemory(norm: String, thai: String) {
-		if (norm.isEmpty() || thai.isEmpty()) return
+		if (norm.length < 4 || thai.isEmpty()) return
 		exactMemoryMap[norm] = thai
 		val skel = ocrSkeleton(norm)
-		if (skel.length >= 3) {
+		if (skel.length >= 5) {
 			skeletonMemoryMap[skel] = thai
-			if (skel.length in 8..MAX_SKELETON_BUCKET) {
+			if (skel.length in 15..MAX_SKELETON_BUCKET) {
 				lengthBuckets[skel.length].add(IndexedEntry(skel, thai))
 			}
 		}
@@ -293,23 +299,40 @@ class TranslationCacheDb(private val appContext: Context) : SQLiteOpenHelper(
 		val trimmed = englishText.trim()
 		if (trimmed.isEmpty()) return null
 
-		// 1. Direct lookup on full text (exact SQLite key -> in-memory exact -> OCR skeleton -> fuzzy)
-		lookupSingleSegment(cacheKey, trimmed)?.let { return it }
+		// CRITICAL: For Popup / Tutorial zones (*_pop), ONLY check exact popup cache in SQLite!
+		// Never match tutorial tips against dialogue subtitles (preload_sub).
+		if (cacheKey.endsWith("_pop")) {
+			val norm = normalizeEnglish(trimmed)
+			if (norm.isEmpty()) return null
+			return try {
+				readableDatabase.rawQuery(
+					"SELECT thai_text FROM $TABLE_NAME WHERE cache_key = ? AND normalized_en = ? LIMIT 1",
+					arrayOf(cacheKey, norm)
+				).use { cursor ->
+					if (cursor.moveToFirst()) cursor.getString(0) else null
+				}
+			} catch (_: Exception) {
+				null
+			}
+		}
 
-		// 2. If text is multi-line or 2-speaker combined ("Speaker A: ... Speaker B: ..."),
-		// try matching with speaker prefix stripped or split
+		// 1. Direct lookup on full subtitle text (exact SQLite key -> in-memory exact -> OCR skeleton -> strict fuzzy)
+		lookupSingleSubtitleSegment(cacheKey, trimmed)?.let { return it }
+
+		// 2. If subtitle has a "Speaker: Dialogue" prefix, try matching the dialogue part
 		val match = SPEAKER_PREFIX_REGEX.find(trimmed)
 		if (match != null) {
 			val speakerRaw = match.groupValues[1].trim()
 			val dialogueRaw = match.groupValues[2].trim()
-			val dialogueTh = lookupSingleSegment(cacheKey, dialogueRaw)
-			if (!dialogueTh.isNullOrBlank()) {
-				val speakerTh = KNOWN_SPEAKERS_TH[speakerRaw.lowercase()] ?: speakerRaw
-				// Avoid double speaker prefix if cached translation already includes speaker
-				return if (dialogueTh.startsWith("$speakerTh:") || dialogueTh.startsWith("$speakerRaw:")) {
-					dialogueTh
-				} else {
-					"$speakerTh: $dialogueTh"
+			if (dialogueRaw.length >= 4) {
+				val dialogueTh = lookupSingleSubtitleSegment(cacheKey, dialogueRaw)
+				if (!dialogueTh.isNullOrBlank()) {
+					val speakerTh = KNOWN_SPEAKERS_TH[speakerRaw.lowercase()] ?: speakerRaw
+					return if (dialogueTh.startsWith("$speakerTh:") || dialogueTh.startsWith("$speakerRaw:")) {
+						dialogueTh
+					} else {
+						"$speakerTh: $dialogueTh"
+					}
 				}
 			}
 		}
@@ -317,9 +340,9 @@ class TranslationCacheDb(private val appContext: Context) : SQLiteOpenHelper(
 		return null
 	}
 
-	private fun lookupSingleSegment(cacheKey: String, segmentText: String): String? {
+	private fun lookupSingleSubtitleSegment(cacheKey: String, segmentText: String): String? {
 		val norm = normalizeEnglish(segmentText)
-		if (norm.isEmpty()) return null
+		if (norm.length < 4) return null
 
 		// Step A: Exact provider cacheKey match in SQLite
 		try {
@@ -336,15 +359,15 @@ class TranslationCacheDb(private val appContext: Context) : SQLiteOpenHelper(
 
 		// Step C: OCR-invariant skeleton exact match (handles I/l/1, O/0, punctuation & space glitches in 0ms)
 		val skel = ocrSkeleton(norm)
-		if (skel.length >= 4) {
+		if (skel.length >= 6) {
 			skeletonMemoryMap[skel]?.let { return it }
 		}
 
-		// Step D: Fast length-bucketed fuzzy match (>= 86% similarity for sentences >= 10 chars)
-		if (skel.length in 10..MAX_SKELETON_BUCKET) {
-			val minSim = if (skel.length >= 22) 0.85 else 0.88
+		// Step D: Strict exact-Levenshtein fuzzy match (>= 90% similarity, only for sentences >= 15 chars)
+		if (skel.length in 15..MAX_SKELETON_BUCKET) {
+			val minSim = 0.90
 			val maxDiff = ((1.0 - minSim) * skel.length).toInt().coerceAtLeast(1)
-			val minBucket = max(8, skel.length - maxDiff)
+			val minBucket = max(15, skel.length - maxDiff)
 			val maxBucket = min(MAX_SKELETON_BUCKET, skel.length + maxDiff)
 
 			var bestSim = 0.0
@@ -353,11 +376,11 @@ class TranslationCacheDb(private val appContext: Context) : SQLiteOpenHelper(
 				val bucket = lengthBuckets[bLen]
 				for (i in 0 until bucket.size) {
 					val entry = bucket[i]
-					val sim = similarityAtLeast(skel, entry.skeleton, minSim)
+					val sim = exactSimilarityAtLeast(skel, entry.skeleton, minSim)
 					if (sim > bestSim) {
 						bestSim = sim
 						bestThai = entry.thai
-						if (sim >= 0.96) return bestThai
+						if (sim >= 0.97) return bestThai
 					}
 				}
 			}
@@ -372,7 +395,7 @@ class TranslationCacheDb(private val appContext: Context) : SQLiteOpenHelper(
 		ensureInitialized()
 		val norm = normalizeEnglish(englishText)
 		val cleanThai = thaiText.trim()
-		if (norm.isEmpty() || cleanThai.isEmpty()) return
+		if (norm.length < 4 || cleanThai.isEmpty()) return
 		// Only cache genuine Thai translations (never cache raw English fallback or broken outputs)
 		if (!cleanThai.any { it in '\u0E00'..'\u0E7F' }) return
 
@@ -385,7 +408,9 @@ class TranslationCacheDb(private val appContext: Context) : SQLiteOpenHelper(
 				put("updated_at", System.currentTimeMillis())
 			}
 			db.insertWithOnConflict(TABLE_NAME, null, values, SQLiteDatabase.CONFLICT_REPLACE)
-			indexInMemory(norm, cleanThai)
+			if (!cacheKey.endsWith("_pop")) {
+				indexInMemory(norm, cleanThai)
+			}
 
 			// Periodically prune oldest rows if database exceeds cap
 			if (System.currentTimeMillis() % 50L == 0L) {
@@ -409,7 +434,6 @@ class TranslationCacheDb(private val appContext: Context) : SQLiteOpenHelper(
 				}
 			} ?: return 0
 
-			// Check SQLite magic header ("SQLite format 3")
 			val isSqlite = tmpFile.length() > 16 && tmpFile.inputStream().use { ins ->
 				val hdr = ByteArray(15)
 				val read = ins.read(hdr)
@@ -423,7 +447,7 @@ class TranslationCacheDb(private val appContext: Context) : SQLiteOpenHelper(
 						while (c.moveToNext()) {
 							val en = c.getString(0)?.trim() ?: continue
 							val th = c.getString(1)?.trim() ?: continue
-							if (en.isNotEmpty() && th.any { it in '\u0E00'..'\u0E7F' }) {
+							if (en.length >= 4 && th.any { it in '\u0E00'..'\u0E7F' }) {
 								pairs.add(en to th)
 							}
 						}
@@ -438,7 +462,7 @@ class TranslationCacheDb(private val appContext: Context) : SQLiteOpenHelper(
 						if (tabIdx > 0 && tabIdx < line.length - 1) {
 							val en = line.substring(0, tabIdx).trim()
 							val th = line.substring(tabIdx + 1).trim()
-							if (en.isNotEmpty() && th.any { it in '\u0E00'..'\u0E7F' }) {
+							if (en.length >= 4 && th.any { it in '\u0E00'..'\u0E7F' }) {
 								pairs.add(en to th)
 							}
 						}
@@ -458,7 +482,7 @@ class TranslationCacheDb(private val appContext: Context) : SQLiteOpenHelper(
 				)
 				for ((en, th) in pairs) {
 					val norm = normalizeEnglish(en)
-					if (norm.isNotEmpty()) {
+					if (norm.length >= 4) {
 						stmt.clearBindings()
 						stmt.bindString(1, PRELOAD_KEY)
 						stmt.bindString(2, norm)

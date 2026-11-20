@@ -164,19 +164,10 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 	private var isSkipSpeakerNameInTts = true
 	private var speechSpeedRate = 1.25f
 
-	enum class TranslationStyle {
-		NATURAL,
-		GRITTY,
-		FORMAL_RPG
-	}
-
-	// Multi-Provider Translation API, Game Context Glossary, Local Cache & Gemini AI TTS settings
+	// Multi-Provider Translation API, Local Cache & Gemini AI TTS settings
 	private lateinit var translationCacheDb: TranslationCacheDb
 	private var activeTranslationProvider = TranslationProvider.GOOGLE_FREE
 	private var editingProvider = TranslationProvider.GOOGLE_FREE
-	private var translationStyle = TranslationStyle.NATURAL
-	private var gameContextGlossary = ""
-	private var isRollingContextEnabled = true
 	private var isLocalCacheEnabled = true
 	private var geminiApiKey = ""
 	private var isGeminiTtsEnabled = true
@@ -553,29 +544,25 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		isTranslating = true
 		pendingOcrEnglish = text
 		android.util.Log.d("PSTranslatorOCR", "Detected dialogue: $text")
-		// Snapshot up to 2 recent dialogue lines on Main thread for safe rolling context
-		val recentContextSnapshot = if (isRollingContextEnabled) {
-			subtitleHistory.take(2).reversed().map { it.english to it.thai }
-		} else {
-			emptyList()
-		}
 		ocrScope.launch {
 			try {
 				val englishForTranslate = if (isSkipSpeakerNameInTts) stripSpeakerPrefix(text) else text
-				val rawThai = translateToThai(englishForTranslate, isPopup = false, recentContext = recentContextSnapshot)
+				val rawThai = translateToThai(englishForTranslate, isPopup = false)
 				val thai = if (isSkipSpeakerNameInTts) stripSpeakerPrefix(rawThai) else rawThai
 				android.util.Log.d("PSTranslatorOCR", "Translated text: $thai")
 				val isDuplicateThai = isSimilarThai(thai, lastTranslatedThai) ||
 					subtitleHistory.take(2).any { isSimilarThai(thai, it.thai) }
 				if (!isDuplicateThai) {
-					lastTranslatedEnglish = text
+					if (thai != englishForTranslate) {
+						lastTranslatedEnglish = text
+					}
 					lastTranslatedThai = thai
 					subtitleHistory.add(0, SubtitleHistoryItem(englishForTranslate, thai))
 					while (subtitleHistory.size > maxHistoryLines) {
 						subtitleHistory.removeAt(subtitleHistory.size - 1)
 					}
 					renderSubtitles()
-					if (isTtsEnabled) {
+					if (isTtsEnabled && thai != englishForTranslate) {
 						speakTranslation(text, thai)
 					}
 				}
@@ -1088,63 +1075,9 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 	}
 
 	private fun setupTranslationQualityAndCacheControls() {
-		translationStyle = try {
-			TranslationStyle.valueOf(
-				cropPrefs.getString("translation_style", TranslationStyle.NATURAL.name) ?: TranslationStyle.NATURAL.name
-			)
-		} catch (_: Exception) {
-			TranslationStyle.NATURAL
-		}
-		gameContextGlossary = cropPrefs.getString("game_context_glossary", "")?.trim() ?: ""
-		isRollingContextEnabled = cropPrefs.getBoolean("rolling_context_enabled", true)
 		isLocalCacheEnabled = cropPrefs.getBoolean("local_cache_enabled", true)
-
-		binding.translationStyleToggleGroup.check(
-			when (translationStyle) {
-				TranslationStyle.GRITTY -> R.id.btnStyleGritty
-				TranslationStyle.FORMAL_RPG -> R.id.btnStyleFormal
-				else -> R.id.btnStyleNatural
-			}
-		)
-		binding.etGameContext.setText(gameContextGlossary)
-		binding.switchRollingContext.isChecked = isRollingContextEnabled
 		binding.switchLocalCache.isChecked = isLocalCacheEnabled
 		refreshCacheStatsUI()
-
-		binding.translationStyleToggleGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
-			if (isChecked) {
-				translationStyle = when (checkedId) {
-					R.id.btnStyleGritty -> TranslationStyle.GRITTY
-					R.id.btnStyleFormal -> TranslationStyle.FORMAL_RPG
-					else -> TranslationStyle.NATURAL
-				}
-				cropPrefs.edit().putString("translation_style", translationStyle.name).apply()
-			}
-		}
-
-		binding.btnSaveGameContext.setOnClickListener {
-			val text = binding.etGameContext.text?.toString()?.trim() ?: ""
-			gameContextGlossary = text
-			cropPrefs.edit().putString("game_context_glossary", text).apply()
-			val msg = if (text.isNotEmpty()) {
-				"บันทึกบริบทเกม / พจนานุกรมเรียบร้อยแล้ว"
-			} else {
-				"ล้างบริบทเกมแล้ว (ใช้โหมดแปลทั่วไป)"
-			}
-			Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
-		}
-
-		binding.btnClearGameContext.setOnClickListener {
-			gameContextGlossary = ""
-			binding.etGameContext.setText("")
-			cropPrefs.edit().remove("game_context_glossary").apply()
-			Toast.makeText(this, "ล้างบริบทเกมแล้ว", Toast.LENGTH_SHORT).show()
-		}
-
-		binding.switchRollingContext.setOnCheckedChangeListener { _, isChecked ->
-			isRollingContextEnabled = isChecked
-			cropPrefs.edit().putBoolean("rolling_context_enabled", isChecked).apply()
-		}
 
 		binding.switchLocalCache.setOnCheckedChangeListener { _, isChecked ->
 			isLocalCacheEnabled = isChecked
@@ -2730,24 +2663,68 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 	}
 
 	private suspend fun translateGoogleFree(englishText: String): String = withContext(Dispatchers.IO) {
-		try {
-			val url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=th&dt=t&q=" + URLEncoder.encode(englishText, "UTF-8")
-			val conn = URL(url).openConnection()
-			conn.setRequestProperty("User-Agent", "Mozilla/5.0")
-			conn.connectTimeout = 3000
-			conn.readTimeout = 3000
-			val res = conn.getInputStream().bufferedReader().use { it.readText() }
-			val json = JSONArray(res)
-			val sentences = json.getJSONArray(0)
-			val sb = StringBuilder()
-			for (i in 0 until sentences.length()) {
-				sb.append(sentences.getJSONArray(i).getString(0))
-			}
-			val result = sb.toString().trim()
-			if (result.isNotEmpty()) result else englishText
+		val encoded = try {
+			URLEncoder.encode(englishText, "UTF-8")
 		} catch (_: Exception) {
-			englishText
+			return@withContext englishText
 		}
+
+		// Primary endpoint: translate.googleapis.com GTX
+		try {
+			val url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=th&dt=t&q=$encoded"
+			val conn = (URL(url).openConnection() as java.net.HttpURLConnection).apply {
+				setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+				connectTimeout = 4500
+				readTimeout = 4500
+			}
+			if (conn.responseCode in 200..299) {
+				val res = conn.inputStream.bufferedReader().use { it.readText() }
+				conn.disconnect()
+				val json = JSONArray(res)
+				val sentences = json.optJSONArray(0)
+				if (sentences != null) {
+					val sb = StringBuilder()
+					for (i in 0 until sentences.length()) {
+						val seg = sentences.optJSONArray(i) ?: continue
+						val part = seg.optString(0, "")
+						if (part.isNotEmpty() && part != "null") {
+							sb.append(part)
+						}
+					}
+					val result = sb.toString().trim()
+					if (result.isNotEmpty() && result != englishText) {
+						return@withContext result
+					}
+				}
+			} else {
+				conn.disconnect()
+			}
+		} catch (_: Exception) {}
+
+		// Backup endpoint: clients5.google.com dict-chrome-ex
+		try {
+			val url2 = "https://clients5.google.com/translate_a/t?client=dict-chrome-ex&sl=en&tl=th&q=$encoded"
+			val conn2 = (URL(url2).openConnection() as java.net.HttpURLConnection).apply {
+				setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+				connectTimeout = 4500
+				readTimeout = 4500
+			}
+			if (conn2.responseCode in 200..299) {
+				val res2 = conn2.inputStream.bufferedReader().use { it.readText() }
+				conn2.disconnect()
+				val arr = JSONArray(res2)
+				if (arr.length() > 0) {
+					val first = arr.optString(0, "").trim()
+					if (first.isNotEmpty()) {
+						return@withContext first
+					}
+				}
+			} else {
+				conn2.disconnect()
+			}
+		} catch (_: Exception) {}
+
+		englishText
 	}
 
 	private fun hideNoteTranslationCard() {
@@ -3003,30 +2980,18 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		return (dp * resources.displayMetrics.density).toInt()
 	}
 
-	private suspend fun translateToThai(
-		englishText: String,
-		isPopup: Boolean = false,
-		recentContext: List<Pair<String, String>> = emptyList()
-	): String = withContext(Dispatchers.IO) {
+	private suspend fun translateToThai(englishText: String, isPopup: Boolean = false): String = withContext(Dispatchers.IO) {
 		val provider = activeTranslationProvider
 		val apiKey = getProviderApiKey(provider)
 		val isUsingAi = provider != TranslationProvider.GOOGLE_FREE && apiKey.isNotEmpty()
-		val styleSnapshot = translationStyle
-		val glossarySnapshot = gameContextGlossary.trim()
-		val useCache = isLocalCacheEnabled
-		val wordCount = englishText.trim().split(Regex("\\s+")).count { it.isNotEmpty() }
-
-		// Isolate cache namespace by AI vs Free + tone + glossary hash + popup vs dialogue
+		val useCache = isLocalCacheEnabled && !englishText.contains("|||")
 		val cacheKey = if (isUsingAi) {
-			"ai_${styleSnapshot.name}_${glossarySnapshot.hashCode()}_${if (isPopup) "pop" else "sub"}"
+			"ai_${if (isPopup) "pop" else "sub"}"
 		} else {
 			"free_${if (isPopup) "pop" else "sub"}"
 		}
 
-		// For short ambiguous 1-2 word replies ("Yeah", "No", "What?"), skip cache read when rolling context is active
-		// unless the line includes an explicit speaker prefix ("Lucia: Okay.")
-		val allowCacheRead = useCache && (isPopup || !isRollingContextEnabled || recentContext.isEmpty() || wordCount >= 3 || englishText.contains(':'))
-		if (allowCacheRead && ::translationCacheDb.isInitialized) {
+		if (useCache && ::translationCacheDb.isInitialized) {
 			val cached = translationCacheDb.get(cacheKey, englishText)
 			if (!cached.isNullOrBlank()) {
 				return@withContext cached
@@ -3036,15 +3001,7 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		if (isUsingAi) {
 			try {
 				val aiResult = when (provider) {
-					TranslationProvider.GEMINI -> translateWithGemini(
-						englishText = englishText,
-						apiKey = apiKey,
-						model = getProviderModel(provider),
-						isPopup = isPopup,
-						style = styleSnapshot,
-						glossary = glossarySnapshot,
-						recentContext = recentContext
-					)
+					TranslationProvider.GEMINI -> translateWithGemini(englishText, apiKey, getProviderModel(provider), isPopup)
 					TranslationProvider.GROQ,
 					TranslationProvider.CEREBRAS,
 					TranslationProvider.OPENAI,
@@ -3057,16 +3014,13 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 							apiKey = apiKey,
 							model = getProviderModel(provider),
 							provider = provider,
-							isPopup = isPopup,
-							style = styleSnapshot,
-							glossary = glossarySnapshot,
-							recentContext = recentContext
+							isPopup = isPopup
 						)
 					}
 					TranslationProvider.GOOGLE_FREE -> null
 				}
 				if (!aiResult.isNullOrBlank()) {
-					if (useCache && ::translationCacheDb.isInitialized && (isPopup || wordCount >= 3)) {
+					if (useCache && ::translationCacheDb.isInitialized) {
 						translationCacheDb.put(cacheKey, englishText, aiResult)
 					}
 					return@withContext aiResult
@@ -3077,131 +3031,33 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		}
 
 		val freeResult = translateGoogleFree(englishText)
-		// Never pollute AI cache with a Google Free fallback; only cache when user actually chose Google Free
 		if (!isUsingAi && useCache && ::translationCacheDb.isInitialized && freeResult != englishText) {
 			translationCacheDb.put(cacheKey, englishText, freeResult)
 		}
 		freeResult
 	}
 
-	private fun buildSystemInstruction(
-		isPopup: Boolean,
-		style: TranslationStyle,
-		glossary: String
-	): String {
-		val baseRole = if (isPopup) {
-			"You are a professional Thai video game localizer. Translate the target English in-game HUD popup, tutorial tip, or phone message into clear, concise, natural Thai."
+	private fun buildTranslationPrompt(englishText: String, isPopup: Boolean): String {
+		return if (isPopup) {
+			"Translate this in-game HUD popup, tutorial tip, or in-game phone message from English to clear, concise, natural Thai. Return ONLY the Thai translation without notes or quotes:\n$englishText"
 		} else {
-			val styleGuide = when (style) {
-				TranslationStyle.GRITTY ->
-					"Use gritty, raw spoken Thai crime/action movie subtitle style (like GTA/Narcos). Translate slang, street talk, and profanity faithfully and punchily matching the speaker's raw emotion. Never censor, never soften into stiff textbook Thai, and never add polite particles (ครับ/ค่ะ) unless the English is explicitly formal or sarcastic."
-				TranslationStyle.FORMAL_RPG ->
-					"Use dramatic, immersive Thai cinema/RPG subtitle style (like God of War/Witcher). Choose natural, evocative, dignified Thai diction matching the serious tone. Avoid modern internet slang."
-				TranslationStyle.NATURAL ->
-					"Use natural, fluid spoken Thai movie/game subtitle style. Translate idioms and emotions naturally instead of word-for-word literal translation. Avoid stiff textbook phrasing and avoid adding polite particles (ครับ/ค่ะ) unless the English is explicitly formal."
-			}
-			"You are a professional Thai video game subtitle translator. $styleGuide"
+			"Translate this video game subtitle from English to natural, punchy spoken Thai (movie/game subtitle style). Accurately translate slang, idioms, and profanity/swear words matching the character's raw emotion without censoring or making it overly polite. Return ONLY the Thai translation:\n$englishText"
 		}
-
-		val glossaryBlock = if (glossary.isNotEmpty()) {
-			"\nGame Context & Glossary (strictly follow these character names, genders, pronouns, and terms):\n$glossary"
-		} else {
-			""
-		}
-
-		val strictContract =
-			"\nSTRICT OUTPUT RULES: Return ONLY the final Thai translation of the target line. Do NOT explain, do NOT add notes or parentheses, do NOT repeat English, do NOT translate context lines, and do NOT wrap in quotes or markdown."
-
-		return baseRole + glossaryBlock + strictContract
 	}
 
-	private fun buildUserTranslationPayload(
-		englishText: String,
-		isPopup: Boolean,
-		recentContext: List<Pair<String, String>>
-	): String {
-		if (isPopup || recentContext.isEmpty()) {
-			return englishText
-		}
-		val sb = StringBuilder()
-		sb.append("[Previous lines for context ONLY - DO NOT translate these]\n")
-		for ((prevEn, prevTh) in recentContext) {
-			sb.append("- EN: ").append(prevEn).append(" => TH: ").append(prevTh).append('\n')
-		}
-		sb.append("\n[Translate ONLY this target line into Thai]\n")
-		sb.append(englishText)
-		return sb.toString()
-	}
-
-	private fun cleanAiTranslationOutput(raw: String, sourceEnglish: String): String? {
-		var cleaned = raw
+	private fun cleanAiTranslationOutput(raw: String): String? {
+		val cleaned = raw
 			.replace(Regex("(?s)<think>.*?</think>"), "")
-			.replace("**", "")
-			.replace("`", "")
-			.trim()
-
-		// Strip any echoed context/instruction lines if a smaller LLM leaks them
-		val lines = cleaned.lines()
-			.map { it.trim() }
-			.filter { line ->
-				line.isNotEmpty() &&
-					!line.startsWith("[Previous", ignoreCase = true) &&
-					!line.startsWith("[Translate", ignoreCase = true) &&
-					!line.startsWith("- EN:", ignoreCase = true) &&
-					!line.startsWith("EN:", ignoreCase = true) &&
-					!line.startsWith("Note:", ignoreCase = true) &&
-					!line.startsWith("หมายเหตุ:", ignoreCase = true)
-			}
-
-		cleaned = if (lines.size > 1 && !sourceEnglish.contains('\n')) {
-			// Prefer the last line containing Thai if model accidentally echoed earlier context
-			lines.lastOrNull { it.any { c -> c in '\u0E00'..'\u0E7F' } } ?: lines.last()
-		} else {
-			lines.joinToString(" ")
-		}
-
-		cleaned = cleaned
-			.replace(Regex("^(?:คำแปล|แปลว่า|แปล|Thai|TH|Translation|Output)\\s*[:：-]\\s*", RegexOption.IGNORE_CASE), "")
+			.replace(Regex("^(?:คำแปล|แปลว่า|แปล|Thai|TH)\\s*[:：-]\\s*", RegexOption.IGNORE_CASE), "")
 			.trim()
 			.removeSurrounding("\"")
 			.removeSurrounding("'")
-			.removeSurrounding("“", "”")
 			.trim()
-
-		if (cleaned.isEmpty()) return null
-
-		// Guard against AI meta-chatter / refusals / hallucinated essays ("กันแปลเพี้ยน")
-		val lower = cleaned.lowercase()
-		val refusalPatterns = listOf(
-			"i cannot", "i can't", "i'm sorry", "as an ai", "here is the translation",
-			"here's the translation", "translated text", "cannot translate", "ไม่สามารถแปล"
-		)
-		if (refusalPatterns.any { lower.contains(it) }) return null
-
-		// Must contain at least one Thai character when source has >= 4 English letters
-		val sourceLetters = sourceEnglish.count { it in 'a'..'z' || it in 'A'..'Z' }
-		val hasThai = cleaned.any { it in '\u0E00'..'\u0E7F' }
-		if (sourceLetters >= 4 && !hasThai) return null
-
-		// Reject runaway explanations far longer than the source subtitle
-		val maxAllowedLen = maxOf(sourceEnglish.length * 4 + 90, 280)
-		if (cleaned.length > maxAllowedLen) return null
-
-		return cleaned
+		return cleaned.ifEmpty { null }
 	}
 
-	private fun translateWithGemini(
-		englishText: String,
-		apiKey: String,
-		model: String,
-		isPopup: Boolean,
-		style: TranslationStyle,
-		glossary: String,
-		recentContext: List<Pair<String, String>>
-	): String? {
-		val systemPrompt = buildSystemInstruction(isPopup, style, glossary)
-		val userPayload = buildUserTranslationPayload(englishText, isPopup, recentContext)
-		val combinedPrompt = "$systemPrompt\n\n$userPayload"
+	private fun translateWithGemini(englishText: String, apiKey: String, model: String, isPopup: Boolean): String? {
+		val prompt = buildTranslationPrompt(englishText, isPopup)
 		val lowerModel = model.lowercase()
 
 		// Primary fast path: Gemini Interactions API (store=false + minimal/off thinking for lowest latency)
@@ -3234,7 +3090,7 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 			val body = org.json.JSONObject().apply {
 				put("model", model)
 				put("store", false)
-				put("input", combinedPrompt)
+				put("input", prompt)
 				put("generation_config", genConfig)
 			}
 
@@ -3271,7 +3127,7 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 						}
 					}
 				}
-				val parsed = cleanAiTranslationOutput(sb.toString(), englishText)
+				val parsed = cleanAiTranslationOutput(sb.toString())
 				if (parsed != null) return parsed
 			} else {
 				conn.disconnect()
@@ -3315,19 +3171,16 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 					}
 				}
 				val genConfig = org.json.JSONObject().apply {
-					put("temperature", 0.30)
+					put("temperature", 0.35)
 					put("maxOutputTokens", 240)
 					if (candidateModel.lowercase().contains("2.5-flash")) {
 						put("thinkingConfig", org.json.JSONObject().put("thinkingBudget", 0))
 					}
 				}
 				val body = org.json.JSONObject().apply {
-					put("systemInstruction", org.json.JSONObject().put("parts", JSONArray().put(
-						org.json.JSONObject().put("text", systemPrompt)
-					)))
 					put("contents", JSONArray().put(
 						org.json.JSONObject().put("parts", JSONArray().put(
-							org.json.JSONObject().put("text", userPayload)
+							org.json.JSONObject().put("text", prompt)
 						))
 					))
 					put("safetySettings", safetyArray)
@@ -3347,7 +3200,7 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 				if (candidates.length() == 0) continue
 				val parts = candidates.getJSONObject(0).optJSONObject("content")?.optJSONArray("parts") ?: continue
 				if (parts.length() == 0) continue
-				val parsed = cleanAiTranslationOutput(parts.getJSONObject(0).optString("text", ""), englishText)
+				val parsed = cleanAiTranslationOutput(parts.getJSONObject(0).optString("text", ""))
 				if (parsed != null) return parsed
 			} catch (_: Exception) {
 				continue
@@ -3362,13 +3215,13 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		apiKey: String,
 		model: String,
 		provider: TranslationProvider,
-		isPopup: Boolean,
-		style: TranslationStyle,
-		glossary: String,
-		recentContext: List<Pair<String, String>>
+		isPopup: Boolean
 	): String? {
-		val systemPrompt = buildSystemInstruction(isPopup, style, glossary)
-		val userPayload = buildUserTranslationPayload(englishText, isPopup, recentContext)
+		val systemPrompt = if (isPopup) {
+			"You are a fast video game translator. Translate the given English HUD popup, tutorial tip, or in-game phone message into clear, concise natural Thai. Return ONLY the Thai text."
+		} else {
+			"You are a fast video game subtitle translator. Translate the given English subtitle into natural, punchy spoken Thai (movie/game style). Accurately translate slang, idioms, and profanity matching the character's raw emotion without censoring. Return ONLY the Thai text."
+		}
 
 		val conn = (URL(endpoint).openConnection() as java.net.HttpURLConnection).apply {
 			requestMethod = "POST"
@@ -3390,7 +3243,7 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 			})
 			put(org.json.JSONObject().apply {
 				put("role", "user")
-				put("content", userPayload)
+				put("content", englishText)
 			})
 		}
 
@@ -3413,7 +3266,7 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		val choices = json.optJSONArray("choices") ?: return null
 		if (choices.length() == 0) return null
 		val message = choices.getJSONObject(0).optJSONObject("message") ?: return null
-		return cleanAiTranslationOutput(message.optString("content", ""), englishText)
+		return cleanAiTranslationOutput(message.optString("content", ""))
 	}
 
 	private fun isFemaleCharacter(englishText: String, thaiText: String): Boolean {

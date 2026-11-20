@@ -1479,6 +1479,19 @@
                             android:textSize="11sp"/>
 
                         <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnImportTranslationCache"
+                            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                            android:layout_width="wrap_content"
+                            android:layout_height="32dp"
+                            android:layout_marginEnd="6dp"
+                            android:text="นำเข้า .db"
+                            android:textSize="10sp"
+                            android:textColor="#81C784"
+                            app:strokeColor="#81C784"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"/>
+
+                        <com.google.android.material.button.MaterialButton
                             android:id="@+id/btnClearTranslationCache"
                             style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                             android:layout_width="wrap_content"

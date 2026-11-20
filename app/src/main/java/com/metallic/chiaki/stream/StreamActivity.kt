@@ -64,6 +64,7 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		const val EXTRA_CONNECT_INFO = "connect_info"
 		private const val MIN_SUB_FONT_SIZE = 10
 		private const val MAX_SUB_FONT_SIZE = 80
+		private const val REQUEST_CODE_IMPORT_CACHE_DB = 9042
 	}
 
 	private lateinit var viewModel: StreamViewModel
@@ -1150,13 +1151,45 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 			cropPrefs.edit().putBoolean("local_cache_enabled", isChecked).apply()
 		}
 
+		binding.btnImportTranslationCache.setOnClickListener {
+			try {
+				val intent = android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT).apply {
+					addCategory(android.content.Intent.CATEGORY_OPENABLE)
+					type = "*/*"
+				}
+				startActivityForResult(intent, REQUEST_CODE_IMPORT_CACHE_DB)
+			} catch (e: Exception) {
+				Toast.makeText(this@StreamActivity, "ไม่สามารถเปิดตัวเลือกไฟล์ได้: ${e.message}", Toast.LENGTH_SHORT).show()
+			}
+		}
+
 		binding.btnClearTranslationCache.setOnClickListener {
 			ocrScope.launch {
 				withContext(Dispatchers.IO) {
 					translationCacheDb.clearAll()
 				}
 				refreshCacheStatsUI()
-				Toast.makeText(this@StreamActivity, "ล้างแคชคำแปลในเครื่องทั้งหมดแล้ว", Toast.LENGTH_SHORT).show()
+				Toast.makeText(this@StreamActivity, "รีเซ็ตแคชคำแปลในเครื่องเรียบร้อยแล้ว", Toast.LENGTH_SHORT).show()
+			}
+		}
+	}
+
+	@Deprecated("Deprecated in Java")
+	override fun onActivityResult(requestCode: Int, resultCode: Int, data: android.content.Intent?) {
+		super.onActivityResult(requestCode, resultCode, data)
+		if (requestCode == REQUEST_CODE_IMPORT_CACHE_DB && resultCode == RESULT_OK) {
+			val uri = data?.data ?: return
+			ocrScope.launch {
+				val imported = withContext(Dispatchers.IO) {
+					translationCacheDb.importFromUri(this@StreamActivity, uri)
+				}
+				refreshCacheStatsUI()
+				val msg = if (imported > 0) {
+					"นำเข้าฐานข้อมูลคำแปลสำเร็จ $imported ประโยค!"
+				} else {
+					"ไม่พบข้อมูลคำแปลที่รองรับในไฟล์นี้ (.db / .tsv)"
+				}
+				Toast.makeText(this@StreamActivity, msg, Toast.LENGTH_LONG).show()
 			}
 		}
 	}
@@ -2991,7 +3024,8 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		}
 
 		// For short ambiguous 1-2 word replies ("Yeah", "No", "What?"), skip cache read when rolling context is active
-		val allowCacheRead = useCache && (isPopup || !isRollingContextEnabled || recentContext.isEmpty() || wordCount >= 3)
+		// unless the line includes an explicit speaker prefix ("Lucia: Okay.")
+		val allowCacheRead = useCache && (isPopup || !isRollingContextEnabled || recentContext.isEmpty() || wordCount >= 3 || englishText.contains(':'))
 		if (allowCacheRead && ::translationCacheDb.isInitialized) {
 			val cached = translationCacheDb.get(cacheKey, englishText)
 			if (!cached.isNullOrBlank()) {

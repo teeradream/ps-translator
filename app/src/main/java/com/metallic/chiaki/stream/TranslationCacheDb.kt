@@ -36,7 +36,7 @@ class TranslationCacheDb(private val appContext: Context) : SQLiteOpenHelper(
 		const val PRELOAD_KEY = "preload_sub"
 		private const val ASSET_PRELOAD_FILE = "preload_gta6_cache.tsv"
 		private const val PRELOAD_PREFS = "ps_translator_cache_meta"
-		private const val PREF_PRELOAD_COUNT = "seeded_asset_line_count_v3"
+		private const val PREF_PRELOAD_COUNT = "seeded_asset_line_count_v4"
 		private const val MAX_ROWS = 60000
 		private const val MAX_SKELETON_BUCKET = 260
 
@@ -62,6 +62,12 @@ class TranslationCacheDb(private val appContext: Context) : SQLiteOpenHelper(
 			"raul bautista" to "ราอูล",
 			"donnie" to "ดอนนี",
 			"ronda" to "รอนดา",
+			"mandy" to "แมนดี",
+			"bert" to "เบิร์ต",
+			"dobbs" to "ด็อบส์",
+			"roxy" to "ร็อกซี",
+			"bae-luxe" to "เบ-ลักซ์",
+			"tourist" to "นักท่องเที่ยว",
 			"sam" to "แซม",
 			"kai" to "ไค",
 			"shanese" to "ชานีส",

@@ -26,7 +26,8 @@ class TvOverlayServer(
 ) {
 	companion object {
 		const val PORT = 8791
-		private const val DEFAULT_TOKEN = "pstranslator0123456789abcdef0123456789abcdef"
+		// Must be 32..128 lowercase hex chars (/^[0-9a-f]{32,128}$/) to pass Tizen app.js TOKEN check
+		private const val DEFAULT_TOKEN = "a1b2c3d4e5f60123456789abcdef0123456789abcdef0123"
 
 		fun getLocalWifiIp(context: Context): String {
 			try {

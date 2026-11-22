@@ -8,11 +8,14 @@ import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.metallic.chiaki.BuildConfig
 import com.metallic.chiaki.R
 import com.metallic.chiaki.common.*
 import com.metallic.chiaki.common.ext.putRevealExtra
@@ -23,7 +26,10 @@ import com.metallic.chiaki.lib.DiscoveryHost
 import com.metallic.chiaki.manualconsole.EditManualConsoleActivity
 import com.metallic.chiaki.regist.RegistActivity
 import com.metallic.chiaki.settings.SettingsActivity
+import com.metallic.chiaki.stream.AppUpdater
 import com.metallic.chiaki.stream.StreamActivity
+import com.metallic.chiaki.stream.TranslationCacheDb
+import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity()
 {
@@ -78,6 +84,8 @@ class MainActivity : AppCompatActivity()
 				discoveryMenuItem?.let { updateDiscoveryMenuItem(it, active) }
 				updateEmptyInfo()
 			})
+
+			checkForAppUpdateOnLaunch()
 		}
 		catch(e: Throwable)
 		{
@@ -157,6 +165,12 @@ class MainActivity : AppCompatActivity()
 			true
 		}
 
+		R.id.action_update_app ->
+		{
+			showUpdateOptionsDialog()
+			true
+		}
+
 		R.id.action_settings ->
 		{
 			Intent(this, SettingsActivity::class.java).also {
@@ -166,6 +180,77 @@ class MainActivity : AppCompatActivity()
 		}
 
 		else -> super.onOptionsItemSelected(item)
+	}
+
+	private fun checkForAppUpdateOnLaunch() {
+		lifecycleScope.launch {
+			val info = AppUpdater.fetchLatestReleaseInfo() ?: return@launch
+			val currentTag = "v${BuildConfig.VERSION_NAME}"
+			if (info.tagName.isNotEmpty() && !info.tagName.equals(currentTag, ignoreCase = true) && !isFinishing && !isDestroyed) {
+				MaterialAlertDialogBuilder(this@MainActivity)
+					.setTitle("พบอัปเดตเวอร์ชันใหม่ (${info.tagName})")
+					.setMessage("${info.title}\n\nต้องการดาวน์โหลดและอัปเดตในแอปทันทีโดยไม่ต้องโหลดไฟล์เองหรือไม่?")
+					.setPositiveButton("อัปเดตทันที") { _, _ ->
+						startInAppApkUpdate(info.apkUrl)
+					}
+					.setNegativeButton("ไว้ทีหลัง", null)
+					.show()
+			}
+		}
+	}
+
+	private fun showUpdateOptionsDialog() {
+		val items = arrayOf(
+			"☁️ ซิงค์คลังซับล่าสุดจากคลาวด์ (ไม่ต้องลงแอปใหม่)",
+			"🔄 ดาวน์โหลดและอัปเดตตัวแอปเป็นเวอร์ชันล่าสุด"
+		)
+		MaterialAlertDialogBuilder(this)
+			.setTitle("อัปเดต PS Translator (v${BuildConfig.VERSION_NAME})")
+			.setItems(items) { _, which ->
+				if (which == 0) {
+					Toast.makeText(this, "กำลังซิงค์คลังซับล่าสุดจากคลาวด์...", Toast.LENGTH_SHORT).show()
+					lifecycleScope.launch {
+						val db = TranslationCacheDb(applicationContext)
+						val count = AppUpdater.syncCloudSubtitleDatabase(this@MainActivity, db)
+						val total = db.count()
+						try { db.close() } catch (_: Exception) {}
+						val msg = if (count > 0) {
+							"ซิงค์คลังซับสำเร็จ! (รวมในเครื่อง $total ประโยค)"
+						} else {
+							"ซิงค์ไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ต"
+						}
+						Toast.makeText(this@MainActivity, msg, Toast.LENGTH_LONG).show()
+					}
+				} else {
+					lifecycleScope.launch {
+						val info = AppUpdater.fetchLatestReleaseInfo()
+						startInAppApkUpdate(info?.apkUrl ?: "https://github.com/teeradream/ps-translator/releases/latest/download/PS-Translator.apk")
+					}
+				}
+			}
+			.setNegativeButton("ยกเลิก", null)
+			.show()
+	}
+
+	private fun startInAppApkUpdate(apkUrl: String) {
+		val progressDialog = MaterialAlertDialogBuilder(this)
+			.setTitle("กำลังดาวน์โหลดอัปเดต...")
+			.setMessage("กำลังดาวน์โหลด 0%")
+			.setCancelable(false)
+			.show()
+		lifecycleScope.launch {
+			val ok = AppUpdater.downloadAndInstallApk(this@MainActivity, apkUrl) { pct ->
+				if (progressDialog.isShowing) {
+					progressDialog.setMessage("กำลังดาวน์โหลด $pct% ...")
+				}
+			}
+			if (progressDialog.isShowing) {
+				try { progressDialog.dismiss() } catch (_: Exception) {}
+			}
+			if (!ok && !isFinishing && !isDestroyed) {
+				Toast.makeText(this@MainActivity, "ดาวน์โหลดอัปเดตไม่สำเร็จ กรุณาลองใหม่", Toast.LENGTH_LONG).show()
+			}
+		}
 	}
 
 	private fun addManualConsole()

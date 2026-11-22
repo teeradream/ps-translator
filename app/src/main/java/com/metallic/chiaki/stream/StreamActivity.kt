@@ -65,6 +65,7 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		private const val MIN_SUB_FONT_SIZE = 10
 		private const val MAX_SUB_FONT_SIZE = 80
 		private const val REQUEST_CODE_IMPORT_CACHE_DB = 9042
+		private const val SUBTITLE_AUTO_HIDE_MS = 10000L
 	}
 
 	private lateinit var viewModel: StreamViewModel
@@ -164,8 +165,10 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 	private var isSkipSpeakerNameInTts = true
 	private var speechSpeedRate = 1.25f
 
-	// Multi-Provider Translation API, Local Cache & Gemini AI TTS settings
+	// Multi-Provider Translation API, Local Cache, Samsung TV Overlay Server & Gemini AI TTS settings
 	private lateinit var translationCacheDb: TranslationCacheDb
+	private var tvOverlayServer: TvOverlayServer? = null
+	private var isTvCastEnabled = true
 	private var activeTranslationProvider = TranslationProvider.GOOGLE_FREE
 	private var editingProvider = TranslationProvider.GOOGLE_FREE
 	private var isLocalCacheEnabled = true
@@ -220,6 +223,13 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 	private val hidePopupLeftRunnable = Runnable {
 		if (::binding.isInitialized && !isDestroyed && !isFinishing) {
 			hidePopupCard(PopupSide.LEFT)
+		}
+	}
+
+	private val autoHideSubtitleRunnable = Runnable {
+		if (::binding.isInitialized && !isDestroyed && !isFinishing) {
+			subtitleHistory.clear()
+			renderSubtitles()
 		}
 	}
 
@@ -562,6 +572,8 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 						subtitleHistory.removeAt(subtitleHistory.size - 1)
 					}
 					renderSubtitles()
+					uiVisibilityHandler.removeCallbacks(autoHideSubtitleRunnable)
+					uiVisibilityHandler.postDelayed(autoHideSubtitleRunnable, SUBTITLE_AUTO_HIDE_MS)
 					if (isTtsEnabled && thai != englishForTranslate) {
 						speakTranslation(text, thai)
 					}
@@ -880,20 +892,7 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		binding.pureFullscreenText2.setTextColor(currentSubTextColor)
 		binding.pureFullscreenText2.setTextSize(TypedValue.COMPLEX_UNIT_SP, (fullSize * 0.72f).coerceAtLeast(10f))
 
-		// 4. Update Live Preview in Settings Menu
-		val previewBg = GradientDrawable().apply {
-			shape = GradientDrawable.RECTANGLE
-			cornerRadius = dpToPx(10).toFloat()
-			setColor(Color.argb(alphaInt, 6, 8, 16))
-			if (alphaInt > 0) {
-				setStroke(dpToPx(1), Color.argb(40, 255, 255, 255))
-			}
-		}
-		binding.previewSubContainer.background = previewBg
-		binding.previewSubNew.setTextColor(currentSubTextColor)
-		binding.previewSubNew.setTextSize(TypedValue.COMPLEX_UNIT_SP, (currentSubFontSize * 0.8f).coerceIn(10f, 34f))
-		binding.previewSubOld.setTextColor(currentSubTextColor)
-		binding.previewSubOld.setTextSize(TypedValue.COMPLEX_UNIT_SP, (currentSubFontSize * 0.7f).coerceIn(9f, 28f))
+		// 4. Update Font Size Label in Settings Menu (Preview box hidden so window does not expand)
 		binding.tvCurrentFontSize.text = "$currentSubFontSize sp"
 		binding.tvCurrentFontSize.setTextColor(currentSubTextColor)
 
@@ -1105,6 +1104,106 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 				Toast.makeText(this@StreamActivity, "รีเซ็ตแคชคำแปลในเครื่องเรียบร้อยแล้ว", Toast.LENGTH_SHORT).show()
 			}
 		}
+
+		// Samsung TV Overlay Cast Server (Port 8791)
+		isTvCastEnabled = cropPrefs.getBoolean("tv_cast_overlay_enabled", true)
+		binding.switchTvCastOverlay.isChecked = isTvCastEnabled
+		if (tvOverlayServer == null) {
+			tvOverlayServer = TvOverlayServer(applicationContext) { tvName ->
+				uiVisibilityHandler.post {
+					if (!isDestroyed && !isFinishing) {
+						updateTvCastStatusUI(tvName)
+					}
+				}
+			}.apply {
+				this.isTvCastEnabled = this@StreamActivity.isTvCastEnabled
+				start()
+			}
+		}
+		updateTvCastStatusUI(tvOverlayServer?.connectedTvName)
+		syncTvOverlayState()
+
+		binding.switchTvCastOverlay.setOnCheckedChangeListener { _, isChecked ->
+			isTvCastEnabled = isChecked
+			cropPrefs.edit().putBoolean("tv_cast_overlay_enabled", isChecked).apply()
+			tvOverlayServer?.isTvCastEnabled = isChecked
+			updateTvCastStatusUI(tvOverlayServer?.connectedTvName)
+			syncTvOverlayState()
+		}
+
+		// 1-Click Cloud Subtitle Sync (OTA without downloading APK)
+		binding.btnSyncCloudSubtitles.setOnClickListener {
+			binding.btnSyncCloudSubtitles.isEnabled = false
+			binding.btnSyncCloudSubtitles.text = "กำลังซิงค์..."
+			ocrScope.launch {
+				val count = AppUpdater.syncCloudSubtitleDatabase(this@StreamActivity, translationCacheDb)
+				binding.btnSyncCloudSubtitles.isEnabled = true
+				binding.btnSyncCloudSubtitles.text = "ซิงค์ซับล่าสุด"
+				refreshCacheStatsUI()
+				val msg = if (count > 0) {
+					"ซิงค์คลังซับล่าสุดจากคลาวด์สำเร็จ ($count ประโยค)!"
+				} else {
+					"ซิงค์คลังซับไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ต"
+				}
+				Toast.makeText(this@StreamActivity, msg, Toast.LENGTH_LONG).show()
+			}
+		}
+
+		// 1-Click In-App APK Auto-Updater (downloads & launches installer inside app)
+		binding.btnInAppUpdateApk.setOnClickListener {
+			binding.btnInAppUpdateApk.isEnabled = false
+			binding.btnInAppUpdateApk.text = "เช็กอัปเดต..."
+			ocrScope.launch {
+				val info = AppUpdater.fetchLatestReleaseInfo()
+				val url = info?.apkUrl ?: "https://github.com/teeradream/ps-translator/releases/latest/download/PS-Translator.apk"
+				val ok = AppUpdater.downloadAndInstallApk(this@StreamActivity, url) { pct ->
+					if (!isDestroyed && !isFinishing) {
+						binding.btnInAppUpdateApk.text = "โหลด $pct%..."
+					}
+				}
+				if (!isDestroyed && !isFinishing) {
+					binding.btnInAppUpdateApk.isEnabled = true
+					binding.btnInAppUpdateApk.text = "อัปเดตแอปในตัว"
+					if (!ok) {
+						Toast.makeText(this@StreamActivity, "ดาวน์โหลดอัปเดตไม่สำเร็จ กรุณาลองใหม่", Toast.LENGTH_LONG).show()
+					}
+				}
+			}
+		}
+	}
+
+	private fun updateTvCastStatusUI(connectedTv: String?) {
+		if (!::binding.isInitialized) return
+		val ip = TvOverlayServer.getLocalWifiIp(this)
+		if (!isTvCastEnabled) {
+			binding.tvSamsungCastStatus.text = "ปิดการส่งซับขึ้นทีวีอยู่ (IP มือถือ: $ip)"
+			binding.tvSamsungCastStatus.setTextColor(Color.parseColor("#88FFFFFF"))
+		} else if (!connectedTv.isNullOrBlank()) {
+			binding.tvSamsungCastStatus.text = "✓ เชื่อมต่อกับทีวีแล้ว: $connectedTv (IP: $ip:${TvOverlayServer.PORT})"
+			binding.tvSamsungCastStatus.setTextColor(Color.parseColor("#00E676"))
+		} else {
+			binding.tvSamsungCastStatus.text = "พร้อมเชื่อมต่อทีวีใน Wi-Fi บ้าน (IP: $ip) — เปิดแอป PS Translator TV บนทีวีได้เลย"
+			binding.tvSamsungCastStatus.setTextColor(Color.parseColor("#99FFFFFF"))
+		}
+	}
+
+	private fun syncTvOverlayState() {
+		val server = tvOverlayServer ?: return
+		val showLeft = isPopupZonesMode && isPopupLeftEnabled && isPopupLeftVisible && lastPopupLeftThai.isNotEmpty()
+		val showRight = isPopupZonesMode && isPopupRightEnabled && isPopupRightVisible && lastPopupRightThai.isNotEmpty()
+		val showNote = ::binding.isInitialized && binding.noteTranslationCard.isVisible && lastNoteThai.isNotEmpty()
+		server.updateOverlayState(
+			subtitles = subtitleHistory.map { it.english to it.thai },
+			maxHistoryLines = maxHistoryLines,
+			fontSizeSp = currentSubFontSize,
+			textColorInt = currentSubTextColor,
+			bgOpacityPercent = currentSubBgOpacity,
+			position = currentSubPosition,
+			isSubtitleEnabled = isSubtitleEnabled,
+			popupLeftText = if (showLeft) lastPopupLeftThai else null,
+			popupRightText = if (showRight) lastPopupRightThai else null,
+			noteText = if (showNote) lastNoteThai else null
+		)
 	}
 
 	@Deprecated("Deprecated in Java")
@@ -1230,6 +1329,11 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 	private fun renderSubtitles() {
 		if (subtitleHistory.isEmpty()) {
 			binding.subtitleOverlayContainer.isVisible = false
+			binding.pureFullscreenText.text = ""
+			binding.pureOriginalText.text = ""
+			binding.pureFullscreenText1.isVisible = false
+			binding.pureFullscreenText2.isVisible = false
+			syncTvOverlayState()
 			return
 		}
 
@@ -1274,11 +1378,12 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 			binding.pureFullscreenText2.isVisible = false
 		}
 
-		// Keep subtitle window permanently visible without auto-fading out
+		// Keep subtitle window visible until 10s idle timer fires
 		if (isSubtitleEnabled && !isTextOnlyMode) {
 			binding.subtitleOverlayContainer.isVisible = true
 			binding.subtitleOverlayContainer.alpha = 1.0f
 		}
+		syncTvOverlayState()
 	}
 
 	@SuppressLint("ClickableViewAccessibility")
@@ -2069,6 +2174,7 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		binding.pureFullscreenInner.layoutParams = lp
 
 		uiVisibilityHandler.postDelayed(hideNoteCardRunnable, 20000)
+		syncTvOverlayState()
 	}
 
 	private fun setupPopupZonesControls() {
@@ -2485,6 +2591,7 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 			binding.popupRightCard.isVisible = false
 			binding.purePopupRightCard.isVisible = false
 		}
+		syncTvOverlayState()
 	}
 
 	private fun syncPopupCardVisibility() {
@@ -2495,6 +2602,7 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		binding.popupRightCard.isVisible = showRight && !isTextOnlyMode
 		binding.purePopupLeftCard.isVisible = showLeft && isTextOnlyMode
 		binding.purePopupRightCard.isVisible = showRight && isTextOnlyMode
+		syncTvOverlayState()
 	}
 
 	private fun isMainTtsBusy(): Boolean {
@@ -2733,6 +2841,7 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		val lp = binding.pureFullscreenInner.layoutParams as FrameLayout.LayoutParams
 		lp.gravity = Gravity.CENTER
 		binding.pureFullscreenInner.layoutParams = lp
+		syncTvOverlayState()
 	}
 
 	private fun openSettingsSheet() {
@@ -3731,6 +3840,9 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		uiVisibilityHandler.removeCallbacks(hideTopDrawerRunnable)
 		uiVisibilityHandler.removeCallbacks(hidePopupLeftRunnable)
 		uiVisibilityHandler.removeCallbacks(hidePopupRightRunnable)
+		uiVisibilityHandler.removeCallbacks(autoHideSubtitleRunnable)
+		tvOverlayServer?.stop()
+		tvOverlayServer = null
 		activeUtterances.clear()
 		pendingSmartPopupSpeech = null
 		stopGeminiAudioPlayback()

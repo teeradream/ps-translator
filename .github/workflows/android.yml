@@ -58,53 +58,56 @@ jobs:
       - name: Build Android APK (assembleDebug)
         run: ./gradlew assembleDebug --stacktrace
 
-      - name: Locate and rename APK
+      - name: Locate and rename APK & Samsung TV WGT
         run: |
           mkdir -p dist
           APK_FILE=$(find app/build/outputs/apk/ -name "*.apk" | head -n 1)
           echo "Found APK at: $APK_FILE"
           cp "$APK_FILE" dist/PS-Translator.apk
+          cp tizen-tv/PS-Translator-Samsung-TV.wgt dist/PS-Translator-Samsung-TV.wgt
           ls -la dist/
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: PS-Translator-APK
-          path: dist/*.apk
+          path: |
+            dist/*.apk
+            dist/*.wgt
 
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/heads/main')
         with:
-          tag_name: v2.1.0
-          name: "PS Translator v2.1.0 (Local Cache 0ms, 12,005 GTA 6 Subtitles, Auto Popup Zones & Multi-AI API)"
+          tag_name: v2.2.0
+          name: "PS Translator v2.2.0 (Samsung TV .wgt Overlay, In-App Auto-Updater, 10s Auto-Hide & 12,005 GTA 6 Subtitles)"
           body: |
-            ### 🎮 PS Translator v2.1.0 (Android APK & Samsung DeX)
+            ### 🎮 PS Translator v2.2.0 (Android APK, Samsung TV `.wgt` & Samsung DeX)
 
-            แอปพลิเคชันสตรีมเกม PlayStation 5 (PS5) และ PS4 พร้อมระบบตรวจจับซับไตเติล แปลข้อความป๊อปอัพซ้าย/ขวา เอกสารเฉพาะจุด และพากย์เสียงไทยแบบเรียลไทม์ในดีไซน์ **Liquid Glass** (`PS-Translator.apk`)
-
-            ---
-
-            #### 🌟 ไฮไลต์ฟีเจอร์ใหม่ในเวอร์ชัน 2.1.0:
-            - **ฐานข้อมูลคำแปลในเครื่อง (Local Cache 0ms + ฝังซับ GTA 6 Part 1–3 จำนวน 12,005 ประโยค):**
-              - ฝังฐานข้อมูลคำแปลซับไตเติล **GTA 6 Part 1–3** (เนื้อเรื่องกว่า 10 ชั่วโมง 20 นาทีแรก) มาพร้อมในตัว APK ใช้งานได้ทันทีตั้งแต่เปิดแอปครั้งแรก
-              - ระบบค้นหาอัจฉริยะ 3 ชั้น (**Exact Match `0ms`** → **OCR-Skeleton Match `0ms`** → **Exact Levenshtein Fuzzy `≥ 90%`**) จับคู่แม่นยำแม้ OCR ตอนเล่นจริงเพี้ยน 1–2 ตัวอักษร และแยกคลังซับเนื้อเรื่องออกจากกล่องข้อความแนะนำ (Popup) 100%
-              - **ปุ่ม `"นำเข้า .DB"`:** นำเข้าไฟล์ฐานข้อมูล `.db` หรือ `.tsv` ของพาร์ทถัดๆ ไปหรือเกมอื่นมารวมเพิ่มในเครื่องได้ทันทีโดยไม่ต้องลงแอปใหม่
-            - **โหมดโซนป๊อปอัพอัตโนมัติ (ซ้าย / ขวา) & ตัวกรองปุ่มกด HUD:**
-              - ตรวจจับและแปลข้อความคำแนะนำด้านซ้ายและข้อความมือถือ/แจ้งเตือนด้านขวาอัตโนมัติ พร้อมตัวกรองปุ่มกด Action/HUD มุมล่างขวา
-              - แสดงการ์ดคำแปลฝั่งเดียวกับต้นฉบับทั้งโหมดปกติและ **โหมดจอดำเต็มจอ (Text-Only Mode)**
-              - ตั้งค่าแยกเสียงพากย์ป๊อปอัพได้อิสระ (**Smart Queue**, **Dual Channel พูดพร้อมกัน**, หรือ **ปิดเสียงพากย์ป๊อปอัพเพื่ออ่านอย่างเดียว**)
-            - **Multi-Provider Translation API (7 ค่าย) + เซิร์ฟเวอร์สำรอง Google ฟรี:**
-              - เลือกค่ายแปลได้อิสระ: **Google Translate (ฟรี + เซิร์ฟเวอร์สำรองอัตโนมัติ)**, **Gemini AI (`flash-lite`)**, **Groq (เร็วสุดในสาย AI)**, **Cerebras**, **OpenAI**, **OpenRouter**, และ **Custom OpenAI-Compatible URL**
-              - เพิ่ม **สวิตช์เปิด/ปิดเสียงพากย์หลัก (Master Dubbing Toggle)** ในหน้าตั้งค่า API สำหรับสลับโหมดแปลตัวหนังสืออย่างเดียวได้ทันที
-            - **Liquid Glass UI, Dual-Crop & Top Quick Drawer:**
-              - เมนูกระจกโปร่งแสงพร้อมฟิสิกส์สปริง, กรอบซับสีเขียว + กรอบแปลเฉพาะจุดสีฟ้า/ป๊อปอัพซ้าย-ขวา, และลิ้นชักปุ่มลัดด้านบน (**พากย์ / เสียงเกม / ซับ / กรอบแปล / โหมดเฉพาะจุด-ป๊อปอัพ**)
-            - **Smart Subtitle Cascade, 3-Mode TTS Queue & Samsung DeX:**
-              - ซับเรียงซ้อน 1–3 แถว (`10–80 sp`), รองรับ **Samsung DeX** เต็มจอ/Pop-up, จอย **DualSense**, ระบบเล่นแบบ **2 บัญชี PSN บนทีวี 4K (0 ดีเลย์)** และส่งเสียงพากย์ออกหูฟัง Bluetooth อัตโนมัติ
+            แอปพลิเคชันสตรีมเกม PlayStation 5 (PS5) และ PS4 พร้อมระบบตรวจจับซับไตเติล แปลข้อความป๊อปอัพซ้าย/ขวา เอกสารเฉพาะจุด ส่งซับลอยขึ้นทีวี Samsung และพากย์เสียงไทยแบบเรียลไทม์ในดีไซน์ **Liquid Glass**
 
             ---
 
-            ### 📦 ไฟล์ติดตั้ง
-            - ดาวน์โหลด: **`PS-Translator.apk`**
-          files: dist/*.apk
+            #### 🌟 ไฮไลต์ฟีเจอร์ใหม่ในเวอร์ชัน 2.2.0:
+            - **ส่งซับขึ้นทีวี Samsung โดยตรง (`PS-Translator-Samsung-TV.wgt`):**
+              - มีไฟล์แอปทีวี **`PS-Translator-Samsung-TV.wgt`** ให้ดาวน์โหลดติดตั้งลงทีวี Samsung (Tizen 2018+) เพื่อดึงภาพพอร์ต HDMI (PS5) ขึ้นมาเป็นพื้นหลังและวางซับไทย + ป๊อปอัพซ้าย/ขวา + โน้ตแปลเฉพาะจุดลอยทับบนจอทีวีโดยตรง
+              - **จับคู่อัตโนมัติใน Wi-Fi บ้าน:** เปิดแอปบนทีวีและมือถือในวง Wi-Fi เดียวกัน แอปจะเชื่อมต่อกันเองใน 2 วินาทีโดยไม่ต้องพิมพ์รหัส 6 หลัก และควบคุมขนาด/สี/ตำแหน่งซับจากมือถือได้แบบเรียลไทม์
+            - **ระบบอัปเดตแอปในตัว (In-App Auto-Updater) & ซิงค์คลังซับจากคลาวด์:**
+              - **ปุ่ม `"อัปเดตแอปในตัว"`:** ดาวน์โหลดและสั่งติดตั้งเวอร์ชันใหม่จากในแอปโดยตรงพร้อมเปอร์เซ็นต์ความคืบหน้า ไม่ต้องเปิดเว็บไปโหลดไฟล์ใหม่เอง
+              - **ปุ่ม `"ซิงค์ซับล่าสุด"`:** ดึงฐานข้อมูลคำแปลพาร์ทใหม่ๆ จากคลาวด์เข้าเครื่องได้ทันทีโดยไม่ต้องลง APK ใหม่ (และฝั่งทีวี `.wgt` อัปเดตหน้าตาซับตามมือถืออัตโนมัติโดยไม่ต้องลงไฟล์ `.wgt` ใหม่)
+            - **ซับค้างอ่านง่าย & ซ่อนอัตโนมัติใน 10 วินาที:**
+              - ซับไตเติลจะแสดงค้างให้อ่านสบายตา และจะซ่อนหน้าต่างซับอัตโนมัติเมื่อไม่มีบทพูดใหม่เข้ามาครบ **10 วินาที** (ทั้งบนจอมือถือและบนทีวี Samsung)
+            - **หน้าต่างตั้งค่าขนาดตัวหนังสือคงที่:**
+              - นำกล่องตัวอย่างซับในหน้าตั้งค่าออกเพื่อไม่ให้หน้าต่างตั้งค่าขยายใหญ่หรือขยับตามขนาดฟอนต์เวลาเลื่อนปรับ
+            - **ฐานข้อมูลคำแปลในเครื่อง (Local Cache 0ms + ซับ GTA 6 Part 1–3 จำนวน 12,005 ประโยค):**
+              - ฝังฐานข้อมูลซับ **GTA 6 Part 1–3** (เนื้อเรื่องกว่า 10 ชั่วโมง 20 นาทีแรก) มาพร้อมในตัว APK พร้อมระบบค้นหา 3 ชั้น (`Exact` → `OCR-Skeleton` → `Exact Levenshtein ≥ 90%`) และปุ่ม **`"นำเข้า .DB"`**
+
+            ---
+
+            ### 📦 ไฟล์ติดตั้งในรีลีสนี้
+            - สำหรับมือถือ/แท็บเล็ต Android: **`PS-Translator.apk`**
+            - สำหรับทีวี Samsung (Tizen 2018+ ลงผ่านแอป Apps2Samsung): **`PS-Translator-Samsung-TV.wgt`**
+          files: |
+            dist/*.apk
+            dist/*.wgt
           token: ${{ secrets.GITHUB_TOKEN }}

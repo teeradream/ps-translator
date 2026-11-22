@@ -1015,7 +1015,70 @@
                         android:textStyle="bold"
                         app:strokeColor="#00E676"
                         app:backgroundTint="#1A00E676"
-                        android:layout_marginBottom="4dp"/>
+                        android:layout_marginBottom="8dp"/>
+
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:background="#22FFFFFF"
+                        android:layout_marginBottom="8dp"/>
+
+                    <!-- Samsung TV Overlay Cast Section -->
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/switchTvCastOverlay"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="ส่งซับขึ้นทีวี Samsung อัตโนมัติ (TV Overlay)"
+                        android:textColor="#00E5FF"
+                        android:textSize="13sp"
+                        android:textStyle="bold"
+                        android:checked="true"/>
+
+                    <TextView
+                        android:id="@+id/tvSamsungCastStatus"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="ทีวี Samsung: พร้อมเชื่อมต่อใน Wi-Fi บ้าน (เปิดแอป PS Translator TV บนทีวีได้เลย)"
+                        android:textColor="#99FFFFFF"
+                        android:textSize="11sp"
+                        android:layout_marginBottom="8dp"/>
+
+                    <!-- 1-Click Cloud Subtitle Sync & In-App Self-Updater -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:layout_marginBottom="4dp">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnSyncCloudSubtitles"
+                            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                            android:layout_width="0dp"
+                            android:layout_height="36dp"
+                            android:layout_weight="1"
+                            android:layout_marginEnd="6dp"
+                            android:text="ซิงค์ซับล่าสุด"
+                            android:textSize="10sp"
+                            android:textStyle="bold"
+                            android:textColor="#80DEEA"
+                            app:strokeColor="#80DEEA"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"/>
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnInAppUpdateApk"
+                            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                            android:layout_width="0dp"
+                            android:layout_height="36dp"
+                            android:layout_weight="1.15"
+                            android:text="อัปเดตแอปในตัว"
+                            android:textSize="10sp"
+                            android:textStyle="bold"
+                            android:textColor="#FFD54F"
+                            app:strokeColor="#FFD54F"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"/>
+                    </LinearLayout>
                 </LinearLayout>
 
                 <!-- ================= SUB-PAGE 4: MULTI-PROVIDER API SETTINGS ================= -->
@@ -1387,13 +1450,14 @@
                         android:layout_height="wrap_content"
                         android:orientation="vertical">
 
-                        <!-- Live Subtitle Preview Box -->
+                        <!-- Live Subtitle Preview Box (Hidden so window does not resize with font size) -->
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="ตัวอย่างหน้าตาซับไตเติ้ล:"
                             android:textColor="#AAAAAA"
                             android:textSize="12sp"
+                            android:visibility="gone"
                             android:layout_marginBottom="4dp"/>
 
                         <LinearLayout
@@ -1404,6 +1468,7 @@
                             android:gravity="center"
                             android:background="#D9060810"
                             android:padding="10dp"
+                            android:visibility="gone"
                             android:layout_marginBottom="10dp">
 
                             <TextView

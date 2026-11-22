@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <title>PS Translator TV</title>
+    <link rel="stylesheet" href="css/app.css" />
+    <script src="$WEBAPIS/webapis/webapis.js"></script>
+  </head>
+  <body>
+    <iframe id="overlay" src="about:blank" tabindex="-1" allowtransparency="true"></iframe>
+
+    <section id="waiting" class="screen hidden">
+      <div class="column">
+        <div class="brand"><img src="logo.png" alt="" /><span class="sunset">PS TRANSLATOR TV</span></div>
+        <div class="line"></div>
+        <div id="enter-code" class="text"></div>
+        <div id="code" class="code" dir="ltr"></div>
+        <div id="where" class="muted"></div>
+        <div id="this-tv" class="muted small"></div>
+      </div>
+      <button id="language" class="button lang-button corner"></button>
+    </section>
+
+    <section id="menu" class="panel hidden">
+      <div class="brand small-brand"><img src="logo.png" alt="" /><span class="sunset">PS TRANSLATOR TV</span></div>
+      <div class="line"></div>
+      <div class="status"><span id="dot" class="dot"></span><span id="status"></span></div>
+      <div class="buttons">
+        <button id="input" class="button"></button>
+        <button id="menu-language" class="button lang-button"></button>
+        <button id="disconnect" class="button"></button>
+      </div>
+    </section>
+
+    <section id="languages" class="panel picker hidden">
+      <div id="languages-title" class="picker-title"></div>
+      <div id="language-list" class="list"></div>
+    </section>
+
+    <div id="hint" class="hint hidden"></div>
+
+    <script src="js/strings.js"></script>
+    <script src="js/app.js"></script>
+  </body>
+</html>

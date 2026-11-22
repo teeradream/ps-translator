@@ -256,7 +256,8 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 	private var maxHistoryLines = 3
 	private var currentSubTextColor = Color.parseColor("#00FF88")
 	private var currentSubFontSize = 26
-	private var currentSubPosition = "CENTER"
+	private var currentSubPosition = "BOTTOM"
+	private var currentSubVerticalPercent = 15
 	private var currentSubBgOpacity = 80
 	private var isSyncingFontUI = false
 
@@ -365,7 +366,9 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 			Color.parseColor("#00FF88")
 		}
 		currentSubFontSize = cropPrefs.getInt("sub_font_size_sp", 26).coerceIn(MIN_SUB_FONT_SIZE, MAX_SUB_FONT_SIZE)
-		currentSubPosition = cropPrefs.getString("sub_position", "CENTER") ?: "CENTER"
+		currentSubPosition = cropPrefs.getString("sub_position", "BOTTOM") ?: "BOTTOM"
+		val defaultVertPct = if (currentSubPosition == "CENTER") 50 else 15
+		currentSubVerticalPercent = cropPrefs.getInt("sub_vertical_percent", defaultVertPct).coerceIn(0, 100)
 		currentSubBgOpacity = cropPrefs.getInt("sub_bg_opacity", 80).coerceIn(0, 100)
 		maxHistoryLines = cropPrefs.getInt("sub_history_limit", 3).coerceIn(1, 3)
 
@@ -700,19 +703,32 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 	}
 
 	private fun setupSubtitleCustomizationUI() {
-		// 1. Position toggle (Center vs Bottom)
-		if (currentSubPosition == "BOTTOM") {
-			binding.positionToggleGroup.check(R.id.btnPosBottom)
-		} else {
-			binding.positionToggleGroup.check(R.id.btnPosCenter)
-		}
-		binding.positionToggleGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
-			if (isChecked) {
-				currentSubPosition = if (checkedId == R.id.btnPosBottom) "BOTTOM" else "CENTER"
-				cropPrefs.edit().putString("sub_position", currentSubPosition).apply()
-				applySubtitleStyles()
+		// 1. Vertical Position Slider (0% = Bottom .. 100% = Top)
+		binding.subPositionSeekBar.max = 100
+		binding.subPositionSeekBar.progress = currentSubVerticalPercent
+		updateSubPositionLabel()
+		binding.subPositionSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+			override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+				if (fromUser) {
+					currentSubVerticalPercent = progress.coerceIn(0, 100)
+					currentSubPosition = if (currentSubVerticalPercent >= 40) "CENTER" else "BOTTOM"
+					updateSubPositionLabel()
+					if (subtitleHistory.isEmpty()) {
+						subtitleHistory.add(SubtitleHistoryItem("Subtitle position preview", "ตัวอย่างตำแหน่งซับไตเติ้ล"))
+					}
+					uiVisibilityHandler.removeCallbacks(autoHideSubtitleRunnable)
+					uiVisibilityHandler.postDelayed(autoHideSubtitleRunnable, SUBTITLE_AUTO_HIDE_MS)
+					applySubtitleStyles()
+				}
 			}
-		}
+			override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+			override fun onStopTrackingTouch(seekBar: SeekBar?) {
+				cropPrefs.edit()
+					.putInt("sub_vertical_percent", currentSubVerticalPercent)
+					.putString("sub_position", currentSubPosition)
+					.apply()
+			}
+		})
 
 		// 2. Color toggle
 		when (currentSubTextColor) {
@@ -832,6 +848,27 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		}
 	}
 
+	private fun updateSubPositionLabel() {
+		val zoneName = when {
+			currentSubVerticalPercent < 28 -> "ด้านล่าง"
+			currentSubVerticalPercent < 68 -> "กลางจอ"
+			else -> "ด้านบน"
+		}
+		binding.tvCurrentSubPosition.text = "$zoneName ($currentSubVerticalPercent%)"
+	}
+
+	private fun applySubtitleVerticalPosition() {
+		val lp = binding.subtitleOverlayContainer.layoutParams as FrameLayout.LayoutParams
+		val parentH = if (binding.mainStreamLayout.height > 0) binding.mainStreamLayout.height else resources.displayMetrics.heightPixels
+		val boxH = if (binding.subtitleOverlayContainer.height > 0) binding.subtitleOverlayContainer.height else dpToPx(68)
+		val minMargin = dpToPx(12)
+		val maxMargin = (parentH - boxH - dpToPx(16)).coerceAtLeast(minMargin)
+		lp.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+		lp.bottomMargin = minMargin + ((maxMargin - minMargin) * (currentSubVerticalPercent / 100f)).toInt()
+		lp.topMargin = 0
+		binding.subtitleOverlayContainer.layoutParams = lp
+	}
+
 	private fun syncFontSizeToggleState() {
 		isSyncingFontUI = true
 		try {
@@ -862,16 +899,9 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		}
 		binding.subtitleOverlayContainer.background = bgDrawable
 
-		// 2. Position (Center vs Bottom)
-		val lp = binding.subtitleOverlayContainer.layoutParams as FrameLayout.LayoutParams
-		if (currentSubPosition == "BOTTOM") {
-			lp.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-			lp.bottomMargin = dpToPx(24)
-		} else {
-			lp.gravity = Gravity.CENTER
-			lp.bottomMargin = 0
-		}
-		binding.subtitleOverlayContainer.layoutParams = lp
+		// 2. Vertical Position (0% = Bottom .. 100% = Top)
+		applySubtitleVerticalPosition()
+		updateSubPositionLabel()
 
 		// 3. Text Color & Sizes
 		binding.translatedSubText.setTextColor(currentSubTextColor)
@@ -1199,6 +1229,7 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 			textColorInt = currentSubTextColor,
 			bgOpacityPercent = currentSubBgOpacity,
 			position = currentSubPosition,
+			verticalPercent = currentSubVerticalPercent,
 			isSubtitleEnabled = isSubtitleEnabled,
 			popupLeftText = if (showLeft) lastPopupLeftThai else null,
 			popupRightText = if (showRight) lastPopupRightThai else null,
@@ -1382,6 +1413,7 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		if (isSubtitleEnabled && !isTextOnlyMode) {
 			binding.subtitleOverlayContainer.isVisible = true
 			binding.subtitleOverlayContainer.alpha = 1.0f
+			applySubtitleVerticalPosition()
 		}
 		syncTvOverlayState()
 	}

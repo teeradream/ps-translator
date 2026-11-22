@@ -120,6 +120,7 @@ class TvOverlayServer(
 		textColorInt: Int,
 		bgOpacityPercent: Int,
 		position: String,
+		verticalPercent: Int,
 		isSubtitleEnabled: Boolean,
 		popupLeftText: String?,
 		popupRightText: String?,
@@ -146,6 +147,7 @@ class TvOverlayServer(
 			put("textColor", colorHex)
 			put("bgOpacity", bgOpacityPercent)
 			put("position", position)
+			put("verticalPercent", verticalPercent.coerceIn(0, 100))
 			put("maxLines", maxHistoryLines)
 			put("subtitles", subsArray)
 			put("popupLeft", popupLeftText ?: "")
@@ -163,7 +165,8 @@ class TvOverlayServer(
 			put("fontSizeSp", 26)
 			put("textColor", "#00FF88")
 			put("bgOpacity", 80)
-			put("position", "CENTER")
+			put("position", "BOTTOM")
+			put("verticalPercent", 15)
 			put("maxLines", 3)
 			put("subtitles", JSONArray())
 			put("popupLeft", "")
@@ -440,7 +443,12 @@ private const val TV_OVERLAY_HTML = """<!DOCTYPE html>
     var color = s.textColor || '#00FF88';
     var alpha = Math.max(0, Math.min(100, s.bgOpacity !== undefined ? s.bgOpacity : 80)) / 100.0;
 
-    subBox.className = (s.position === 'CENTER') ? 'pos-center' : 'pos-bottom';
+    var vPct = (s.verticalPercent !== undefined) ? Math.max(0, Math.min(100, s.verticalPercent)) : ((s.position === 'CENTER') ? 50 : 15);
+    var bottomPct = 3.5 + (vPct * 0.80);
+    subBox.className = '';
+    subBox.style.top = 'auto';
+    subBox.style.bottom = bottomPct.toFixed(1) + '%';
+    subBox.style.transform = 'translateX(-50%)';
     subBox.style.background = alpha > 0 ? ('rgba(12, 18, 32, ' + alpha.toFixed(2) + ')') : 'transparent';
     subBox.style.border = alpha > 0 ? '1.5px solid rgba(255, 255, 255, 0.32)' : 'none';
 

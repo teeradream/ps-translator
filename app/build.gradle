@@ -23,8 +23,8 @@ android {
         applicationId "com.pstranslator.app"
         minSdkVersion 26
         targetSdkVersion 33
-        versionCode 215
-        versionName "2.2.1"
+        versionCode 216
+        versionName "2.2.2"
         externalNativeBuild {
             cmake {
                 arguments "-DCHIAKI_ENABLE_TESTS=OFF",

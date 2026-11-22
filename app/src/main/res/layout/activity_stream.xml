@@ -1502,52 +1502,65 @@
                                 android:gravity="center"/>
                         </LinearLayout>
 
-                        <!-- Subtitle Position Toggle -->
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="ตำแหน่งซับบนหน้าจอ:"
-                            android:textColor="#AAAAAA"
-                            android:textSize="12sp"
-                            android:layout_marginBottom="4dp"/>
-
-                        <com.google.android.material.button.MaterialButtonToggleGroup
-                            android:id="@+id/positionToggleGroup"
+                        <!-- Subtitle Vertical Position Slider (0% = Bottom .. 100% = Top) -->
+                        <LinearLayout
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            app:singleSelection="true"
-                            app:selectionRequired="true"
-                            app:checkedButton="@id/btnPosCenter"
-                            android:layout_marginBottom="10dp">
+                            android:orientation="horizontal"
+                            android:gravity="center_vertical"
+                            android:layout_marginBottom="4dp">
 
-                            <com.google.android.material.button.MaterialButton
-                                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                                android:id="@+id/btnPosCenter"
-                                android:layout_width="0dp"
-                                android:layout_height="wrap_content"
-                                android:layout_weight="1.2"
-                                android:text="ตรงกลางจอ"
-                                android:textSize="11sp"
-                                android:textStyle="bold"
-                                android:textColor="@color/toggle_btn_text_color"
-                                app:backgroundTint="@color/toggle_btn_bg_tint"
-                                app:strokeColor="@color/toggle_btn_stroke_color"
-                                app:strokeWidth="1.5dp"/>
-
-                            <com.google.android.material.button.MaterialButton
-                                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                                android:id="@+id/btnPosBottom"
+                            <TextView
                                 android:layout_width="0dp"
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
-                                android:text="ด้านล่างจอ"
-                                android:textSize="11sp"
+                                android:text="ตำแหน่งซับ (เลื่อนขึ้น-ลง):"
+                                android:textColor="#AAAAAA"
+                                android:textSize="12sp"/>
+
+                            <TextView
+                                android:id="@+id/tvCurrentSubPosition"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="ด้านล่าง (15%)"
+                                android:textColor="#00E5FF"
                                 android:textStyle="bold"
-                                android:textColor="@color/toggle_btn_text_color"
-                                app:backgroundTint="@color/toggle_btn_bg_tint"
-                                app:strokeColor="@color/toggle_btn_stroke_color"
-                                app:strokeWidth="1.5dp"/>
-                        </com.google.android.material.button.MaterialButtonToggleGroup>
+                                android:textSize="12sp"/>
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:gravity="center_vertical"
+                            android:layout_marginBottom="10dp">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="ล่าง ↓"
+                                android:textColor="#88FFFFFF"
+                                android:textSize="11sp"
+                                android:textStyle="bold"/>
+
+                            <SeekBar
+                                android:id="@+id/subPositionSeekBar"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:max="100"
+                                android:progress="15"
+                                android:progressTint="#00E5FF"
+                                android:thumbTint="#00E5FF"/>
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="↑ บน"
+                                android:textColor="#88FFFFFF"
+                                android:textSize="11sp"
+                                android:textStyle="bold"/>
+                        </LinearLayout>
 
                         <!-- Subtitle Color Selection -->
                         <TextView

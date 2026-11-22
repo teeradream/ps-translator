@@ -23,8 +23,8 @@ android {
         applicationId "com.pstranslator.app"
         minSdkVersion 26
         targetSdkVersion 33
-        versionCode 216
-        versionName "2.2.2"
+        versionCode 217
+        versionName "2.2.3"
         externalNativeBuild {
             cmake {
                 arguments "-DCHIAKI_ENABLE_TESTS=OFF",
@@ -80,6 +80,14 @@ android {
         signingConfigs.release.storePassword = properties.get("chiakiKeystorePW")
         signingConfigs.release.keyAlias = properties.get("chiakiKeyAlias")
         signingConfigs.release.keyPassword = properties.get("chiakiKeyPW")
+    } else if (file("pstranslator-signing.jks").exists()) {
+        println("Enabling Persistent Repository Signing (pstranslator-signing.jks)")
+        signingConfigs.release.storeFile = file("pstranslator-signing.jks")
+        signingConfigs.release.storePassword = "pstranslator2026"
+        signingConfigs.release.keyAlias = "pstranslator"
+        signingConfigs.release.keyPassword = "pstranslator2026"
+        buildTypes.release.signingConfig = signingConfigs.release
+        buildTypes.debug.signingConfig = signingConfigs.release
     } else {
         println("Signing not enabled")
     }

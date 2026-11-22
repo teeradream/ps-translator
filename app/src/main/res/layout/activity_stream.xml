@@ -682,6 +682,22 @@
         </ScrollView>
     </LinearLayout>
 
+    <!-- Floating Icon Button for TV Black Screen Lock Mode (bottom-right, left of scan note button) -->
+    <ImageButton
+        android:id="@+id/btnTvModeFloat"
+        android:layout_width="46dp"
+        android:layout_height="46dp"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="128dp"
+        android:layout_marginBottom="18dp"
+        android:background="@drawable/bg_circle_button"
+        android:src="@drawable/ic_tv_mode"
+        app:tint="#00E5FF"
+        android:contentDescription="โหมดทีวี (ปิดจอดำสนิท)"
+        android:elevation="10dp"
+        android:clickable="true"
+        android:focusable="true"/>
+
     <!-- Floating Icon Button for Note/Tutorial Crop Box (bottom-right, left of fullscreen button) -->
     <ImageButton
         android:id="@+id/btnScanNoteFloat"
@@ -817,6 +833,20 @@
             android:textStyle="bold"
             android:textColor="#00E5FF"
             app:strokeColor="#00E5FF"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:layout_marginEnd="6dp"/>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnQuickTvMode"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:text="โหมดทีวี"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:textColor="#00FF88"
+            app:strokeColor="#00FF88"
             android:insetTop="0dp"
             android:insetBottom="0dp"/>
     </LinearLayout>
@@ -1041,7 +1071,25 @@
                         android:text="ทีวี Samsung: พร้อมเชื่อมต่อใน Wi-Fi บ้าน (เปิดแอป PS Translator TV บนทีวีได้เลย)"
                         android:textColor="#99FFFFFF"
                         android:textSize="11sp"
-                        android:layout_marginBottom="8dp"/>
+                        android:layout_marginBottom="6dp"/>
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnEnterTvMode"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="38dp"
+                        android:layout_marginBottom="8dp"
+                        android:text="เข้าสู่โหมดทีวี (ปิดจอดำสนิท 100% + ล็อกหน้าจอ)"
+                        android:textSize="11sp"
+                        android:textStyle="bold"
+                        android:textColor="#00FF88"
+                        app:strokeColor="#00FF88"
+                        app:backgroundTint="#1400FF88"
+                        app:icon="@drawable/ic_tv_mode"
+                        app:iconTint="#00FF88"
+                        app:iconSize="16dp"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"/>
 
                     <!-- 1-Click Cloud Subtitle Sync & In-App Self-Updater -->
                     <LinearLayout
@@ -2720,5 +2768,16 @@
             </ScrollView>
         </LinearLayout>
     </FrameLayout>
+
+    <!-- Pure Pitch-Black TV Mode Lock Overlay (0% text shown on phone, 1% backlight, double-tap to unlock) -->
+    <View
+        android:id="@+id/tvBlackLockOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#000000"
+        android:elevation="32dp"
+        android:visibility="gone"
+        android:clickable="true"
+        android:focusable="true"/>
 
 </FrameLayout>

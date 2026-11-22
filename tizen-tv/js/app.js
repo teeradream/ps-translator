@@ -29,7 +29,7 @@
   /** hosts asked at once while looking through the network */
   var PARALLEL = 48;
   var HINT_MS = 6000;
-  var TOKEN = /^[0-9a-f]{32,128}$/;
+  var TOKEN = /^[0-9a-zA-Z_-]{16,128}$/;
 
   var KEY = { LEFT: 37, UP: 38, RIGHT: 39, DOWN: 40, ENTER: 13, BACK: 10009, ESC: 27 };
 
@@ -37,8 +37,8 @@
 
   /** The desktop app's interface languages, in its order: the strings' tag, and the name in itself. */
   var LANGUAGES = [
-    ["en", "English"], ["ar", "العربية"], ["hi", "हिन्दी"], ["bn", "বাংলা"], ["ur", "اردو"],
-    ["id", "Bahasa Indonesia"], ["tr", "Türkçe"], ["vi", "Tiếng Việt"], ["fa", "فارسی"], ["th", "ไทย"],
+    ["th", "ไทย"], ["en", "English"], ["ar", "العربية"], ["hi", "हिन्दी"], ["bn", "বাংলা"], ["ur", "اردو"],
+    ["id", "Bahasa Indonesia"], ["tr", "Türkçe"], ["vi", "Tiếng Việt"], ["fa", "فارسی"],
     ["ta", "தமிழ்"], ["te", "తెలుగు"], ["mr", "मराठी"], ["uk", "Українська"], ["nl", "Nederlands"],
     ["fil", "Filipino"], ["ms", "Bahasa Melayu"], ["sw", "Kiswahili"], ["ro", "Română"], ["el", "Ελληνικά"],
     ["cs", "Čeština"], ["fr", "Français"], ["it", "Italiano"], ["de", "Deutsch"], ["ru", "Русский"],
@@ -47,16 +47,14 @@
   ];
 
   var lang = "th";
-  var S = STRINGS.en;
+  var S = STRINGS.th || STRINGS.en;
 
-  /** The language picked in the app (saved as "language"), or the TV's own. */
+  /** The language picked in the app (saved as "language"), defaulting to Thai ("th"). */
   function setLanguage() {
     var chosen = chosenLanguage();
-    // (?lang=ar: another language, to try the app in a browser)
-    // (on a TV the web engine's language is the TV's menu language)
-    var tag = /[?&]lang=([^&]+)/.test(location.search) ? RegExp.$1 : chosen ? chosen[0] : navigator.language || "th";
+    var tag = /[?&]lang=([^&]+)/.test(location.search) ? RegExp.$1 : chosen ? chosen[0] : "th";
     lang = pickLanguage(tag);
-    S = STRINGS[lang] || STRINGS.en;
+    S = STRINGS[lang] || STRINGS.th || STRINGS.en;
   }
 
   /** The chosen language's [tag, name], or null for the TV's own. */

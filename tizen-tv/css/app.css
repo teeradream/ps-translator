@@ -1,4 +1,4 @@
-/* The desktop app's Vice City look (its dark theme): night purple, a sunset gradient, neon teal. */
+/* PS Translator TV — Signature Liquid Glass Theme (matches PS Translator Android APK) */
 @font-face {
   font-family: "Changa";
   src: url("../fonts/changa.ttf") format("truetype");
@@ -6,15 +6,22 @@
 }
 
 :root {
-  --bg: #0f0b17;
-  --bg-glow: #3a1236;
-  --panel: #20182b;
-  --text: #f1ebf8;
-  --muted: #a193b5;
-  --pink: #ff5aa5;
-  --orange: #ff9a4a;
-  --neon: #3ef0d8;
-  --warn: #ffb35c;
+  --bg-deep: #060a12;
+  --bg-navy: #0f1a2c;
+  --bg-glow: #0b253a;
+  --glass-top: rgba(26, 38, 60, 0.92);
+  --glass-mid: rgba(16, 24, 40, 0.90);
+  --glass-bot: rgba(10, 15, 26, 0.94);
+  --glass-border: rgba(255, 255, 255, 0.28);
+  --glass-highlight: rgba(0, 229, 255, 0.42);
+  --panel-btn: rgba(24, 35, 56, 0.88);
+  --text: #f4f8ff;
+  --muted: #9cb0c9;
+  --green: #00ff88;
+  --emerald: #00e676;
+  --cyan: #00e5ff;
+  --warn: #ffb74d;
+  --danger: #ff6b6b;
 }
 
 html,
@@ -23,9 +30,9 @@ body {
   width: 1920px;
   height: 1080px;
   overflow: hidden;
-  /* transparent: the HDMI picture is shown behind this page */
+  /* transparent: the console's HDMI picture is shown behind this page */
   background: transparent;
-  font-family: "Changa", sans-serif;
+  font-family: "Noto Sans Thai", "Leelawadee UI", "Tahoma", "Changa", sans-serif;
   color: var(--text);
 }
 
@@ -44,7 +51,7 @@ body {
   pointer-events: none;
 }
 
-/* the code screen: night sky fading to a sunset glow at the bottom */
+/* Waiting screen: Deep PlayStation Navy & Liquid Glass Card */
 .screen {
   position: fixed;
   left: 0;
@@ -54,7 +61,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(to bottom, var(--bg) 0%, var(--bg) 33%, #1c1030 66%, var(--bg-glow) 100%);
+  background: radial-gradient(circle at 50% 28%, #162844 0%, #0b1322 55%, #05080f 100%);
 }
 
 .column {
@@ -62,6 +69,12 @@ body {
   flex-direction: column;
   align-items: center;
   text-align: center;
+  padding: 54px 84px 58px;
+  border-radius: 36px;
+  background: linear-gradient(180deg, var(--glass-top) 0%, var(--glass-mid) 52%, var(--glass-bot) 100%);
+  border: 2px solid var(--glass-border);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.72), inset 0 2px 0 rgba(255, 255, 255, 0.22);
+  max-width: 1180px;
 }
 
 .brand {
@@ -70,140 +83,161 @@ body {
   align-items: center;
 }
 .brand img {
-  width: 96px;
-  height: 96px;
-  -webkit-margin-end: 8px;
-  margin-inline-end: 8px;
+  width: 92px;
+  height: 92px;
+  border-radius: 22px;
+  border: 2px solid rgba(0, 229, 255, 0.45);
+  box-shadow: 0 0 20px rgba(0, 229, 255, 0.25);
+  -webkit-margin-end: 16px;
+  margin-inline-end: 16px;
 }
 .sunset {
-  font-size: 66px;
+  font-size: 62px;
   font-weight: 800;
-  padding: 0 18px;
-  background: linear-gradient(to right, var(--pink), var(--orange));
+  padding: 0 14px;
+  letter-spacing: 0.02em;
+  background: linear-gradient(90deg, var(--green) 0%, var(--cyan) 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  filter: drop-shadow(0 0 14px rgba(255, 90, 165, 0.53));
+  filter: drop-shadow(0 0 16px rgba(0, 229, 255, 0.38));
 }
 
-/* a thin sunset line, like the desktop app's header */
+/* Liquid Glass neon cyan-green divider line */
 .line {
-  width: 780px;
-  height: 4px;
-  margin: 14px 0 50px;
-  background: linear-gradient(to right, rgba(255, 90, 165, 0), var(--pink), var(--orange), rgba(255, 154, 74, 0));
+  width: 760px;
+  height: 3px;
+  margin: 18px 0 38px;
+  background: linear-gradient(to right, rgba(0, 255, 136, 0), var(--green), var(--cyan), rgba(0, 229, 255, 0));
 }
 
 .text {
-  font-size: 33px;
+  font-size: 32px;
+  font-weight: 600;
+  color: #e2eeff;
 }
 .muted {
   font-size: 24px;
   color: var(--muted);
+  margin-top: 8px;
 }
 .small {
-  font-size: 21px;
-  padding-top: 27px;
+  font-size: 22px;
+  padding-top: 22px;
+  color: #80deea;
+  font-weight: 600;
 }
 
 .code {
-  font-size: 144px;
+  font-size: 116px;
   font-weight: 800;
-  letter-spacing: 0.12em;
-  color: var(--neon);
-  text-shadow: 0 0 27px rgba(62, 240, 216, 0.67);
-  padding: 18px 0;
+  letter-spacing: 0.14em;
+  color: var(--green);
+  text-shadow: 0 0 28px rgba(0, 255, 136, 0.55);
+  padding: 18px 42px;
+  margin: 18px 0;
+  border-radius: 28px;
+  background: rgba(6, 12, 22, 0.68);
+  border: 1.5px solid rgba(0, 255, 136, 0.35);
   direction: ltr;
   unicode-bidi: isolate;
 }
 
-/* the menu over the game, at the bottom */
+/* Bottom Liquid Glass Menu Panel over the HDMI Game Picture */
 .panel {
   position: fixed;
   left: 50%;
-  bottom: 80px;
+  bottom: 68px;
   transform: translateX(-50%);
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 30px 60px 40px;
-  border-radius: 27px;
-  background: rgba(23, 17, 31, 0.92);
-  border: 2px solid #2f2440;
+  padding: 32px 64px 40px;
+  border-radius: 32px;
+  background: linear-gradient(180deg, rgba(24, 34, 54, 0.94) 0%, rgba(14, 21, 35, 0.92) 55%, rgba(8, 13, 23, 0.95) 100%);
+  border: 2px solid rgba(255, 255, 255, 0.32);
+  box-shadow: 0 20px 56px rgba(0, 0, 0, 0.78), inset 0 1.5px 0 rgba(255, 255, 255, 0.25);
   white-space: nowrap;
 }
 .small-brand img {
-  width: 64px;
-  height: 64px;
+  width: 62px;
+  height: 62px;
+  border-radius: 16px;
 }
 .small-brand .sunset {
-  font-size: 44px;
+  font-size: 42px;
 }
 .panel .line {
-  width: 520px;
+  width: 560px;
   height: 3px;
-  margin: 10px 0 26px;
+  margin: 12px 0 24px;
 }
 
 .status {
   display: flex;
   align-items: center;
-  font-size: 39px;
-  font-weight: 650;
+  font-size: 34px;
+  font-weight: 700;
+  color: #ffffff;
 }
 .dot {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  -webkit-margin-end: 21px;
-  margin-inline-end: 21px;
-  background: var(--orange);
+  -webkit-margin-end: 18px;
+  margin-inline-end: 18px;
+  background: var(--warn);
+  box-shadow: 0 0 12px var(--warn);
 }
 .dot.ok {
-  background: var(--neon);
+  background: var(--green);
+  box-shadow: 0 0 14px var(--green);
 }
 .dot.off {
   background: var(--warn);
+  box-shadow: 0 0 12px var(--warn);
 }
 
 .buttons {
   display: flex;
-  margin-top: 40px;
+  margin-top: 34px;
 }
 
-/* a pill button: dark with a pink edge, the sunset gradient when the remote is on it */
+/* Liquid Glass Pill Button: Dark Navy with Cyan/White border, Neon Green-Cyan when focused */
 .button {
   font-family: inherit;
   font-size: 26px;
-  font-weight: 650;
+  font-weight: 700;
   color: var(--text);
-  height: 90px;
-  padding: 0 48px;
-  margin: 0 15px;
-  border-radius: 45px;
-  border: 3px solid rgba(255, 90, 165, 0.4);
-  background: var(--panel);
+  height: 84px;
+  padding: 0 44px;
+  margin: 0 14px;
+  border-radius: 42px;
+  border: 2px solid rgba(0, 229, 255, 0.42);
+  background: var(--panel-btn);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
   outline: none;
-  transition: transform 0.12s;
+  transition: transform 0.14s ease, background 0.14s ease, box-shadow 0.14s ease;
 }
 .button:focus,
 .button.focus {
-  color: #fff;
-  border-color: transparent;
-  background: linear-gradient(to right, var(--pink), var(--orange));
+  color: #04121c;
+  border-color: #ffffff;
+  background: linear-gradient(90deg, var(--green) 0%, var(--cyan) 100%);
+  box-shadow: 0 0 26px rgba(0, 229, 255, 0.55);
   transform: scale(1.06);
 }
 
-/* the language button: compact, a globe and the language in use */
+/* Language button */
 .lang-button {
   display: flex;
   align-items: center;
 }
 .lang-button svg {
-  width: 30px;
-  height: 30px;
-  -webkit-margin-end: 14px;
-  margin-inline-end: 14px;
+  width: 28px;
+  height: 28px;
+  -webkit-margin-end: 12px;
+  margin-inline-end: 12px;
   flex: none;
 }
 .corner {
@@ -220,7 +254,7 @@ body {
   left: 56px;
 }
 
-/* the language list, in the middle of the screen */
+/* Language Picker Modal */
 .picker {
   bottom: auto;
   top: 50%;
@@ -228,16 +262,17 @@ body {
   padding: 30px 30px 34px;
   width: 640px;
   z-index: 2;
-  background: #17111f;
+  background: linear-gradient(180deg, rgba(22, 32, 52, 0.97) 0%, rgba(10, 16, 28, 0.98) 100%);
 }
 .picker-title {
   font-size: 32px;
-  font-weight: 650;
+  font-weight: 700;
+  color: var(--cyan);
   padding-bottom: 18px;
 }
 .list {
   width: 100%;
-  max-height: 760px;
+  max-height: 740px;
   overflow-y: auto;
   padding: 6px 12px;
   box-sizing: border-box;
@@ -246,37 +281,42 @@ body {
   display: block;
   width: 100%;
   margin: 6px 0;
-  height: 70px;
-  font-size: 28px;
+  height: 68px;
+  font-size: 27px;
   text-align: start;
-  padding: 0 34px;
-  border-radius: 35px;
+  padding: 0 32px;
+  border-radius: 34px;
   border-color: transparent;
   background: transparent;
+  box-shadow: none;
 }
 .item:focus {
   transform: none;
 }
 .item.chosen {
-  color: var(--neon);
-  border-color: rgba(62, 240, 216, 0.5);
+  color: var(--green);
+  border-color: rgba(0, 255, 136, 0.55);
+  background: rgba(0, 255, 136, 0.10);
 }
 .item.chosen:focus {
-  color: #fff;
+  color: #04121c;
 }
 
-/* "Press OK for the menu", a moment after the game shows */
+/* Top-Right Liquid Glass Hint Pill */
 .hint {
   position: fixed;
-  right: 60px;
-  top: 50px;
-  padding: 12px 30px;
-  border-radius: 30px;
-  font-size: 26px;
-  background: rgba(23, 17, 31, 0.85);
-  border: 2px solid rgba(255, 90, 165, 0.4);
+  right: 56px;
+  top: 46px;
+  padding: 14px 32px;
+  border-radius: 32px;
+  font-size: 25px;
+  font-weight: 600;
+  color: #e6f7ff;
+  background: linear-gradient(180deg, rgba(24, 36, 58, 0.90) 0%, rgba(12, 18, 32, 0.92) 100%);
+  border: 1.5px solid rgba(0, 229, 255, 0.48);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.65);
 }
 [dir="rtl"] .hint {
   right: auto;
-  left: 60px;
+  left: 56px;
 }

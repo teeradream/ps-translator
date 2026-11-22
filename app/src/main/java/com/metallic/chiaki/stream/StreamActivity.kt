@@ -151,6 +151,8 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 	private var isSubtitleEnabled = true
 	private var isAudioMuted = false
 	private var isTextOnlyMode = false
+	private var isTvBlackScreenMode = false
+	private var lastTvOverlayTapTimeMs = 0L
 	private var isCapturing = false
 	private var captureFrameCounter = 0
 	private var isTranslating = false
@@ -510,6 +512,42 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		binding.btnMenuToggle.alpha = 1.0f
 		uiVisibilityHandler.removeCallbacks(hideMenuButtonRunnable)
 		uiVisibilityHandler.postDelayed(hideMenuButtonRunnable, 3500)
+	}
+
+	private fun setTvBlackScreenMode(enabled: Boolean) {
+		isTvBlackScreenMode = enabled
+		if (enabled) {
+			if (!isTvCastEnabled) {
+				isTvCastEnabled = true
+				cropPrefs.edit().putBoolean("tv_cast_overlay_enabled", true).apply()
+				binding.switchTvCastOverlay.isChecked = true
+				tvOverlayServer?.isTvCastEnabled = true
+				updateTvCastStatusUI(tvOverlayServer?.connectedTvName)
+			}
+			binding.menuPanelContainer.isVisible = false
+			closeTopQuickDrawer()
+			binding.tvBlackLockOverlay.isVisible = true
+			val lp = window.attributes
+			lp.screenBrightness = 0.01f
+			window.attributes = lp
+			syncTvOverlayState()
+			Toast.makeText(this, "เข้าสู่โหมดทีวี (จอดำสนิท) — แตะหน้าจอ 2 ครั้งติดกันเพื่อออก", Toast.LENGTH_SHORT).show()
+		} else {
+			binding.tvBlackLockOverlay.isVisible = false
+			val lp = window.attributes
+			lp.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+			window.attributes = lp
+			resetMenuButtonTimer()
+		}
+	}
+
+	@Deprecated("Deprecated in Java")
+	override fun onBackPressed() {
+		if (::binding.isInitialized && isTvBlackScreenMode) {
+			setTvBlackScreenMode(false)
+			return
+		}
+		super.onBackPressed()
 	}
 
 	private fun updateTextOnlyModeUI() {
@@ -1161,6 +1199,10 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 			syncTvOverlayState()
 		}
 
+		binding.btnEnterTvMode.setOnClickListener {
+			setTvBlackScreenMode(true)
+		}
+
 		// 1-Click Cloud Subtitle Sync (OTA without downloading APK)
 		binding.btnSyncCloudSubtitles.setOnClickListener {
 			binding.btnSyncCloudSubtitles.isEnabled = false
@@ -1685,6 +1727,10 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 			updateQuickDrawerUI()
 			resetTopDrawerTimer()
 		}
+
+		binding.btnQuickTvMode.setOnClickListener {
+			setTvBlackScreenMode(true)
+		}
 	}
 
 	private fun openTopQuickDrawer() {
@@ -1768,6 +1814,18 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		}
 		applyExtraTranslateModeUI()
 
+		binding.btnTvModeFloat.setOnClickListener {
+			setTvBlackScreenMode(true)
+		}
+		binding.tvBlackLockOverlay.setOnClickListener {
+			val now = System.currentTimeMillis()
+			if (now - lastTvOverlayTapTimeMs in 40..450) {
+				lastTvOverlayTapTimeMs = 0L
+				setTvBlackScreenMode(false)
+			} else {
+				lastTvOverlayTapTimeMs = now
+			}
+		}
 		binding.btnScanNoteFloat.setOnClickListener {
 			captureAndTranslateNote()
 		}

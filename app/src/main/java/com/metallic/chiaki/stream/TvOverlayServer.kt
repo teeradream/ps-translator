@@ -345,16 +345,17 @@ private const val TV_OVERLAY_HTML = """<!DOCTYPE html>
   .sub-line + .sub-line {
     margin-top: 8px;
   }
-  /* Left & Right Auto Popup Cards */
+  /* Left & Right Auto Popup Cards (Liquid Glass) */
   .popup-card {
     position: absolute;
     top: 72px;
     max-width: 34%;
     min-width: 240px;
-    padding: 16px 24px;
-    border-radius: 20px;
-    background: rgba(12, 18, 32, 0.84);
+    padding: 18px 26px;
+    border-radius: 22px;
+    background: linear-gradient(180deg, rgba(26, 36, 56, 0.88) 0%, rgba(16, 24, 40, 0.86) 55%, rgba(10, 16, 27, 0.90) 100%);
     border: 1.5px solid rgba(255, 183, 77, 0.72);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.24);
     color: #FFE082;
     font-size: 28px;
     font-weight: 700;
@@ -364,7 +365,7 @@ private const val TV_OVERLAY_HTML = """<!DOCTYPE html>
   }
   #popup-left { left: 42px; }
   #popup-right { right: 42px; border-color: rgba(0, 229, 255, 0.75); color: #80DEEA; }
-  /* Scan Note Card */
+  /* Scan Note Card (Liquid Glass) */
   #note-card {
     position: absolute;
     top: 10%;
@@ -373,8 +374,9 @@ private const val TV_OVERLAY_HTML = """<!DOCTYPE html>
     max-width: 74%;
     padding: 24px 36px;
     border-radius: 24px;
-    background: rgba(10, 16, 28, 0.90);
-    border: 2px solid rgba(0, 229, 255, 0.8);
+    background: linear-gradient(180deg, rgba(26, 36, 56, 0.92) 0%, rgba(16, 24, 40, 0.90) 55%, rgba(10, 16, 27, 0.94) 100%);
+    border: 2px solid rgba(0, 229, 255, 0.82);
+    box-shadow: 0 16px 44px rgba(0, 0, 0, 0.75), inset 0 1.5px 0 rgba(255, 255, 255, 0.26);
     color: #FFFFFF;
     font-size: 30px;
     font-weight: 600;
@@ -449,8 +451,11 @@ private const val TV_OVERLAY_HTML = """<!DOCTYPE html>
     subBox.style.top = 'auto';
     subBox.style.bottom = bottomPct.toFixed(1) + '%';
     subBox.style.transform = 'translateX(-50%)';
-    subBox.style.background = alpha > 0 ? ('rgba(12, 18, 32, ' + alpha.toFixed(2) + ')') : 'transparent';
-    subBox.style.border = alpha > 0 ? '1.5px solid rgba(255, 255, 255, 0.32)' : 'none';
+    subBox.style.background = alpha > 0
+      ? ('linear-gradient(180deg, rgba(26, 36, 56, ' + alpha.toFixed(2) + ') 0%, rgba(16, 24, 40, ' + alpha.toFixed(2) + ') 55%, rgba(10, 16, 27, ' + Math.min(1, alpha + 0.05).toFixed(2) + ') 100%)')
+      : 'transparent';
+    subBox.style.border = alpha > 0 ? '1.5px solid rgba(255, 255, 255, 0.33)' : 'none';
+    subBox.style.boxShadow = alpha > 0 ? '0 14px 36px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.24)' : 'none';
 
     var subs = s.subtitles || [];
     if (subs.length === 0) {

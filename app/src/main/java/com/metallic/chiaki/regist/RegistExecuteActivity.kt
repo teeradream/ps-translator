@@ -69,6 +69,8 @@ class RegistExecuteActivity: AppCompatActivity()
 					binding.infoTextView.visibility = View.VISIBLE
 					binding.infoTextView.setText(R.string.regist_info_success)
 					setResult(RESULT_OK)
+					if(it == RegistExecuteViewModel.State.SUCCESSFUL)
+						com.metallic.chiaki.common.AppStateBackupManager.autoBackupAsync(applicationContext)
 					if(it == RegistExecuteViewModel.State.SUCCESSFUL_DUPLICATE)
 						showDuplicateDialog()
 				}

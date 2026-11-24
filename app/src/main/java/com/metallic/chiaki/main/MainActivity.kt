@@ -33,6 +33,11 @@ import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity()
 {
+	companion object {
+		private const val REQUEST_CODE_EXPORT_BACKUP = 9101
+		private const val REQUEST_CODE_IMPORT_BACKUP = 9102
+	}
+
 	private lateinit var viewModel: MainViewModel
 
 	private lateinit var binding: ActivityMainBinding
@@ -86,6 +91,14 @@ class MainActivity : AppCompatActivity()
 			})
 
 			checkForAppUpdateOnLaunch()
+
+			// Auto-restore PS5 hosts & app settings if DB/prefs are empty (e.g. after clean install)
+			lifecycleScope.launch {
+				val restored = AppStateBackupManager.autoRestoreIfNeeded(applicationContext)
+				if (restored && !isFinishing && !isDestroyed) {
+					Toast.makeText(this@MainActivity, "กู้คืนการตั้งค่าและข้อมูล PS5 อัตโนมัติแล้ว", Toast.LENGTH_LONG).show()
+				}
+			}
 		}
 		catch(e: Throwable)
 		{
@@ -202,29 +215,51 @@ class MainActivity : AppCompatActivity()
 	private fun showUpdateOptionsDialog() {
 		val items = arrayOf(
 			"☁️ ซิงค์คลังซับล่าสุดจากคลาวด์ (ไม่ต้องลงแอปใหม่)",
-			"🔄 ดาวน์โหลดและอัปเดตตัวแอปเป็นเวอร์ชันล่าสุด"
+			"🔄 ดาวน์โหลดและอัปเดตตัวแอปเป็นเวอร์ชันล่าสุด",
+			"💾 สำรองการตั้งค่าและข้อมูล PS5 (ส่งออกไฟล์)",
+			"📂 กู้คืนการตั้งค่าและข้อมูล PS5 (นำเข้าไฟล์)"
 		)
 		MaterialAlertDialogBuilder(this)
-			.setTitle("อัปเดต PS Translator (v${BuildConfig.VERSION_NAME})")
+			.setTitle("อัปเดต & สำรองข้อมูล PS Translator (v${BuildConfig.VERSION_NAME})")
 			.setItems(items) { _, which ->
-				if (which == 0) {
-					Toast.makeText(this, "กำลังซิงค์คลังซับล่าสุดจากคลาวด์...", Toast.LENGTH_SHORT).show()
-					lifecycleScope.launch {
-						val db = TranslationCacheDb(applicationContext)
-						val count = AppUpdater.syncCloudSubtitleDatabase(this@MainActivity, db)
-						val total = db.count()
-						try { db.close() } catch (_: Exception) {}
-						val msg = if (count > 0) {
-							"ซิงค์คลังซับสำเร็จ! (รวมในเครื่อง $total ประโยค)"
-						} else {
-							"ซิงค์ไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ต"
+				when (which) {
+					0 -> {
+						Toast.makeText(this, "กำลังซิงค์คลังซับล่าสุดจากคลาวด์...", Toast.LENGTH_SHORT).show()
+						lifecycleScope.launch {
+							val db = TranslationCacheDb(applicationContext)
+							val count = AppUpdater.syncCloudSubtitleDatabase(this@MainActivity, db)
+							val total = db.count()
+							try { db.close() } catch (_: Exception) {}
+							val msg = if (count > 0) {
+								"ซิงค์คลังซับสำเร็จ! (รวมในเครื่อง $total ประโยค)"
+							} else {
+								"ซิงค์ไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ต"
+							}
+							Toast.makeText(this@MainActivity, msg, Toast.LENGTH_LONG).show()
 						}
-						Toast.makeText(this@MainActivity, msg, Toast.LENGTH_LONG).show()
 					}
-				} else {
-					lifecycleScope.launch {
-						val info = AppUpdater.fetchLatestReleaseInfo()
-						startInAppApkUpdate(info?.apkUrl ?: "https://github.com/teeradream/ps-translator/releases/latest/download/PS-Translator.apk")
+					1 -> {
+						lifecycleScope.launch {
+							val info = AppUpdater.fetchLatestReleaseInfo()
+							startInAppApkUpdate(info?.apkUrl ?: "https://github.com/teeradream/ps-translator/releases/latest/download/PS-Translator.apk")
+						}
+					}
+					2 -> {
+						val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+							addCategory(Intent.CATEGORY_OPENABLE)
+							type = "application/json"
+							putExtra(Intent.EXTRA_TITLE, "ps_translator_backup.json")
+						}
+						@Suppress("DEPRECATION")
+						startActivityForResult(intent, REQUEST_CODE_EXPORT_BACKUP)
+					}
+					3 -> {
+						val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+							addCategory(Intent.CATEGORY_OPENABLE)
+							type = "*/*"
+						}
+						@Suppress("DEPRECATION")
+						startActivityForResult(intent, REQUEST_CODE_IMPORT_BACKUP)
 					}
 				}
 			}
@@ -232,13 +267,44 @@ class MainActivity : AppCompatActivity()
 			.show()
 	}
 
+	@Suppress("DEPRECATION")
+	override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+		super.onActivityResult(requestCode, resultCode, data)
+		if (resultCode != RESULT_OK) return
+		val uri = data?.data ?: return
+		when (requestCode) {
+			REQUEST_CODE_EXPORT_BACKUP -> {
+				lifecycleScope.launch {
+					val ok = AppStateBackupManager.exportToUri(this@MainActivity, uri)
+					Toast.makeText(
+						this@MainActivity,
+						if (ok) "สำรองการตั้งค่าและข้อมูล PS5 สำเร็จแล้ว!" else "สำรองข้อมูลไม่สำเร็จ",
+						Toast.LENGTH_LONG
+					).show()
+				}
+			}
+			REQUEST_CODE_IMPORT_BACKUP -> {
+				lifecycleScope.launch {
+					val ok = AppStateBackupManager.importFromUri(this@MainActivity, uri)
+					Toast.makeText(
+						this@MainActivity,
+						if (ok) "กู้คืนการตั้งค่าและข้อมูล PS5 สำเร็จแล้ว!" else "ไฟล์สำรองไม่ถูกต้องหรือไม่สามารถกู้คืนได้",
+						Toast.LENGTH_LONG
+					).show()
+				}
+			}
+		}
+	}
+
 	private fun startInAppApkUpdate(apkUrl: String) {
 		val progressDialog = MaterialAlertDialogBuilder(this)
 			.setTitle("กำลังดาวน์โหลดอัปเดต...")
-			.setMessage("กำลังดาวน์โหลด 0%")
+			.setMessage("กำลังสำรองการตั้งค่าและข้อมูล PS5...")
 			.setCancelable(false)
 			.show()
 		lifecycleScope.launch {
+			// Always flush a fresh backup of settings + PS5 hosts right before updating
+			AppStateBackupManager.autoBackupNow(applicationContext)
 			val ok = AppUpdater.downloadAndInstallApk(this@MainActivity, apkUrl) { pct ->
 				if (progressDialog.isShowing) {
 					progressDialog.setMessage("กำลังดาวน์โหลด $pct% ...")
@@ -275,6 +341,9 @@ class MainActivity : AppCompatActivity()
 		if(registeredHost != null)
 		{
 			fun connect() {
+				// Permanently remember this PS5 IP + registration so it stays saved after exiting & updating
+				viewModel.rememberConnectedHost(host.host, registeredHost.id)
+				AppStateBackupManager.autoBackupAsync(applicationContext)
 				val connectInfo = ConnectInfo(host.isPS5, host.host, registeredHost.rpRegistKey, registeredHost.rpKey, Preferences(this).videoProfile)
 				Intent(this, StreamActivity::class.java).let {
 					it.putExtra(StreamActivity.EXTRA_CONNECT_INFO, connectInfo)

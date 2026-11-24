@@ -26,6 +26,7 @@ import android.view.*
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.SeekBar
+import android.widget.TextView
 import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
@@ -468,10 +469,22 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 			}
 		}
 
+		// Restore saved game audio mute state
+		isAudioMuted = cropPrefs.getBoolean("game_audio_muted", false)
+		viewModel.session.isAudioMuted = isAudioMuted
+		if (isAudioMuted) {
+			binding.btnMuteAudio.text = "เปิดเสียงเกมมือถือ"
+			binding.btnMuteAudio.setIconResource(R.drawable.ic_volume_off)
+		} else {
+			binding.btnMuteAudio.text = "ปิดเสียงเกมจากมือถือ"
+			binding.btnMuteAudio.setIconResource(R.drawable.ic_volume_up)
+		}
+
 		// Mute / Unmute game audio directly in native stream (keeps TTS translation voice loud and clear!)
 		binding.btnMuteAudio.setOnClickListener {
 			isAudioMuted = !isAudioMuted
 			viewModel.session.isAudioMuted = isAudioMuted
+			cropPrefs.edit().putBoolean("game_audio_muted", isAudioMuted).apply()
 			if (isAudioMuted) {
 				binding.btnMuteAudio.text = "เปิดเสียงเกมมือถือ"
 				binding.btnMuteAudio.setIconResource(R.drawable.ic_volume_off)
@@ -479,6 +492,7 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 				binding.btnMuteAudio.text = "ปิดเสียงเกมจากมือถือ"
 				binding.btnMuteAudio.setIconResource(R.drawable.ic_volume_up)
 			}
+			updateQuickDrawerUI()
 		}
 
 		// Text-Only Mode button
@@ -499,7 +513,18 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 			resetMenuButtonTimer()
 		}
 
-		binding.displayModeToggle.addOnButtonCheckedListener { _, _, _ ->
+		val savedDisplayMode = cropPrefs.getString("stream_display_mode", TransformMode.FIT.name)
+		when (savedDisplayMode) {
+			TransformMode.STRETCH.name -> binding.displayModeToggle.check(R.id.display_mode_stretch_button)
+			TransformMode.ZOOM.name -> binding.displayModeToggle.check(R.id.display_mode_zoom_button)
+			else -> binding.displayModeToggle.check(R.id.display_mode_normal_button)
+		}
+
+		binding.displayModeToggle.addOnButtonCheckedListener { _, checkedId, isChecked ->
+			if (isChecked) {
+				val mode = TransformMode.fromButton(checkedId)
+				cropPrefs.edit().putString("stream_display_mode", mode.name).apply()
+			}
 			adjustStreamViewAspect()
 		}
 
@@ -4164,6 +4189,8 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 	override fun onPause()
 	{
 		super.onPause()
+		// Persist a fresh snapshot of all settings + PS5 hosts whenever leaving the stream
+		com.metallic.chiaki.common.AppStateBackupManager.autoBackupAsync(applicationContext)
 		if (!isInMultiWindowMode && !isChangingConfigurations) {
 			viewModel.session.pause()
 		}

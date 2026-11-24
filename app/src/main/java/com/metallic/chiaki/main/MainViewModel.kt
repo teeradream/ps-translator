@@ -33,14 +33,51 @@ class MainViewModel(val database: AppDatabase, val preferences: Preferences): Vi
 			{ manualHosts, registeredHosts, discoveredHosts ->
 				val macRegisteredHosts = registeredHosts.associateBy { it.serverMac }
 				val idRegisteredHosts = registeredHosts.associateBy { it.id }
-				discoveredHosts.map {
+				val discoveredList = discoveredHosts.map {
 					DiscoveredDisplayHost(it.serverMac?.let { mac -> macRegisteredHosts[mac] }, it)
-				} +
-				manualHosts.map {
-					ManualDisplayHost(it.registeredHost?.let { id -> idRegisteredHosts[id] }, it)
 				}
+				val discoveredIps = discoveredList.map { it.host }.toSet()
+				val discoveredRegIds = discoveredList.mapNotNull { it.registeredHost?.id }.toSet()
+				val uniqueManualList = manualHosts
+					.filter { m -> m.host !in discoveredIps && (m.registeredHost == null || m.registeredHost !in discoveredRegIds) }
+					.map {
+						ManualDisplayHost(it.registeredHost?.let { id -> idRegisteredHosts[id] }, it)
+					}
+				discoveredList + uniqueManualList
 			}
 			.toLiveData()
+	}
+
+	fun rememberConnectedHost(hostIp: String, registeredHostId: Long)
+	{
+		val cleanIp = hostIp.trim()
+		if (cleanIp.isEmpty()) return
+		database.manualHostDao()
+			.getAll()
+			.firstOrError()
+			.flatMapCompletable { existing ->
+				val byIp = existing.firstOrNull { it.host == cleanIp }
+				val byReg = existing.firstOrNull { it.registeredHost == registeredHostId }
+				when {
+					byIp != null -> {
+						if (byIp.registeredHost != registeredHostId) {
+							database.manualHostDao().assignRegisteredHost(byIp.id, registeredHostId)
+						} else {
+							io.reactivex.Completable.complete()
+						}
+					}
+					byReg != null -> {
+						database.manualHostDao().update(byReg.copy(host = cleanIp))
+					}
+					else -> {
+						database.manualHostDao().insert(ManualHost(host = cleanIp, registeredHost = registeredHostId))
+					}
+				}
+			}
+			.onErrorComplete()
+			.subscribeOn(Schedulers.io())
+			.subscribe()
+			.addTo(disposable)
 	}
 
 	val discoveryActive by lazy {

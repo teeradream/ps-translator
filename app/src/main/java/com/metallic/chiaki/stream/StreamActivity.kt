@@ -219,6 +219,17 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 	private var lastPopupRightThai = ""
 	private var isPopupRightVisible = false
 
+	// Typewriter / progressive popup stabilization state (waits until text finishes typing before translating)
+	private var pendingPopupLeftCandidate = ""
+	private var pendingPopupLeftStableTicks = 0
+	private var pendingPopupLeftFirstSeenMs = 0L
+	private var queuedPopupLeftEnglish = ""
+
+	private var pendingPopupRightCandidate = ""
+	private var pendingPopupRightStableTicks = 0
+	private var pendingPopupRightFirstSeenMs = 0L
+	private var queuedPopupRightEnglish = ""
+
 	private var lastNoteThai = ""
 	private var lastNoteEnglish = ""
 
@@ -638,8 +649,9 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		if (surfaceView.width <= 100 || surfaceView.height <= 100) return
 		if (isCapturing || isScanningNote) return
 
+		val isPopupSettling = pendingPopupLeftCandidate.isNotEmpty() || pendingPopupRightCandidate.isNotEmpty()
 		val shouldScanPopupsThisTick = isPopupZonesMode &&
-			(++captureFrameCounter % 2 == 0) &&
+			(isPopupSettling || (++captureFrameCounter % 2 == 0)) &&
 			!binding.cropEditorOverlay.isVisible &&
 			!binding.menuPanelContainer.isVisible
 
@@ -1563,8 +1575,8 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		return when (target) {
 			CropEditTarget.SUBTITLE -> floatArrayOf(0.18f, 0.72f, 0.64f, 0.22f)
 			CropEditTarget.NOTE -> floatArrayOf(0.20f, 0.15f, 0.60f, 0.65f)
-			CropEditTarget.POPUP_LEFT -> floatArrayOf(0.02f, 0.22f, 0.30f, 0.34f)
-			CropEditTarget.POPUP_RIGHT -> floatArrayOf(0.66f, 0.26f, 0.31f, 0.34f)
+			CropEditTarget.POPUP_LEFT -> floatArrayOf(0.02f, 0.04f, 0.34f, 0.44f)
+			CropEditTarget.POPUP_RIGHT -> floatArrayOf(0.60f, 0.50f, 0.38f, 0.44f)
 		}
 	}
 
@@ -2502,38 +2514,211 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		}
 	}
 
+	private fun extractStructuredPopupText(
+		visionText: com.google.mlkit.vision.text.Text,
+		side: PopupSide,
+		cropW: Int
+	): String {
+		data class OcrLineItem(val text: String, val top: Int, val left: Int, val right: Int)
+
+		val rawLines = mutableListOf<OcrLineItem>()
+		for (block in visionText.textBlocks) {
+			for (line in block.lines) {
+				val box = line.boundingBox ?: block.boundingBox
+				val cleaned = fixOcrText(line.text.trim())
+					.replace(Regex("^(?:->|→|»|//|vv|✓+)\\s*", RegexOption.IGNORE_CASE), "")
+					.replace(Regex("\\s+(?://|vv|✓+)$", RegexOption.IGNORE_CASE), "")
+					.replace(Regex("\\s+"), " ")
+					.trim()
+				val letters = cleaned.count { it.isLetter() }
+				if (letters < 2) continue
+				rawLines.add(
+					OcrLineItem(
+						text = cleaned,
+						top = box?.top ?: 0,
+						left = box?.left ?: 0,
+						right = box?.right ?: 0
+					)
+				)
+			}
+		}
+		if (rawLines.isEmpty()) return ""
+
+		// Sort top-to-bottom (group lines on the same visual row within 14px, then left-to-right)
+		val sorted = rawLines.sortedWith { a, b ->
+			if (kotlin.math.abs(a.top - b.top) <= 14) {
+				a.left.compareTo(b.left)
+			} else {
+				a.top.compareTo(b.top)
+			}
+		}.toMutableList()
+
+		// On right phone popup, if the bottom-most line is a short right-aligned reply button (e.g. "-> Brian"), drop it
+		if (side == PopupSide.RIGHT && sorted.size >= 3 && cropW > 100) {
+			val last = sorted.last()
+			val lastWords = last.text.split(" ").filter { it.isNotEmpty() }
+			if (lastWords.size <= 2 && last.text.length <= 16 && last.left > (cropW * 0.46f)) {
+				sorted.removeAt(sorted.size - 1)
+			}
+		}
+
+		// Merge lines that are on the exact same horizontal row
+		val mergedRows = mutableListOf<String>()
+		var prevTop = -9999
+		for (item in sorted) {
+			if (mergedRows.isNotEmpty() && kotlin.math.abs(item.top - prevTop) <= 14) {
+				val prev = mergedRows.removeAt(mergedRows.size - 1)
+				// Ignore trailing 2-char read-receipt artifact on the same row as sender name
+				if (item.text.length <= 2 && !item.text.any { it.isDigit() }) {
+					mergedRows.add(prev)
+				} else {
+					mergedRows.add("$prev ${item.text}")
+				}
+			} else {
+				mergedRows.add(item.text)
+				prevTop = item.top
+			}
+		}
+		if (mergedRows.isEmpty()) return ""
+
+		// If first row is a short sender/title header (e.g. "Jason", "Mandy", "Lucia") and followed by message lines, format as "Header: Body"
+		val first = mergedRows[0]
+		val firstWords = first.split(" ").filter { it.isNotEmpty() }
+		val isSenderHeader = mergedRows.size >= 2 &&
+			firstWords.size in 1..2 &&
+			first.length in 2..20 &&
+			!first.endsWith(".") &&
+			!first.endsWith("?") &&
+			!first.endsWith("!") &&
+			!first.endsWith(":") &&
+			first[0].isUpperCase()
+
+		return if (isSenderHeader) {
+			val body = mergedRows.drop(1).joinToString(" ").replace(Regex("\\s+"), " ").trim()
+			"$first: $body"
+		} else {
+			mergedRows.joinToString(" ").replace(Regex("\\s+"), " ").trim()
+		}
+	}
+
+	private fun isNearlyIdenticalPopupText(a: String, b: String): Boolean {
+		if (a.isBlank() || b.isBlank()) return false
+		val cleanA = a.lowercase().replace(Regex("[^a-z0-9 ]"), "").replace(Regex("\\s+"), " ").trim()
+		val cleanB = b.lowercase().replace(Regex("[^a-z0-9 ]"), "").replace(Regex("\\s+"), " ").trim()
+		if (cleanA.isEmpty() || cleanB.isEmpty()) return false
+		if (cleanA == cleanB) return true
+		// If length grew by 3+ characters, it is still typing/expanding -> NOT identical!
+		if (kotlin.math.abs(cleanA.length - cleanB.length) >= 3) return false
+		val maxLen = maxOf(cleanA.length, cleanB.length)
+		val dist = levenshteinDistance(cleanA, cleanB)
+		return (1.0 - dist.toDouble() / maxLen) >= 0.92
+	}
+
+	private fun hasDanglingMidWordTypingTail(text: String): Boolean {
+		val trimmed = text.trim()
+		if (trimmed.isEmpty()) return false
+		val lastChar = trimmed.last()
+		if (lastChar in listOf('.', '!', '?', '"', '\'', ')')) return false
+		val lastToken = trimmed.substringAfterLast(' ').lowercase()
+		// A single trailing consonant letter (like "as a f" or "Got u") indicates typewriter animation mid-word
+		return lastToken.length == 1 && lastToken[0] in 'b'..'z' && lastToken != "i" && lastToken != "a"
+	}
+
 	private fun processPopupZoneBitmap(side: PopupSide, ocrBitmap: Bitmap) {
+		val cropW = ocrBitmap.width
 		val image = InputImage.fromBitmap(ocrBitmap, 0)
 		textRecognizer.process(image)
 			.addOnSuccessListener { visionText ->
 				if (!isPopupZonesMode) return@addOnSuccessListener
-				val rawText = visionText.text.trim().replace("\n", " ")
-				val fixedText = fixOcrText(rawText)
-				val text = fixedText.replace(Regex("\\s+"), " ").trim()
+				val text = extractStructuredPopupText(visionText, side, cropW)
 
-				if (text.isEmpty() || !isValidPopupText(text)) return@addOnSuccessListener
+				if (text.isEmpty() || !isValidPopupText(text)) {
+					if (side == PopupSide.LEFT) {
+						pendingPopupLeftCandidate = ""
+						pendingPopupLeftStableTicks = 0
+					} else {
+						pendingPopupRightCandidate = ""
+						pendingPopupRightStableTicks = 0
+					}
+					return@addOnSuccessListener
+				}
 
 				// Skip if identical to current main subtitle
 				if (lastTranslatedEnglish.isNotEmpty() && isSimilarText(text, lastTranslatedEnglish)) return@addOnSuccessListener
 
+				val now = System.currentTimeMillis()
 				if (side == PopupSide.LEFT) {
-					if (isPopupLeftVisible && isSimilarText(text, lastPopupLeftEnglish)) {
-						// Still visible on game screen -> extend hold timer smoothly without re-translating
+					// Keep visible card alive if text is already displayed and hasn't grown
+					if (isPopupLeftVisible && isNearlyIdenticalPopupText(text, lastPopupLeftEnglish)) {
 						uiVisibilityHandler.removeCallbacks(hidePopupLeftRunnable)
 						uiVisibilityHandler.postDelayed(hidePopupLeftRunnable, popupHoldDurationMs)
+						pendingPopupLeftCandidate = text
+						pendingPopupLeftStableTicks = 2
 						return@addOnSuccessListener
 					}
-					if (!isTranslatingPopupLeft && !isSimilarText(text, lastPopupLeftEnglish)) {
-						translateAndShowPopup(PopupSide.LEFT, text)
+
+					// Typewriter / fade-in settling: wait until text stops growing between consecutive scans
+					if (pendingPopupLeftCandidate.isEmpty() ||
+						text.length > pendingPopupLeftCandidate.length + 1 ||
+						!isNearlyIdenticalPopupText(text, pendingPopupLeftCandidate)
+					) {
+						pendingPopupLeftCandidate = text
+						pendingPopupLeftStableTicks = 1
+						pendingPopupLeftFirstSeenMs = now
+						return@addOnSuccessListener
+					}
+
+					pendingPopupLeftStableTicks++
+					if (text.length > pendingPopupLeftCandidate.length) {
+						pendingPopupLeftCandidate = text
+					}
+					val settledText = pendingPopupLeftCandidate
+					// If ending has a single mid-word consonant ("as a f"), wait up to 1.6s for typing to complete
+					if (hasDanglingMidWordTypingTail(settledText) && (now - pendingPopupLeftFirstSeenMs) < 1600L) {
+						return@addOnSuccessListener
+					}
+
+					if (pendingPopupLeftStableTicks >= 2 && !isNearlyIdenticalPopupText(settledText, lastPopupLeftEnglish)) {
+						if (isTranslatingPopupLeft) {
+							queuedPopupLeftEnglish = settledText
+						} else {
+							translateAndShowPopup(PopupSide.LEFT, settledText)
+						}
 					}
 				} else {
-					if (isPopupRightVisible && isSimilarText(text, lastPopupRightEnglish)) {
+					if (isPopupRightVisible && isNearlyIdenticalPopupText(text, lastPopupRightEnglish)) {
 						uiVisibilityHandler.removeCallbacks(hidePopupRightRunnable)
 						uiVisibilityHandler.postDelayed(hidePopupRightRunnable, popupHoldDurationMs)
+						pendingPopupRightCandidate = text
+						pendingPopupRightStableTicks = 2
 						return@addOnSuccessListener
 					}
-					if (!isTranslatingPopupRight && !isSimilarText(text, lastPopupRightEnglish)) {
-						translateAndShowPopup(PopupSide.RIGHT, text)
+
+					if (pendingPopupRightCandidate.isEmpty() ||
+						text.length > pendingPopupRightCandidate.length + 1 ||
+						!isNearlyIdenticalPopupText(text, pendingPopupRightCandidate)
+					) {
+						pendingPopupRightCandidate = text
+						pendingPopupRightStableTicks = 1
+						pendingPopupRightFirstSeenMs = now
+						return@addOnSuccessListener
+					}
+
+					pendingPopupRightStableTicks++
+					if (text.length > pendingPopupRightCandidate.length) {
+						pendingPopupRightCandidate = text
+					}
+					val settledText = pendingPopupRightCandidate
+					if (hasDanglingMidWordTypingTail(settledText) && (now - pendingPopupRightFirstSeenMs) < 1600L) {
+						return@addOnSuccessListener
+					}
+
+					if (pendingPopupRightStableTicks >= 2 && !isNearlyIdenticalPopupText(settledText, lastPopupRightEnglish)) {
+						if (isTranslatingPopupRight) {
+							queuedPopupRightEnglish = settledText
+						} else {
+							translateAndShowPopup(PopupSide.RIGHT, settledText)
+						}
 					}
 				}
 			}
@@ -2554,62 +2739,43 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 
 		val nonSpaceCount = text.count { !it.isWhitespace() }.coerceAtLeast(1)
 		// Reject counters, ammo, speedometers, timers, money ($12,400, 24/120, 85 MPH, 02:45)
-		if (letterCount < 10) return false
-		if (letterCount.toFloat() / nonSpaceCount < 0.55f) return false
+		if (letterCount < 8) return false
+		if (letterCount.toFloat() / nonSpaceCount < 0.52f) return false
 
 		val rawWords = text.split(Regex("\\s+")).filter { it.isNotEmpty() }
 		val alphaWords = rawWords.map { it.lowercase().replace(Regex("[^a-z0-9-]"), "") }.filter { it.isNotEmpty() }
 		val realWords = alphaWords.filter { it.length >= 2 && it.any { c -> c in 'a'..'z' } }
-		if (realWords.size < 3 && letterCount < 16) return false
+		if (realWords.size < 2 && letterCount < 12) return false
 
-		// 1. Reject HUD item/ammo counters like "WATER (2/2)", "24/120", "1/3" in short/medium HUD stacks
+		// 1. Reject HUD item/ammo counters like "WATER (2/2)", "24/120", "1/3" in short HUD stacks
 		val hasCounterFraction = Regex("\\b\\d+\\s*/\\s*\\d+\\b").containsMatchIn(text)
-		if (hasCounterFraction && alphaWords.size <= 9) return false
+		if (hasCounterFraction && alphaWords.size <= 6) return false
 
-		// 2. Reject bracketed/parenthesized controller button tags including OCR misreads like (R1), (RI), (L1), (LI), (O), [X]
+		// 2. Reject short bracketed controller button prompts like "DRINK (R1) PUT DOWN" (<= 5 words)
 		val hasButtonTag = Regex("[(\\[{]\\s*(?:r1|r2|r3|ri|rl|l1|l2|l3|li|ll|x|o|0|a)\\s*[)\\]}]", RegexOption.IGNORE_CASE)
 			.containsMatchIn(text)
-		if (hasButtonTag && alphaWords.size <= 8) return false
+		if (hasButtonTag && alphaWords.size <= 5) return false
 
-		// 3. Reject ALL-CAPS HUD action menus like "DRINK (RI) PUT DOWN WATER" / "OPEN DOOR" / "HOLD X TO SPRINT"
+		// 3. Reject ALL-CAPS short HUD action menus like "DRINK (RI) PUT DOWN WATER" / "OPEN DOOR"
 		val upperCount = text.count { it.isUpperCase() }
 		val upperRatio = upperCount.toFloat() / letterCount.coerceAtLeast(1)
-		if (upperRatio >= 0.85f && (alphaWords.size <= 6 || hasButtonTag || hasCounterFraction)) {
+		if (upperRatio >= 0.88f && (alphaWords.size <= 5 || hasButtonTag || hasCounterFraction)) {
 			return false
 		}
 
-		// PlayStation button icons & OCR misreads (RI/LI/RL/LL) + short HUD action prompt tokens
-		val buttonTokens = setOf(
-			"x", "o", "a", "l1", "l2", "l3", "li", "ll", "r1", "r2", "r3", "ri", "rl",
-			"ps", "ls", "rs", "dpad", "d-pad", "pad", "touchpad", "options", "share", "create",
-			"triangle", "square", "circle", "cross", "up", "down", "left", "right"
-		)
-		val hudActionWords = setOf(
-			"hold", "press", "tap", "aim", "fire", "shoot", "reload", "sprint", "run",
-			"jump", "crouch", "dodge", "roll", "block", "parry", "melee", "cover", "take",
-			"interact", "talk", "open", "close", "back", "cancel", "confirm", "select", "skip",
-			"map", "menu", "pause", "camera", "zoom", "horn", "brake", "handbrake", "boost",
-			"radio", "weapon", "wheel", "inventory", "skills", "craft", "heal", "use", "drop",
-			"equip", "pick", "enter", "exit", "climb", "mount", "whistle", "focus", "scan",
-			"photo", "hud", "mph", "kmh", "fps", "ammo", "health", "armor", "stamina", "to", "for",
-			"drink", "drinks", "eat", "put", "water", "beer", "sit", "stand", "sleep", "smoke",
-			"grab", "carry", "throw", "inspect", "search", "loot", "buy", "sell", "leave", "park",
-			"drive", "lights", "light", "door", "trunk", "hood", "engine", "seat", "call", "answer"
-		)
-
-		val hudHitCount = alphaWords.count { it in buttonTokens || it in hudActionWords }
-		val hudRatio = hudHitCount.toFloat() / alphaWords.size.coerceAtLeast(1)
-
-		// Short/medium action prompt clusters (e.g. "DRINK RI PUT DOWN WATER", "Hold X to Sprint", "L2 Aim R2 Fire")
-		if (alphaWords.size <= 7 && hudRatio >= 0.45f) return false
-		// Multi-line stacked bottom-right HUD clusters
-		if (alphaWords.size > 7 && hudRatio >= 0.58f) return false
-
-		// Reject short prompt starting with Hold/Press/Tap + button
-		if (alphaWords.size <= 5 && alphaWords.firstOrNull() in setOf("hold", "press", "tap") &&
-			alphaWords.any { it in buttonTokens }
-		) {
-			return false
+		// Only filter very short 1-4 word button/HUD clusters (allow full 5+ word tutorial sentences!)
+		if (alphaWords.size <= 4) {
+			val buttonTokens = setOf(
+				"x", "o", "a", "l1", "l2", "l3", "li", "ll", "r1", "r2", "r3", "ri", "rl",
+				"ps", "ls", "rs", "dpad", "d-pad", "pad", "touchpad", "options", "share"
+			)
+			val shortHudWords = setOf(
+				"hold", "press", "tap", "aim", "fire", "shoot", "reload", "sprint",
+				"drink", "drinks", "eat", "put", "water", "beer", "sit", "stand",
+				"mph", "kmh", "fps", "ammo", "health", "armor", "stamina"
+			)
+			val hudHitCount = alphaWords.count { it in buttonTokens || it in shortHudWords }
+			if (hudHitCount >= 2) return false
 		}
 
 		return true
@@ -2628,12 +2794,16 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 				if (thai.isEmpty() || !isPopupZonesMode) return@launch
 
 				if (side == PopupSide.LEFT) {
-					if (isPopupLeftVisible && isSimilarThai(thai, lastPopupLeftThai)) return@launch
+					val isUpgrade = englishText.length >= lastPopupLeftEnglish.length + 3 ||
+						!isNearlyIdenticalPopupText(englishText, lastPopupLeftEnglish)
+					if (isPopupLeftVisible && !isUpgrade && isSimilarThai(thai, lastPopupLeftThai)) return@launch
 					lastPopupLeftEnglish = englishText
 					lastPopupLeftThai = thai
 					showPopupCard(PopupSide.LEFT, thai)
 				} else {
-					if (isPopupRightVisible && isSimilarThai(thai, lastPopupRightThai)) return@launch
+					val isUpgrade = englishText.length >= lastPopupRightEnglish.length + 3 ||
+						!isNearlyIdenticalPopupText(englishText, lastPopupRightEnglish)
+					if (isPopupRightVisible && !isUpgrade && isSimilarThai(thai, lastPopupRightThai)) return@launch
 					lastPopupRightEnglish = englishText
 					lastPopupRightThai = thai
 					showPopupCard(PopupSide.RIGHT, thai)
@@ -2645,8 +2815,22 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 			} finally {
 				if (side == PopupSide.LEFT) {
 					isTranslatingPopupLeft = false
+					val nextLeft = queuedPopupLeftEnglish
+					if (nextLeft.isNotEmpty()) {
+						queuedPopupLeftEnglish = ""
+						if (!isNearlyIdenticalPopupText(nextLeft, lastPopupLeftEnglish)) {
+							translateAndShowPopup(PopupSide.LEFT, nextLeft)
+						}
+					}
 				} else {
 					isTranslatingPopupRight = false
+					val nextRight = queuedPopupRightEnglish
+					if (nextRight.isNotEmpty()) {
+						queuedPopupRightEnglish = ""
+						if (!isNearlyIdenticalPopupText(nextRight, lastPopupRightEnglish)) {
+							translateAndShowPopup(PopupSide.RIGHT, nextRight)
+						}
+					}
 				}
 			}
 		}
@@ -3238,7 +3422,7 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 
 	private fun buildTranslationPrompt(englishText: String, isPopup: Boolean): String {
 		return if (isPopup) {
-			"Translate this in-game HUD popup, tutorial tip, or in-game phone message from English to clear, concise, natural Thai. Return ONLY the Thai translation without notes or quotes:\n$englishText"
+			"Translate this in-game tutorial box or phone text message from English into complete, accurate, natural Thai sentence-for-sentence. Do NOT summarize, shorten, or omit any words or sentences. If it begins with 'Name: message', keep the format 'ชื่อ: ข้อความ'. Return ONLY the Thai translation:\n$englishText"
 		} else {
 			"Translate this video game subtitle from English to natural, punchy spoken Thai (movie/game subtitle style). Accurately translate slang, idioms, and profanity/swear words matching the character's raw emotion without censoring or making it overly polite. Return ONLY the Thai translation:\n$englishText"
 		}

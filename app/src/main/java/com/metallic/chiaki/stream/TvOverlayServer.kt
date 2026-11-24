@@ -378,12 +378,7 @@ private const val TV_OVERLAY_HTML = """<!DOCTYPE html>
     font-family: 'GTAPromptSemiBold', 'GTAPromptLight', 'Noto Sans Thai', 'Leelawadee UI', 'Tahoma', sans-serif;
     font-weight: 700;
     line-height: 1.32;
-    /* Crisp GTA 6 style solid black text outline — NO fuzzy drop shadow */
-    -webkit-text-stroke: 3px #000000;
-    paint-order: stroke fill;
-    text-shadow:
-      -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000,
-      0 -2px 0 #000, 0 2px 0 #000, -2px 0 0 #000, 2px 0 0 #000;
+    text-shadow: none;
     word-wrap: break-word;
   }
   .sub-line + .sub-line {

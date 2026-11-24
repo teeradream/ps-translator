@@ -88,7 +88,7 @@ jobs:
         if: startsWith(github.ref, 'refs/heads/main')
         with:
           tag_name: ${{ steps.ver.outputs.tag }}
-          name: "PS Translator ${{ steps.ver.outputs.tag }} (GTA 6 Outlined Bold Font, Fit-Content Subtitle Box, Dark Left Tutorial Box & Independent Popup Position Sliders)"
+          name: "PS Translator ${{ steps.ver.outputs.tag }} (Clean Bold Main Subtitle Font, Fit-Content Borderless Sub Box, Dark Left Tutorial Box & Popup Position Sliders)"
           body: |
             ### 🎮 PS Translator ${{ steps.ver.outputs.tag }} (Android APK, Samsung TV `.wgt` & Samsung DeX)
 
@@ -97,8 +97,8 @@ jobs:
             ---
 
             #### 🌟 ไฮไลต์ฟีเจอร์ล่าสุดในเวอร์ชัน ${{ steps.ver.outputs.version }}:
-            - **ฟอนต์หนาขึ้น + ขอบตัวหนังสือสีดำคมชัดสไตล์ต้นฉบับเกม GTA 6 (ไม่มีเงาฟุ้ง):**
-              - อัปเกรดฟอนต์ผสมเป็น **`GTA Art Deco + Prompt SemiBold`** หนาและอ่านชัดขึ้นทั้งบนมือถือและทีวี Samsung พร้อมเปลี่ยนจากเงาฟุ้งเป็น **เส้นขอบตัวหนังสือสีดำคมกริบ** เหมือนซับต้นฉบับเกม
+            - **ฟอนต์ซับหลักหนาคลีน (ไม่มีขอบดำซ้อน / ไม่มีเงาฟุ้ง):**
+              - แยกใช้ฟอนต์ **`GTA Art Deco + Prompt SemiBold`** เฉพาะตัวหนังสือซับที่แปลหลักให้น้ำหนักหนาอ่านชัดขึ้นทั้งบนมือถือและทีวี Samsung โดยเอาขอบดำและเงาออกทั้งหมด (ส่วนหน้าแรกและเมนูยังคงฟอนต์เดิมคมชัด)
             - **กรอบพื้นหลังซับลอย ไม่มีขอบ ย่อ-ขยายตามความยาวซับ + เปิด/ปิดได้:**
               - ลบเส้นขอบรอบกรอบซับออก ให้เป็นกล่องโปร่งแสงลอยตัวที่ **ย่อ-ขยายพอดีความยาวข้อความซับอัตโนมัติ** พร้อมสวิตช์ **เปิด/ปิดกรอบพื้นหลังซับ** และปรับระดับความโปร่งแสงได้อิสระ
             - **อัปเกรดกล่องป๊อปอัพซ้าย-ขวา (OCR แม่นขึ้น 2x + ดีไซน์แยก + เลื่อนขึ้น-ลงอิสระ):**

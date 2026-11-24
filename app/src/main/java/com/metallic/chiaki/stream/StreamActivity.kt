@@ -560,6 +560,20 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		if (gtaPromptFont != null) {
 			applyTypefaceRecursively(binding.root, gtaPromptFont)
 		}
+		// Apply thicker GTA Art Deco + Prompt SemiBold ONLY to main translated subtitles
+		val subBoldFont = try {
+			androidx.core.content.res.ResourcesCompat.getFont(this, R.font.gta_prompt_semibold)
+		} catch (_: Exception) {
+			null
+		}
+		if (subBoldFont != null) {
+			binding.translatedSubText.setTypeface(subBoldFont, android.graphics.Typeface.BOLD)
+			binding.translatedSubText1.setTypeface(subBoldFont, android.graphics.Typeface.BOLD)
+			binding.translatedSubText2.setTypeface(subBoldFont, android.graphics.Typeface.BOLD)
+			binding.pureFullscreenText.setTypeface(subBoldFont, android.graphics.Typeface.BOLD)
+			binding.pureFullscreenText1.setTypeface(subBoldFont, android.graphics.Typeface.BOLD)
+			binding.pureFullscreenText2.setTypeface(subBoldFont, android.graphics.Typeface.BOLD)
+		}
 		applyViceCityMenuColorsRecursively(binding.menuSheetContainer)
 	}
 

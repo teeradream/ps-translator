@@ -268,6 +268,18 @@ class TvOverlayServer(
 						sendResponse(socket, 404, "text/plain", "Not Found")
 					}
 				}
+				path == "/font-sub.ttf" -> {
+					val fontBytes = try {
+						context.assets.open("gta_prompt_semibold.ttf").use { it.readBytes() }
+					} catch (_: Exception) {
+						null
+					}
+					if (fontBytes != null) {
+						sendBinaryResponse(socket, 200, "font/ttf", fontBytes)
+					} else {
+						sendResponse(socket, 404, "text/plain", "Not Found")
+					}
+				}
 				else -> {
 					sendResponse(socket, 404, "text/plain", "Not Found")
 				}
@@ -326,6 +338,11 @@ private const val TV_OVERLAY_HTML = """<!DOCTYPE html>
     src: url('/font.ttf') format('truetype');
     font-weight: 100 900;
   }
+  @font-face {
+    font-family: 'GTAPromptSemiBold';
+    src: url('/font-sub.ttf') format('truetype');
+    font-weight: 100 900;
+  }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body {
     width: 100%;
@@ -358,6 +375,7 @@ private const val TV_OVERLAY_HTML = """<!DOCTYPE html>
     display: none;
   }
   .sub-line {
+    font-family: 'GTAPromptSemiBold', 'GTAPromptLight', 'Noto Sans Thai', 'Leelawadee UI', 'Tahoma', sans-serif;
     font-weight: 700;
     line-height: 1.32;
     /* Crisp GTA 6 style solid black text outline — NO fuzzy drop shadow */

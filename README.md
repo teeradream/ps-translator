@@ -124,7 +124,7 @@
 ## 📲 ดาวน์โหลดและติดตั้ง (Download & Installation)
 
 1. เข้าไปที่หน้าดาวน์โหลดเวอร์ชันล่าสุดบน GitHub:  
-   👉 **[ดาวน์โหลด PS-Translator.apk & PS-Translator-Samsung-TV.wgt (v2.2.8)](https://github.com/teeradream/ps-translator/releases/latest)**
+   👉 **[ดาวน์โหลด PS-Translator.apk & PS-Translator-Samsung-TV.wgt (v2.2.9)](https://github.com/teeradream/ps-translator/releases/latest)**
 2. แตะดาวน์โหลดไฟล์ **`PS-Translator.apk`**
 3. แตะที่ไฟล์เพื่อทำการติดตั้ง:
    - หากระบบแจ้งเตือนความปลอดภัย ให้เลือก **"อนุญาตการติดตั้งจากแหล่งนี้" (Allow install from unknown apps)**

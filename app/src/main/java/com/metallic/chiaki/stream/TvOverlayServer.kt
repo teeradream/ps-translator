@@ -358,11 +358,17 @@ private const val TV_OVERLAY_HTML = """<!DOCTYPE html>
     height: 100%;
     pointer-events: none;
   }
+  /* Main Subtitle Anchor — integer-pixel flex centering (NO transform sub-pixel blur!) */
+  #sub-anchor {
+    position: absolute;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: center;
+    pointer-events: none;
+  }
   /* Main Subtitle Box — floating borderless, auto-fits subtitle length */
   #sub-box {
-    position: absolute;
-    left: 50%;
-    transform: translateX(-50%);
     width: fit-content;
     max-width: 88%;
     min-width: 0;
@@ -378,7 +384,10 @@ private const val TV_OVERLAY_HTML = """<!DOCTYPE html>
     font-family: 'GTAPromptSemiBold', 'GTAPromptLight', 'Noto Sans Thai', 'Leelawadee UI', 'Tahoma', sans-serif;
     font-weight: 700;
     line-height: 1.32;
-    text-shadow: 0 3px 8px rgba(0,0,0,0.95), 0 0 4px rgba(0,0,0,0.95);
+    letter-spacing: 0.3px;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: geometricPrecision;
+    text-shadow: 0 2px 3px rgba(0,0,0,0.98), 0 0 2px rgba(0,0,0,0.98), 0 4px 10px rgba(0,0,0,0.78);
     word-wrap: break-word;
   }
   .sub-line + .sub-line {
@@ -509,15 +518,18 @@ private const val TV_OVERLAY_HTML = """<!DOCTYPE html>
     <div id="pop-r-body" class="chat-body"></div>
   </div>
   <div id="note-card"></div>
-  <div id="sub-box">
-    <div id="sub-0" class="sub-line"></div>
-    <div id="sub-1" class="sub-line" style="opacity:0.65;display:none;"></div>
-    <div id="sub-2" class="sub-line" style="opacity:0.35;display:none;"></div>
+  <div id="sub-anchor">
+    <div id="sub-box">
+      <div id="sub-0" class="sub-line"></div>
+      <div id="sub-1" class="sub-line" style="opacity:0.65;display:none;"></div>
+      <div id="sub-2" class="sub-line" style="opacity:0.35;display:none;"></div>
+    </div>
   </div>
 </div>
 <script>
 (function() {
   var lastSeq = -1;
+  var subAnchor = document.getElementById('sub-anchor');
   var subBox = document.getElementById('sub-box');
   var sub0 = document.getElementById('sub-0');
   var sub1 = document.getElementById('sub-1');
@@ -580,10 +592,9 @@ private const val TV_OVERLAY_HTML = """<!DOCTYPE html>
 
     var vPct = (s.verticalPercent !== undefined) ? Math.max(0, Math.min(100, s.verticalPercent)) : ((s.position === 'CENTER') ? 50 : 15);
     var bottomPct = 3.5 + (vPct * 0.80);
+    subAnchor.style.top = 'auto';
+    subAnchor.style.bottom = bottomPct.toFixed(1) + '%';
     subBox.className = '';
-    subBox.style.top = 'auto';
-    subBox.style.bottom = bottomPct.toFixed(1) + '%';
-    subBox.style.transform = 'translateX(-50%)';
     subBox.style.background = alpha > 0 ? ('rgba(16, 18, 26, ' + alpha.toFixed(2) + ')') : 'transparent';
     subBox.style.border = 'none';
     subBox.style.boxShadow = 'none';

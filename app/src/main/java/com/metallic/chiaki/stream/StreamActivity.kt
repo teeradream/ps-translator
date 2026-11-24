@@ -3528,9 +3528,9 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 
 	private fun buildTranslationPrompt(englishText: String, isPopup: Boolean): String {
 		return if (isPopup) {
-			"Translate this in-game tutorial box or phone text message from English into complete, accurate, natural Thai sentence-for-sentence. Do NOT summarize, shorten, or omit any words or sentences. If it begins with 'Name: message', keep the format 'ชื่อ: ข้อความ'. Return ONLY the Thai translation:\n$englishText"
+			"Translate this in-game tutorial box or phone text message from English into complete, accurate, natural modern Thai (casual American texting/slang tone when it's a chat message). Do NOT summarize, shorten, or omit any words or sentences. If it begins with 'Name: message', keep the format 'ชื่อ: ข้อความ'. Return ONLY the Thai translation:\n$englishText"
 		} else {
-			"Translate this video game subtitle from English to natural, punchy spoken Thai (movie/game subtitle style). Accurately translate slang, idioms, and profanity/swear words matching the character's raw emotion without censoring or making it overly polite. Return ONLY the Thai translation:\n$englishText"
+			"Translate this American video game subtitle (GTA style) from English into raw, realistic, modern spoken Thai. Use authentic modern Thai slang, street pronouns (กู/มึง/แก/เพื่อน/พวก), uncensored profanity (แม่ง/เชี่ย/เหี้ย/ฉิบหาย/โคตร), and natural exclamations (เฮ้ย/โห/จริงดิ/เก็ตป่ะ/ว่ะ) matching the speaker's American attitude—never stiff textbook Thai or polite ครับ/ค่ะ unless explicitly formal. Return ONLY the Thai translation:\n$englishText"
 		}
 	}
 
@@ -3707,9 +3707,9 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		isPopup: Boolean
 	): String? {
 		val systemPrompt = if (isPopup) {
-			"You are a fast video game translator. Translate the given English HUD popup, tutorial tip, or in-game phone message into clear, concise natural Thai. Return ONLY the Thai text."
+			"You are a fast video game translator. Translate the given English HUD popup, tutorial tip, or in-game phone message into complete, natural modern Thai (casual American texting/slang tone for messages, without summarizing). Return ONLY the Thai text."
 		} else {
-			"You are a fast video game subtitle translator. Translate the given English subtitle into natural, punchy spoken Thai (movie/game style). Accurately translate slang, idioms, and profanity matching the character's raw emotion without censoring. Return ONLY the Thai text."
+			"You are a fast American video game subtitle translator (GTA style). Translate the given English subtitle into raw, realistic, modern spoken Thai using authentic Thai slang, street pronouns, uncensored profanity, and natural modern exclamations matching the speaker's attitude—never stiff textbook Thai. Return ONLY the Thai text."
 		}
 
 		val conn = (URL(endpoint).openConnection() as java.net.HttpURLConnection).apply {

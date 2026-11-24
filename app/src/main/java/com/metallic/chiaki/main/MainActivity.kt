@@ -195,11 +195,24 @@ class MainActivity : AppCompatActivity()
 		else -> super.onOptionsItemSelected(item)
 	}
 
+	private fun isRemoteVersionNewer(remoteTag: String, currentVersion: String): Boolean {
+		val remoteParts = remoteTag.trim().removePrefix("v").removePrefix("V").split(".").mapNotNull { it.toIntOrNull() }
+		val currentParts = currentVersion.trim().removePrefix("v").removePrefix("V").split(".").mapNotNull { it.toIntOrNull() }
+		if (remoteParts.isEmpty() || currentParts.isEmpty()) return false
+		val maxLen = maxOf(remoteParts.size, currentParts.size)
+		for (i in 0 until maxLen) {
+			val r = remoteParts.getOrElse(i) { 0 }
+			val c = currentParts.getOrElse(i) { 0 }
+			if (r > c) return true
+			if (r < c) return false
+		}
+		return false
+	}
+
 	private fun checkForAppUpdateOnLaunch() {
 		lifecycleScope.launch {
 			val info = AppUpdater.fetchLatestReleaseInfo() ?: return@launch
-			val currentTag = "v${BuildConfig.VERSION_NAME}"
-			if (info.tagName.isNotEmpty() && !info.tagName.equals(currentTag, ignoreCase = true) && !isFinishing && !isDestroyed) {
+			if (info.tagName.isNotEmpty() && isRemoteVersionNewer(info.tagName, BuildConfig.VERSION_NAME) && !isFinishing && !isDestroyed) {
 				MaterialAlertDialogBuilder(this@MainActivity)
 					.setTitle("พบอัปเดตเวอร์ชันใหม่ (${info.tagName})")
 					.setMessage("${info.title}\n\nต้องการดาวน์โหลดและอัปเดตในแอปทันทีโดยไม่ต้องโหลดไฟล์เองหรือไม่?")

@@ -75,14 +75,22 @@ jobs:
             dist/*.apk
             dist/*.wgt
 
+      - name: Read app version from build.gradle
+        id: ver
+        run: |
+          VER=$(grep -oP 'versionName\s+"\K[^"]+' app/build.gradle | head -n 1)
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VER" >> "$GITHUB_OUTPUT"
+          echo "Detected version: v$VER"
+
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/heads/main')
         with:
-          tag_name: v2.2.6
-          name: "PS Translator v2.2.6 (GTA Art Deco + Prompt Light Hybrid Font, GTA 6 Chat Bubble Popups & Vice City Menu Theme)"
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: "PS Translator ${{ steps.ver.outputs.tag }} (GTA 6 Part 1–4 15,868 Subtitles, Modern American Slang, Persistent Settings & PS5 Backup)"
           body: |
-            ### 🎮 PS Translator v2.2.6 (Android APK, Samsung TV `.wgt` & Samsung DeX)
+            ### 🎮 PS Translator ${{ steps.ver.outputs.tag }} (Android APK, Samsung TV `.wgt` & Samsung DeX)
 
             แอปพลิเคชันสตรีมเกม PlayStation 5 (PS5) และ PS4 พร้อมระบบตรวจจับซับไตเติล แปลข้อความป๊อปอัพซ้าย/ขวา เอกสารเฉพาะจุด ส่งซับลอยขึ้นทีวี Samsung และพากย์เสียงไทยแบบเรียลไทม์ในดีไซน์ **Liquid Glass**
 

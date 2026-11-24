@@ -22,21 +22,21 @@
             android:layout_height="wrap_content"/>
     </com.metallic.chiaki.stream.AspectRatioFrameLayout>
 
-    <!-- Popup Zone Left Translation Card (Normal Mode: Tutorial / Help Tips on Left) -->
+    <!-- Popup Zone Left Translation Card (GTA 6 Chat Bubble Style) -->
     <LinearLayout
         android:id="@+id/popupLeftCard"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:minWidth="150dp"
+        android:minWidth="175dp"
         android:layout_gravity="start|center_vertical"
         android:layout_marginStart="14dp"
         android:layout_marginEnd="14dp"
         android:orientation="vertical"
         android:background="@drawable/bg_popup_card_left"
-        android:paddingStart="12dp"
-        android:paddingEnd="10dp"
-        android:paddingTop="8dp"
-        android:paddingBottom="10dp"
+        android:paddingStart="14dp"
+        android:paddingEnd="14dp"
+        android:paddingTop="10dp"
+        android:paddingBottom="12dp"
         android:elevation="8dp"
         android:visibility="gone"
         android:clickable="true"
@@ -47,28 +47,52 @@
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:gravity="center_vertical"
-            android:layout_marginBottom="4dp">
+            android:layout_marginBottom="5dp">
 
             <TextView
+                android:id="@+id/tvPopupLeftAvatar"
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:background="@drawable/bg_chat_avatar_circle"
+                android:gravity="center"
+                android:text="!"
+                android:textColor="#FFFFFF"
+                android:textSize="11sp"
+                android:textStyle="bold"
+                android:fontFamily="@font/gta_prompt_light"
+                android:layout_marginEnd="8dp"/>
+
+            <TextView
+                android:id="@+id/tvPopupLeftSender"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="💡 คำแนะนำ"
-                android:textColor="#FFB74D"
+                android:text="คำแนะนำ"
+                android:textColor="#1B2A3A"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:fontFamily="@font/gta_prompt_light"
+                android:singleLine="true"/>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="✓✓"
+                android:textColor="#6C859E"
                 android:textSize="11sp"
                 android:textStyle="bold"
-                android:singleLine="true"/>
+                android:layout_marginStart="6dp"/>
 
             <TextView
                 android:id="@+id/btnClosePopupLeft"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="✕"
-                android:textColor="#CCFFFFFF"
-                android:textSize="12sp"
+                android:textColor="#7A90A6"
+                android:textSize="11sp"
                 android:textStyle="bold"
                 android:paddingStart="8dp"
-                android:paddingEnd="4dp"
+                android:paddingEnd="2dp"
                 android:clickable="true"
                 android:focusable="true"/>
         </LinearLayout>
@@ -77,30 +101,30 @@
             android:id="@+id/tvPopupLeftText"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:maxWidth="250dp"
-            android:textColor="#FFF8E1"
+            android:maxWidth="265dp"
+            android:textColor="#253646"
             android:textSize="14sp"
-            android:textStyle="bold"
+            android:fontFamily="@font/gta_prompt_light"
             android:lineSpacingExtra="2dp"
             android:text=""/>
     </LinearLayout>
 
-    <!-- Popup Zone Right Translation Card (Normal Mode: Phone / Messages on Right) -->
+    <!-- Popup Zone Right Translation Card (GTA 6 Chat Bubble Style) -->
     <LinearLayout
         android:id="@+id/popupRightCard"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:minWidth="150dp"
+        android:minWidth="175dp"
         android:layout_gravity="end|bottom"
         android:layout_marginEnd="14dp"
         android:layout_marginStart="14dp"
         android:layout_marginBottom="86dp"
         android:orientation="vertical"
         android:background="@drawable/bg_popup_card_right"
-        android:paddingStart="12dp"
-        android:paddingEnd="10dp"
-        android:paddingTop="8dp"
-        android:paddingBottom="10dp"
+        android:paddingStart="14dp"
+        android:paddingEnd="14dp"
+        android:paddingTop="10dp"
+        android:paddingBottom="12dp"
         android:elevation="8dp"
         android:visibility="gone"
         android:clickable="true"
@@ -111,28 +135,52 @@
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:gravity="center_vertical"
-            android:layout_marginBottom="4dp">
+            android:layout_marginBottom="5dp">
 
             <TextView
+                android:id="@+id/tvPopupRightAvatar"
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:background="@drawable/bg_chat_avatar_circle"
+                android:gravity="center"
+                android:text="J"
+                android:textColor="#FFFFFF"
+                android:textSize="11sp"
+                android:textStyle="bold"
+                android:fontFamily="@font/gta_prompt_light"
+                android:layout_marginEnd="8dp"/>
+
+            <TextView
+                android:id="@+id/tvPopupRightSender"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="📱 ข้อความ"
-                android:textColor="#00E5FF"
+                android:text="ข้อความ"
+                android:textColor="#1B2A3A"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:fontFamily="@font/gta_prompt_light"
+                android:singleLine="true"/>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="✓✓"
+                android:textColor="#6C859E"
                 android:textSize="11sp"
                 android:textStyle="bold"
-                android:singleLine="true"/>
+                android:layout_marginStart="6dp"/>
 
             <TextView
                 android:id="@+id/btnClosePopupRight"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="✕"
-                android:textColor="#CCFFFFFF"
-                android:textSize="12sp"
+                android:textColor="#7A90A6"
+                android:textSize="11sp"
                 android:textStyle="bold"
                 android:paddingStart="8dp"
-                android:paddingEnd="4dp"
+                android:paddingEnd="2dp"
                 android:clickable="true"
                 android:focusable="true"/>
         </LinearLayout>
@@ -141,10 +189,10 @@
             android:id="@+id/tvPopupRightText"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:maxWidth="250dp"
-            android:textColor="#E0F7FA"
+            android:maxWidth="265dp"
+            android:textColor="#253646"
             android:textSize="14sp"
-            android:textStyle="bold"
+            android:fontFamily="@font/gta_prompt_light"
             android:lineSpacingExtra="2dp"
             android:text=""/>
     </LinearLayout>
@@ -351,17 +399,18 @@
                 android:text="(แตะที่หน้าจอเพื่อสลับกลับสู่โหมดภาพเกม)"/>
         </LinearLayout>
 
-        <!-- Pure Black Mode: Left Popup Card (mirrors Left source side) -->
+        <!-- Pure Black Mode: Left Popup Card (GTA 6 Chat Bubble Style) -->
         <LinearLayout
             android:id="@+id/purePopupLeftCard"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:minWidth="175dp"
             android:layout_gravity="start|center_vertical"
             android:layout_marginStart="16dp"
             android:orientation="vertical"
             android:background="@drawable/bg_popup_card_left"
             android:paddingStart="14dp"
-            android:paddingEnd="12dp"
+            android:paddingEnd="14dp"
             android:paddingTop="10dp"
             android:paddingBottom="12dp"
             android:elevation="6dp"
@@ -374,27 +423,51 @@
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
                 android:gravity="center_vertical"
-                android:layout_marginBottom="4dp">
+                android:layout_marginBottom="5dp">
 
                 <TextView
+                    android:id="@+id/tvPurePopupLeftAvatar"
+                    android:layout_width="22dp"
+                    android:layout_height="22dp"
+                    android:background="@drawable/bg_chat_avatar_circle"
+                    android:gravity="center"
+                    android:text="!"
+                    android:textColor="#FFFFFF"
+                    android:textSize="11sp"
+                    android:textStyle="bold"
+                    android:fontFamily="@font/gta_prompt_light"
+                    android:layout_marginEnd="8dp"/>
+
+                <TextView
+                    android:id="@+id/tvPurePopupLeftSender"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:text="💡 คำแนะนำ"
-                    android:textColor="#FFB74D"
-                    android:textSize="12sp"
-                    android:textStyle="bold"/>
+                    android:text="คำแนะนำ"
+                    android:textColor="#1B2A3A"
+                    android:textSize="13sp"
+                    android:textStyle="bold"
+                    android:fontFamily="@font/gta_prompt_light"/>
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="✓✓"
+                    android:textColor="#6C859E"
+                    android:textSize="11sp"
+                    android:textStyle="bold"
+                    android:layout_marginStart="6dp"/>
 
                 <TextView
                     android:id="@+id/btnClosePurePopupLeft"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="✕"
-                    android:textColor="#CCFFFFFF"
-                    android:textSize="13sp"
+                    android:textColor="#7A90A6"
+                    android:textSize="12sp"
                     android:textStyle="bold"
                     android:paddingStart="8dp"
-                    android:paddingEnd="4dp"
+                    android:paddingEnd="2dp"
                     android:clickable="true"
                     android:focusable="true"/>
             </LinearLayout>
@@ -403,26 +476,27 @@
                 android:id="@+id/tvPurePopupLeftText"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:maxWidth="240dp"
-                android:textColor="#FFF8E1"
-                android:textSize="16sp"
-                android:textStyle="bold"
+                android:maxWidth="250dp"
+                android:textColor="#253646"
+                android:textSize="15sp"
+                android:fontFamily="@font/gta_prompt_light"
                 android:lineSpacingExtra="3dp"
                 android:text=""/>
         </LinearLayout>
 
-        <!-- Pure Black Mode: Right Popup Card (mirrors Right/Bottom-Right source side) -->
+        <!-- Pure Black Mode: Right Popup Card (GTA 6 Chat Bubble Style) -->
         <LinearLayout
             android:id="@+id/purePopupRightCard"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:minWidth="175dp"
             android:layout_gravity="end|bottom"
             android:layout_marginEnd="16dp"
             android:layout_marginBottom="20dp"
             android:orientation="vertical"
             android:background="@drawable/bg_popup_card_right"
             android:paddingStart="14dp"
-            android:paddingEnd="12dp"
+            android:paddingEnd="14dp"
             android:paddingTop="10dp"
             android:paddingBottom="12dp"
             android:elevation="6dp"
@@ -435,27 +509,51 @@
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
                 android:gravity="center_vertical"
-                android:layout_marginBottom="4dp">
+                android:layout_marginBottom="5dp">
 
                 <TextView
+                    android:id="@+id/tvPurePopupRightAvatar"
+                    android:layout_width="22dp"
+                    android:layout_height="22dp"
+                    android:background="@drawable/bg_chat_avatar_circle"
+                    android:gravity="center"
+                    android:text="J"
+                    android:textColor="#FFFFFF"
+                    android:textSize="11sp"
+                    android:textStyle="bold"
+                    android:fontFamily="@font/gta_prompt_light"
+                    android:layout_marginEnd="8dp"/>
+
+                <TextView
+                    android:id="@+id/tvPurePopupRightSender"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:text="📱 ข้อความ"
-                    android:textColor="#00E5FF"
-                    android:textSize="12sp"
-                    android:textStyle="bold"/>
+                    android:text="ข้อความ"
+                    android:textColor="#1B2A3A"
+                    android:textSize="13sp"
+                    android:textStyle="bold"
+                    android:fontFamily="@font/gta_prompt_light"/>
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="✓✓"
+                    android:textColor="#6C859E"
+                    android:textSize="11sp"
+                    android:textStyle="bold"
+                    android:layout_marginStart="6dp"/>
 
                 <TextView
                     android:id="@+id/btnClosePurePopupRight"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="✕"
-                    android:textColor="#CCFFFFFF"
-                    android:textSize="13sp"
+                    android:textColor="#7A90A6"
+                    android:textSize="12sp"
                     android:textStyle="bold"
                     android:paddingStart="8dp"
-                    android:paddingEnd="4dp"
+                    android:paddingEnd="2dp"
                     android:clickable="true"
                     android:focusable="true"/>
             </LinearLayout>
@@ -464,10 +562,10 @@
                 android:id="@+id/tvPurePopupRightText"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:maxWidth="240dp"
-                android:textColor="#E0F7FA"
-                android:textSize="16sp"
-                android:textStyle="bold"
+                android:maxWidth="250dp"
+                android:textColor="#253646"
+                android:textSize="15sp"
+                android:fontFamily="@font/gta_prompt_light"
                 android:lineSpacingExtra="3dp"
                 android:text=""/>
         </LinearLayout>
@@ -937,7 +1035,7 @@
                         android:paddingStart="4dp"
                         android:paddingEnd="8dp"
                         android:text="‹ กลับ"
-                        android:textColor="#00FF88"
+                        android:textColor="#FF9A4A"
                         android:textSize="14sp"
                         android:textStyle="bold"
                         android:visibility="gone"/>
@@ -948,7 +1046,7 @@
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:text="ตั้งค่า PS Translator"
-                        android:textColor="#FFFFFF"
+                        android:textColor="#FF5AA5"
                         android:textSize="17sp"
                         android:textStyle="bold"/>
 
@@ -958,7 +1056,7 @@
                         android:layout_height="32dp"
                         android:background="?attr/selectableItemBackgroundBorderless"
                         android:src="@drawable/ic_close"
-                        app:tint="#FFFFFF"
+                        app:tint="#FF9A4A"
                         android:contentDescription="ปิดเมนู"/>
                 </LinearLayout>
 
@@ -976,7 +1074,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:text="แสดงกล่องซับไตเติ้ลบนจอ"
-                        android:textColor="#EEEEEE"
+                        android:textColor="#F8ECFF"
                         android:textSize="14sp"
                         android:checked="true"
                         android:layout_marginBottom="8dp"/>
@@ -984,7 +1082,7 @@
                     <View
                         android:layout_width="match_parent"
                         android:layout_height="1dp"
-                        android:background="#22FFFFFF"
+                        android:background="#44FF5AA5"
                         android:layout_marginBottom="10dp"/>
 
                     <!-- Sub-menu Category 1: Text & Subtitle Styling -->
@@ -995,11 +1093,11 @@
                         android:layout_height="wrap_content"
                         android:text="ปรับแต่งตัวหนังสือ &amp; ซับไตเติ้ล  ›"
                         android:textAlignment="viewStart"
-                        android:textColor="#FFFFFF"
+                        android:textColor="#FF77B7"
                         android:textSize="13sp"
                         android:textStyle="bold"
-                        app:strokeColor="#44FFFFFF"
-                        app:backgroundTint="#1AFFFFFF"
+                        app:strokeColor="#88FF5AA5"
+                        app:backgroundTint="#22FF5AA5"
                         android:layout_marginBottom="8dp"/>
 
                     <!-- Sub-menu Category 2: Voice Dubbing & Audio -->
@@ -1010,11 +1108,11 @@
                         android:layout_height="wrap_content"
                         android:text="การออกเสียงพากย์ &amp; เสียงเกม  ›"
                         android:textAlignment="viewStart"
-                        android:textColor="#FFFFFF"
+                        android:textColor="#FF9A4A"
                         android:textSize="13sp"
                         android:textStyle="bold"
-                        app:strokeColor="#44FFFFFF"
-                        app:backgroundTint="#1AFFFFFF"
+                        app:strokeColor="#88FF9A4A"
+                        app:backgroundTint="#22FF9A4A"
                         android:layout_marginBottom="8dp"/>
 
                     <!-- Sub-menu Category 3: Modes & Detection Area -->
@@ -1025,11 +1123,11 @@
                         android:layout_height="wrap_content"
                         android:text="โหมดหน้าจอ &amp; กรอบตรวจจับซับ  ›"
                         android:textAlignment="viewStart"
-                        android:textColor="#FFFFFF"
+                        android:textColor="#3EF0D8"
                         android:textSize="13sp"
                         android:textStyle="bold"
-                        app:strokeColor="#44FFFFFF"
-                        app:backgroundTint="#1AFFFFFF"
+                        app:strokeColor="#883EF0D8"
+                        app:backgroundTint="#1F3EF0D8"
                         android:layout_marginBottom="8dp"/>
 
                     <!-- Sub-menu Category 4: Multi-Provider Translation & AI TTS API -->
@@ -1040,17 +1138,17 @@
                         android:layout_height="wrap_content"
                         android:text="ตั้งค่า API แปล &amp; พากย์ (หลายค่าย)  ›"
                         android:textAlignment="viewStart"
-                        android:textColor="#00E676"
+                        android:textColor="#FFB35C"
                         android:textSize="13sp"
                         android:textStyle="bold"
-                        app:strokeColor="#00E676"
-                        app:backgroundTint="#1A00E676"
+                        app:strokeColor="#CCFFB35C"
+                        app:backgroundTint="#26FFB35C"
                         android:layout_marginBottom="8dp"/>
 
                     <View
                         android:layout_width="match_parent"
                         android:layout_height="1dp"
-                        android:background="#22FFFFFF"
+                        android:background="#44FF5AA5"
                         android:layout_marginBottom="8dp"/>
 
                     <!-- Samsung TV Overlay Cast Section -->
@@ -1059,7 +1157,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:text="ส่งซับขึ้นทีวี Samsung อัตโนมัติ (TV Overlay)"
-                        android:textColor="#00E5FF"
+                        android:textColor="#3EF0D8"
                         android:textSize="13sp"
                         android:textStyle="bold"
                         android:checked="true"/>
@@ -1069,7 +1167,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:text="ทีวี Samsung: พร้อมเชื่อมต่อใน Wi-Fi บ้าน (เปิดแอป PS Translator TV บนทีวีได้เลย)"
-                        android:textColor="#99FFFFFF"
+                        android:textColor="#D7B8F3"
                         android:textSize="11sp"
                         android:layout_marginBottom="6dp"/>
 
@@ -1082,11 +1180,11 @@
                         android:text="เข้าสู่โหมดทีวี (ปิดจอดำสนิท 100% + ล็อกหน้าจอ)"
                         android:textSize="11sp"
                         android:textStyle="bold"
-                        android:textColor="#00FF88"
-                        app:strokeColor="#00FF88"
-                        app:backgroundTint="#1400FF88"
+                        android:textColor="#FF5AA5"
+                        app:strokeColor="#FF5AA5"
+                        app:backgroundTint="#24FF5AA5"
                         app:icon="@drawable/ic_tv_mode"
-                        app:iconTint="#00FF88"
+                        app:iconTint="#FF5AA5"
                         app:iconSize="16dp"
                         android:insetTop="0dp"
                         android:insetBottom="0dp"/>
@@ -1108,8 +1206,8 @@
                             android:text="ซิงค์ซับล่าสุด"
                             android:textSize="10sp"
                             android:textStyle="bold"
-                            android:textColor="#80DEEA"
-                            app:strokeColor="#80DEEA"
+                            android:textColor="#3EF0D8"
+                            app:strokeColor="#3EF0D8"
                             android:insetTop="0dp"
                             android:insetBottom="0dp"/>
 
@@ -1122,8 +1220,8 @@
                             android:text="อัปเดตแอปในตัว"
                             android:textSize="10sp"
                             android:textStyle="bold"
-                            android:textColor="#FFD54F"
-                            app:strokeColor="#FFD54F"
+                            android:textColor="#FF9A4A"
+                            app:strokeColor="#FF9A4A"
                             android:insetTop="0dp"
                             android:insetBottom="0dp"/>
                     </LinearLayout>
@@ -1563,7 +1661,7 @@
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
                                 android:text="ตำแหน่งซับ (เลื่อนขึ้น-ลง):"
-                                android:textColor="#AAAAAA"
+                                android:textColor="#FF9A4A"
                                 android:textSize="12sp"/>
 
                             <TextView
@@ -1571,7 +1669,7 @@
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:text="ด้านล่าง (15%)"
-                                android:textColor="#00E5FF"
+                                android:textColor="#3EF0D8"
                                 android:textStyle="bold"
                                 android:textSize="12sp"/>
                         </LinearLayout>
@@ -1587,7 +1685,7 @@
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:text="ล่าง ↓"
-                                android:textColor="#88FFFFFF"
+                                android:textColor="#E0C8F5"
                                 android:textSize="11sp"
                                 android:textStyle="bold"/>
 
@@ -1598,14 +1696,14 @@
                                 android:layout_weight="1"
                                 android:max="100"
                                 android:progress="15"
-                                android:progressTint="#00E5FF"
-                                android:thumbTint="#00E5FF"/>
+                                android:progressTint="#FF5AA5"
+                                android:thumbTint="#FF5AA5"/>
 
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:text="↑ บน"
-                                android:textColor="#88FFFFFF"
+                                android:textColor="#E0C8F5"
                                 android:textSize="11sp"
                                 android:textStyle="bold"/>
                         </LinearLayout>
@@ -1615,7 +1713,7 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="สีตัวหนังสือ:"
-                            android:textColor="#AAAAAA"
+                            android:textColor="#FF9A4A"
                             android:textSize="12sp"
                             android:layout_marginBottom="4dp"/>
 
@@ -1864,8 +1962,8 @@
                             android:layout_height="wrap_content"
                             android:max="70"
                             android:progress="16"
-                            android:progressTint="#00FF88"
-                            android:thumbTint="#00FF88"
+                            android:progressTint="#FF9A4A"
+                            android:thumbTint="#FF5AA5"
                             android:layout_marginBottom="10dp"/>
 
                         <!-- Background Opacity -->
@@ -1873,7 +1971,7 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="ความโปร่งใสพื้นหลัง:"
-                            android:textColor="#AAAAAA"
+                            android:textColor="#FF9A4A"
                             android:textSize="12sp"
                             android:layout_marginBottom="4dp"/>
 

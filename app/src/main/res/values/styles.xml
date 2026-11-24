@@ -10,6 +10,8 @@
         <item name="android:navigationBarColor">?attr/colorPrimarySurface</item>
         <item name="materialAlertDialogTheme">@style/AppTheme.AlertDialog</item>
         <item name="alertDialogTheme">@style/AppTheme.AlertDialog.NonMaterial</item>
+        <item name="android:fontFamily">@font/gta_prompt_light</item>
+        <item name="fontFamily">@font/gta_prompt_light</item>
 
         <item name="android:windowActivityTransitions">true</item>
     </style>
@@ -66,6 +68,8 @@
         <item name="android:windowDrawsSystemBarBackgrounds">true</item>
 
         <item name="materialAlertDialogTheme">@style/AppTheme.AlertDialog</item>
+        <item name="android:fontFamily">@font/gta_prompt_light</item>
+        <item name="fontFamily">@font/gta_prompt_light</item>
     </style>
 
     <style name="MageTheme.Translucent" parent="MageTheme">
@@ -73,7 +77,8 @@
     </style>
 
     <style name="MageTheme.TextAppearanceHeadline1" parent="TextAppearance.MaterialComponents.Headline1">
-        <item name="fontFamily">sans-serif-condensed-light</item>
+        <item name="android:fontFamily">@font/gta_prompt_light</item>
+        <item name="fontFamily">@font/gta_prompt_light</item>
     </style>
 
     <style name="MageTheme.TextInputStyle" parent="Widget.MaterialComponents.TextInputLayout.FilledBox">
@@ -106,10 +111,13 @@
     <style name="StreamTheme" parent="Theme.MaterialComponents.Light.NoActionBar">
         <item name="colorPrimary">@color/primary</item>
         <item name="colorPrimaryDark">@color/primary_dark</item>
-        <item name="colorAccent">@color/accent</item>
+        <item name="colorAccent">#FF5AA5</item>
+        <item name="colorSecondary">#FF5AA5</item>
         <item name="materialAlertDialogTheme">@style/AppTheme.AlertDialog</item>
         <item name="android:windowBackground">@color/stream_background</item>
         <item name="android:windowTranslucentStatus">true</item>
         <item name="android:windowTranslucentNavigation">true</item>
+        <item name="android:fontFamily">@font/gta_prompt_light</item>
+        <item name="fontFamily">@font/gta_prompt_light</item>
     </style>
 </resources>

@@ -79,10 +79,10 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/heads/main')
         with:
-          tag_name: v2.2.5
-          name: "PS Translator v2.2.5 (Typewriter Popup Stabilization, Full Non-Summarized Left/Right Popups & TV Mode)"
+          tag_name: v2.2.6
+          name: "PS Translator v2.2.6 (GTA Art Deco + Prompt Light Hybrid Font, GTA 6 Chat Bubble Popups & Vice City Menu Theme)"
           body: |
-            ### 🎮 PS Translator v2.2.5 (Android APK, Samsung TV `.wgt` & Samsung DeX)
+            ### 🎮 PS Translator v2.2.6 (Android APK, Samsung TV `.wgt` & Samsung DeX)
 
             แอปพลิเคชันสตรีมเกม PlayStation 5 (PS5) และ PS4 พร้อมระบบตรวจจับซับไตเติล แปลข้อความป๊อปอัพซ้าย/ขวา เอกสารเฉพาะจุด ส่งซับลอยขึ้นทีวี Samsung และพากย์เสียงไทยแบบเรียลไทม์ในดีไซน์ **Liquid Glass**
 

@@ -515,8 +515,52 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		setupPopupZonesControls()
 		updateQuickDrawerUI()
 		updateGeminiApiStatusUI()
+		applyViceCityThemeAndFont()
 		uiVisibilityHandler.postDelayed(captureRunnable, 1500)
 		resetMenuButtonTimer()
+	}
+
+	private fun applyViceCityThemeAndFont() {
+		val gtaPromptFont = try {
+			androidx.core.content.res.ResourcesCompat.getFont(this, R.font.gta_prompt_light)
+		} catch (_: Exception) {
+			null
+		}
+		if (gtaPromptFont != null) {
+			applyTypefaceRecursively(binding.root, gtaPromptFont)
+		}
+		applyViceCityMenuColorsRecursively(binding.menuSheetContainer)
+	}
+
+	private fun applyTypefaceRecursively(view: View, typeface: android.graphics.Typeface) {
+		if (view is TextView) {
+			val style = view.typeface?.style ?: android.graphics.Typeface.NORMAL
+			view.setTypeface(typeface, style)
+		} else if (view is ViewGroup) {
+			for (i in 0 until view.childCount) {
+				applyTypefaceRecursively(view.getChildAt(i), typeface)
+			}
+		}
+	}
+
+	private fun applyViceCityMenuColorsRecursively(view: View) {
+		if (view is com.google.android.material.switchmaterial.SwitchMaterial) {
+			view.setTextColor(Color.parseColor("#FF80BF"))
+		} else if (view is TextView && view !is com.google.android.material.button.MaterialButton && view !is EditText) {
+			val cur = view.currentTextColor
+			// Convert neutral grey/white labels inside the settings menu into Vice City Sunset Orange & Lavender Pink
+			if (cur == Color.parseColor("#AAAAAA") || cur == Color.parseColor("#CCCCCC")) {
+				view.setTextColor(Color.parseColor("#FF9A4A"))
+			} else if (cur == Color.parseColor("#EEEEEE") || cur == Color.parseColor("#DDDDDD")) {
+				view.setTextColor(Color.parseColor("#F7E8FF"))
+			} else if (cur == Color.parseColor("#88FFFFFF") || cur == Color.parseColor("#99FFFFFF")) {
+				view.setTextColor(Color.parseColor("#D8B6F8"))
+			}
+		} else if (view is ViewGroup) {
+			for (i in 0 until view.childCount) {
+				applyViceCityMenuColorsRecursively(view.getChildAt(i))
+			}
+		}
 	}
 
 	private fun resetMenuButtonTimer() {
@@ -1261,13 +1305,13 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		val ip = TvOverlayServer.getLocalWifiIp(this)
 		if (!isTvCastEnabled) {
 			binding.tvSamsungCastStatus.text = "ปิดการส่งซับขึ้นทีวีอยู่ (IP มือถือ: $ip)"
-			binding.tvSamsungCastStatus.setTextColor(Color.parseColor("#88FFFFFF"))
+			binding.tvSamsungCastStatus.setTextColor(Color.parseColor("#C7A6E8"))
 		} else if (!connectedTv.isNullOrBlank()) {
 			binding.tvSamsungCastStatus.text = "✓ เชื่อมต่อกับทีวีแล้ว: $connectedTv (IP: $ip:${TvOverlayServer.PORT})"
-			binding.tvSamsungCastStatus.setTextColor(Color.parseColor("#00E676"))
+			binding.tvSamsungCastStatus.setTextColor(Color.parseColor("#3EF0D8"))
 		} else {
 			binding.tvSamsungCastStatus.text = "พร้อมเชื่อมต่อทีวีใน Wi-Fi บ้าน (IP: $ip) — เปิดแอป PS Translator TV บนทีวีได้เลย"
-			binding.tvSamsungCastStatus.setTextColor(Color.parseColor("#99FFFFFF"))
+			binding.tvSamsungCastStatus.setTextColor(Color.parseColor("#E0C8F5"))
 		}
 	}
 
@@ -1334,9 +1378,9 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		)
 		for ((p, btn) in buttons) {
 			val selected = (p == provider)
-			val color = if (selected) Color.parseColor("#00E676") else Color.parseColor("#CCCCCC")
-			val stroke = if (selected) Color.parseColor("#00E676") else Color.parseColor("#44FFFFFF")
-			val bg = if (selected) Color.parseColor("#2600E676") else Color.TRANSPARENT
+			val color = if (selected) Color.parseColor("#FF5AA5") else Color.parseColor("#E0C8F5")
+			val stroke = if (selected) Color.parseColor("#FF5AA5") else Color.parseColor("#66FF9A4A")
+			val bg = if (selected) Color.parseColor("#33FF5AA5") else Color.TRANSPARENT
 			btn.setTextColor(color)
 			btn.strokeColor = android.content.res.ColorStateList.valueOf(stroke)
 			btn.backgroundTintList = android.content.res.ColorStateList.valueOf(bg)
@@ -1373,10 +1417,10 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		if (activeTranslationProvider != TranslationProvider.GOOGLE_FREE && keyReady) {
 			val model = getProviderModel(activeTranslationProvider)
 			binding.tvGeminiApiStatus.text = "กำลังใช้แปล: ${activeTranslationProvider.displayName} ($model) • พากย์: $ttsLabel"
-			binding.tvGeminiApiStatus.setTextColor(Color.parseColor("#00E676"))
+			binding.tvGeminiApiStatus.setTextColor(Color.parseColor("#3EF0D8"))
 		} else {
 			binding.tvGeminiApiStatus.text = "กำลังใช้แปล: Google Translate (ฟรี) • พากย์: $ttsLabel"
-			binding.tvGeminiApiStatus.setTextColor(Color.parseColor("#AAAAAA"))
+			binding.tvGeminiApiStatus.setTextColor(Color.parseColor("#FF9A4A"))
 		}
 
 		binding.useGeminiTtsSwitch.isVisible = isTtsEnabled
@@ -2836,17 +2880,54 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		}
 	}
 
+	private fun parsePopupSenderAndBody(side: PopupSide, englishText: String, thaiText: String): Pair<String, String> {
+		val defaultSender = if (side == PopupSide.LEFT) "คำแนะนำ" else "ข้อความ"
+		val colonIdx = thaiText.indexOf(':')
+		if (colonIdx in 1..24) {
+			val prefix = thaiText.substring(0, colonIdx).trim()
+			val body = thaiText.substring(colonIdx + 1).trim()
+			if (prefix.isNotEmpty() && body.isNotEmpty() && prefix.split(Regex("\\s+")).size <= 3) {
+				return prefix to body
+			}
+		}
+		val engColonIdx = englishText.indexOf(':')
+		if (engColonIdx in 1..20) {
+			val engPrefix = englishText.substring(0, engColonIdx).trim()
+			if (engPrefix.isNotEmpty() && engPrefix.split(Regex("\\s+")).size <= 2) {
+				val body = if (thaiText.startsWith(engPrefix, ignoreCase = true)) {
+					thaiText.removePrefix(engPrefix).trim().removePrefix(":").trim().ifEmpty { thaiText }
+				} else {
+					thaiText
+				}
+				return engPrefix to body
+			}
+		}
+		return defaultSender to thaiText
+	}
+
 	private fun showPopupCard(side: PopupSide, thaiText: String) {
 		if (side == PopupSide.LEFT) {
 			isPopupLeftVisible = true
-			binding.tvPopupLeftText.text = thaiText
-			binding.tvPurePopupLeftText.text = thaiText
+			val (sender, body) = parsePopupSenderAndBody(PopupSide.LEFT, lastPopupLeftEnglish, thaiText)
+			val avatarChar = sender.firstOrNull()?.uppercaseChar()?.toString() ?: "!"
+			binding.tvPopupLeftAvatar.text = avatarChar
+			binding.tvPurePopupLeftAvatar.text = avatarChar
+			binding.tvPopupLeftSender.text = sender
+			binding.tvPurePopupLeftSender.text = sender
+			binding.tvPopupLeftText.text = body
+			binding.tvPurePopupLeftText.text = body
 			uiVisibilityHandler.removeCallbacks(hidePopupLeftRunnable)
 			uiVisibilityHandler.postDelayed(hidePopupLeftRunnable, popupHoldDurationMs)
 		} else {
 			isPopupRightVisible = true
-			binding.tvPopupRightText.text = thaiText
-			binding.tvPurePopupRightText.text = thaiText
+			val (sender, body) = parsePopupSenderAndBody(PopupSide.RIGHT, lastPopupRightEnglish, thaiText)
+			val avatarChar = sender.firstOrNull()?.uppercaseChar()?.toString() ?: "M"
+			binding.tvPopupRightAvatar.text = avatarChar
+			binding.tvPurePopupRightAvatar.text = avatarChar
+			binding.tvPopupRightSender.text = sender
+			binding.tvPurePopupRightSender.text = sender
+			binding.tvPopupRightText.text = body
+			binding.tvPurePopupRightText.text = body
 			uiVisibilityHandler.removeCallbacks(hidePopupRightRunnable)
 			uiVisibilityHandler.postDelayed(hidePopupRightRunnable, popupHoldDurationMs)
 		}

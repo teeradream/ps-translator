@@ -6,21 +6,21 @@
 }
 
 :root {
-  --bg-deep: #060a12;
-  --bg-navy: #0f1a2c;
-  --bg-glow: #0b253a;
-  --glass-top: rgba(26, 38, 60, 0.92);
-  --glass-mid: rgba(16, 24, 40, 0.90);
-  --glass-bot: rgba(10, 15, 26, 0.94);
-  --glass-border: rgba(255, 255, 255, 0.28);
-  --glass-highlight: rgba(0, 229, 255, 0.42);
-  --panel-btn: rgba(24, 35, 56, 0.88);
-  --text: #f4f8ff;
-  --muted: #9cb0c9;
-  --green: #00ff88;
-  --emerald: #00e676;
-  --cyan: #00e5ff;
-  --warn: #ffb74d;
+  --bg-deep: #0e0918;
+  --bg-navy: #1d102e;
+  --bg-glow: #381236;
+  --glass-top: rgba(34, 20, 48, 0.94);
+  --glass-mid: rgba(24, 14, 36, 0.92);
+  --glass-bot: rgba(15, 9, 24, 0.96);
+  --glass-border: rgba(255, 90, 165, 0.42);
+  --glass-highlight: rgba(255, 154, 74, 0.45);
+  --panel-btn: rgba(32, 20, 46, 0.90);
+  --text: #f7efff;
+  --muted: #c2aad8;
+  --green: #ff5aa5;
+  --emerald: #ff5aa5;
+  --cyan: #ff9a4a;
+  --warn: #3ef0d8;
   --danger: #ff6b6b;
 }
 
@@ -32,7 +32,7 @@ body {
   overflow: hidden;
   /* transparent: the console's HDMI picture is shown behind this page */
   background: transparent;
-  font-family: "Noto Sans Thai", "Leelawadee UI", "Tahoma", "Changa", sans-serif;
+  font-family: "Changa", sans-serif;
   color: var(--text);
 }
 

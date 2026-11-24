@@ -250,6 +250,18 @@ class TvOverlayServer(
 					}
 					sendResponse(socket, 200, "text/html; charset=utf-8", TV_OVERLAY_HTML)
 				}
+				path == "/font.ttf" -> {
+					val fontBytes = try {
+						context.assets.open("gta_prompt_light.ttf").use { it.readBytes() }
+					} catch (_: Exception) {
+						null
+					}
+					if (fontBytes != null) {
+						sendBinaryResponse(socket, 200, "font/ttf", fontBytes)
+					} else {
+						sendResponse(socket, 404, "text/plain", "Not Found")
+					}
+				}
 				else -> {
 					sendResponse(socket, 404, "text/plain", "Not Found")
 				}
@@ -269,13 +281,16 @@ class TvOverlayServer(
 	}
 
 	private fun sendResponse(socket: Socket, statusCode: Int, contentType: String, body: String) {
+		sendBinaryResponse(socket, statusCode, contentType, body.toByteArray(Charsets.UTF_8))
+	}
+
+	private fun sendBinaryResponse(socket: Socket, statusCode: Int, contentType: String, bytes: ByteArray) {
 		val statusText = when (statusCode) {
 			200 -> "OK"
 			403 -> "Forbidden"
 			404 -> "Not Found"
 			else -> "OK"
 		}
-		val bytes = body.toByteArray(Charsets.UTF_8)
 		val header = buildString {
 			append("HTTP/1.1 $statusCode $statusText\r\n")
 			append("Content-Type: $contentType\r\n")
@@ -300,13 +315,18 @@ private const val TV_OVERLAY_HTML = """<!DOCTYPE html>
 <meta name="viewport" content="width=1920, height=1080">
 <title>PS Translator TV Overlay</title>
 <style>
+  @font-face {
+    font-family: 'GTAPromptLight';
+    src: url('/font.ttf') format('truetype');
+    font-weight: 100 900;
+  }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body {
     width: 100%;
     height: 100%;
     background: transparent !important;
     overflow: hidden;
-    font-family: 'Noto Sans Thai', 'Leelawadee UI', 'Tahoma', sans-serif;
+    font-family: 'GTAPromptLight', 'Noto Sans Thai', 'Leelawadee UI', 'Tahoma', sans-serif;
     user-select: none;
   }
   #stage {
@@ -328,16 +348,8 @@ private const val TV_OVERLAY_HTML = """<!DOCTYPE html>
     transition: opacity 0.16s ease;
     display: none;
   }
-  #sub-box.pos-bottom {
-    bottom: 52px;
-    top: auto;
-  }
-  #sub-box.pos-center {
-    top: 50%;
-    transform: translate(-50%, -50%);
-  }
   .sub-line {
-    font-weight: 700;
+    font-weight: 600;
     line-height: 1.34;
     text-shadow: 0 3px 8px rgba(0,0,0,0.95), 0 0 4px rgba(0,0,0,0.95);
     word-wrap: break-word;
@@ -345,26 +357,94 @@ private const val TV_OVERLAY_HTML = """<!DOCTYPE html>
   .sub-line + .sub-line {
     margin-top: 8px;
   }
-  /* Left & Right Auto Popup Cards (Liquid Glass) */
+  /* Left & Right Auto Popup Cards — GTA 6 Chat Bubble Style */
   .popup-card {
     position: absolute;
-    top: 72px;
+    top: 64px;
     max-width: 34%;
-    min-width: 240px;
-    padding: 18px 26px;
-    border-radius: 22px;
-    background: linear-gradient(180deg, rgba(26, 36, 56, 0.88) 0%, rgba(16, 24, 40, 0.86) 55%, rgba(10, 16, 27, 0.90) 100%);
-    border: 1.5px solid rgba(255, 183, 77, 0.72);
-    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.24);
-    color: #FFE082;
-    font-size: 28px;
-    font-weight: 700;
-    line-height: 1.35;
-    text-shadow: 0 2px 6px rgba(0,0,0,0.95);
+    min-width: 310px;
+    padding: 16px 22px 18px;
+    border-radius: 18px;
+    background: linear-gradient(180deg, rgba(242, 248, 253, 0.96) 0%, rgba(221, 235, 248, 0.95) 100%);
+    border: 1.5px solid rgba(186, 208, 230, 0.90);
+    box-shadow: 0 14px 36px rgba(0, 0, 0, 0.55);
+    color: #243546;
     display: none;
   }
-  #popup-left { left: 42px; }
-  #popup-right { right: 42px; border-color: rgba(0, 229, 255, 0.75); color: #80DEEA; }
+  #popup-left {
+    left: 44px;
+    border-bottom-left-radius: 4px;
+  }
+  #popup-left::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: -10px;
+    width: 0;
+    height: 0;
+    border-style: solid;
+    border-width: 0 0 14px 12px;
+    border-color: transparent transparent rgba(221, 235, 248, 0.95) transparent;
+  }
+  #popup-right {
+    right: 44px;
+    border-bottom-right-radius: 4px;
+  }
+  #popup-right::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    right: -10px;
+    width: 0;
+    height: 0;
+    border-style: solid;
+    border-width: 14px 0 0 12px;
+    border-color: transparent transparent transparent rgba(221, 235, 248, 0.95);
+  }
+  .chat-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+  .chat-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #3A506B 0%, #1C2B3A 100%);
+    border: 1.5px solid rgba(255,255,255,0.75);
+    color: #FFFFFF;
+    font-size: 17px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 11px;
+    flex-shrink: 0;
+  }
+  .chat-sender {
+    flex: 1;
+    color: #1B2A3A;
+    font-size: 24px;
+    font-weight: 700;
+    line-height: 1.15;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .chat-ticks {
+    color: #6C859E;
+    font-size: 20px;
+    font-weight: 700;
+    margin-left: 10px;
+    letter-spacing: -2px;
+  }
+  .chat-body {
+    color: #243546;
+    font-size: 26px;
+    font-weight: 500;
+    line-height: 1.34;
+    word-wrap: break-word;
+  }
   /* Scan Note Card (Liquid Glass) */
   #note-card {
     position: absolute;
@@ -379,7 +459,7 @@ private const val TV_OVERLAY_HTML = """<!DOCTYPE html>
     box-shadow: 0 16px 44px rgba(0, 0, 0, 0.75), inset 0 1.5px 0 rgba(255, 255, 255, 0.26);
     color: #FFFFFF;
     font-size: 30px;
-    font-weight: 600;
+    font-weight: 500;
     line-height: 1.45;
     text-shadow: 0 2px 6px rgba(0,0,0,0.95);
     white-space: pre-wrap;
@@ -389,10 +469,24 @@ private const val TV_OVERLAY_HTML = """<!DOCTYPE html>
 </head>
 <body>
 <div id="stage">
-  <div id="popup-left" class="popup-card"></div>
-  <div id="popup-right" class="popup-card"></div>
+  <div id="popup-left" class="popup-card">
+    <div class="chat-header">
+      <div id="pop-l-avatar" class="chat-avatar">!</div>
+      <div id="pop-l-sender" class="chat-sender">คำแนะนำ</div>
+      <div class="chat-ticks">✓✓</div>
+    </div>
+    <div id="pop-l-body" class="chat-body"></div>
+  </div>
+  <div id="popup-right" class="popup-card">
+    <div class="chat-header">
+      <div id="pop-r-avatar" class="chat-avatar">M</div>
+      <div id="pop-r-sender" class="chat-sender">ข้อความ</div>
+      <div class="chat-ticks">✓✓</div>
+    </div>
+    <div id="pop-r-body" class="chat-body"></div>
+  </div>
   <div id="note-card"></div>
-  <div id="sub-box" class="pos-bottom">
+  <div id="sub-box">
     <div id="sub-0" class="sub-line"></div>
     <div id="sub-1" class="sub-line" style="opacity:0.65;display:none;"></div>
     <div id="sub-2" class="sub-line" style="opacity:0.35;display:none;"></div>
@@ -406,8 +500,26 @@ private const val TV_OVERLAY_HTML = """<!DOCTYPE html>
   var sub1 = document.getElementById('sub-1');
   var sub2 = document.getElementById('sub-2');
   var popL = document.getElementById('popup-left');
+  var popLAvatar = document.getElementById('pop-l-avatar');
+  var popLSender = document.getElementById('pop-l-sender');
+  var popLBody = document.getElementById('pop-l-body');
   var popR = document.getElementById('popup-right');
+  var popRAvatar = document.getElementById('pop-r-avatar');
+  var popRSender = document.getElementById('pop-r-sender');
+  var popRBody = document.getElementById('pop-r-body');
   var noteC = document.getElementById('note-card');
+
+  function splitSenderBody(text, defSender) {
+    var idx = text.indexOf(':');
+    if (idx > 0 && idx <= 24) {
+      var pre = text.slice(0, idx).trim();
+      var bod = text.slice(idx + 1).trim();
+      if (pre && bod && pre.split(/\s+/).length <= 3) {
+        return { sender: pre, body: bod };
+      }
+    }
+    return { sender: defSender, body: text };
+  }
 
   function poll() {
     var x = new XMLHttpRequest();
@@ -485,18 +597,27 @@ private const val TV_OVERLAY_HTML = """<!DOCTYPE html>
       }
     }
 
+    var popPx = Math.max(22, Math.round(basePx * 0.68));
     if (s.popupLeft && s.popupLeft.length > 0) {
-      popL.textContent = s.popupLeft;
+      var parsedL = splitSenderBody(s.popupLeft, 'คำแนะนำ');
+      popLAvatar.textContent = (parsedL.sender.charAt(0) || '!').toUpperCase();
+      popLSender.textContent = parsedL.sender;
+      popLSender.style.fontSize = Math.max(21, Math.round(popPx * 0.92)) + 'px';
+      popLBody.textContent = parsedL.body;
+      popLBody.style.fontSize = popPx + 'px';
       popL.style.display = 'block';
-      popL.style.fontSize = Math.max(22, Math.round(basePx * 0.72)) + 'px';
     } else {
       popL.style.display = 'none';
     }
 
     if (s.popupRight && s.popupRight.length > 0) {
-      popR.textContent = s.popupRight;
+      var parsedR = splitSenderBody(s.popupRight, 'ข้อความ');
+      popRAvatar.textContent = (parsedR.sender.charAt(0) || 'M').toUpperCase();
+      popRSender.textContent = parsedR.sender;
+      popRSender.style.fontSize = Math.max(21, Math.round(popPx * 0.92)) + 'px';
+      popRBody.textContent = parsedR.body;
+      popRBody.style.fontSize = popPx + 'px';
       popR.style.display = 'block';
-      popR.style.fontSize = Math.max(22, Math.round(basePx * 0.72)) + 'px';
     } else {
       popR.style.display = 'none';
     }

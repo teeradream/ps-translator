@@ -194,6 +194,10 @@
                 android:textSize="26sp"
                 android:textStyle="bold"
                 android:fontFamily="@font/gta_prompt_semibold"
+                android:shadowColor="#FF000000"
+                android:shadowDx="2"
+                android:shadowDy="2"
+                android:shadowRadius="5"
                 android:gravity="center"
                 android:text=""/>
         </LinearLayout>
@@ -226,6 +230,10 @@
                 android:textSize="22sp"
                 android:textStyle="bold"
                 android:fontFamily="@font/gta_prompt_semibold"
+                android:shadowColor="#FF000000"
+                android:shadowDx="2"
+                android:shadowDy="2"
+                android:shadowRadius="4"
                 android:gravity="center"
                 android:text=""/>
         </LinearLayout>
@@ -258,6 +266,10 @@
                 android:textSize="19sp"
                 android:textStyle="bold"
                 android:fontFamily="@font/gta_prompt_semibold"
+                android:shadowColor="#FF000000"
+                android:shadowDx="2"
+                android:shadowDy="2"
+                android:shadowRadius="4"
                 android:gravity="center"
                 android:text=""/>
         </LinearLayout>

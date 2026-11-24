@@ -378,7 +378,7 @@ private const val TV_OVERLAY_HTML = """<!DOCTYPE html>
     font-family: 'GTAPromptSemiBold', 'GTAPromptLight', 'Noto Sans Thai', 'Leelawadee UI', 'Tahoma', sans-serif;
     font-weight: 700;
     line-height: 1.32;
-    text-shadow: none;
+    text-shadow: 0 3px 8px rgba(0,0,0,0.95), 0 0 4px rgba(0,0,0,0.95);
     word-wrap: break-word;
   }
   .sub-line + .sub-line {

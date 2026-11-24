@@ -273,6 +273,9 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 	private var currentSubPosition = "BOTTOM"
 	private var currentSubVerticalPercent = 15
 	private var currentSubBgOpacity = 80
+	private var isSubtitleBgEnabled = true
+	private var popupLeftVerticalPercent = 8
+	private var popupRightVerticalPercent = 8
 	private var isSyncingFontUI = false
 
 	private val hideMenuButtonRunnable = Runnable {
@@ -384,6 +387,9 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		val defaultVertPct = if (currentSubPosition == "CENTER") 50 else 15
 		currentSubVerticalPercent = cropPrefs.getInt("sub_vertical_percent", defaultVertPct).coerceIn(0, 100)
 		currentSubBgOpacity = cropPrefs.getInt("sub_bg_opacity", 80).coerceIn(0, 100)
+		isSubtitleBgEnabled = cropPrefs.getBoolean("sub_bg_enabled", true)
+		popupLeftVerticalPercent = cropPrefs.getInt("popup_left_vertical_percent", 8).coerceIn(0, 100)
+		popupRightVerticalPercent = cropPrefs.getInt("popup_right_vertical_percent", 8).coerceIn(0, 100)
 		maxHistoryLines = cropPrefs.getInt("sub_history_limit", 3).coerceIn(1, 3)
 
 		setupSubtitleCustomizationUI()
@@ -926,6 +932,18 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		})
 
 		// 4. Background Opacity
+		// 4. Subtitle Background Box On/Off Switch & Opacity
+		binding.switchSubtitleBgEnabled.isChecked = isSubtitleBgEnabled
+		binding.bgOpacityToggleGroup.isEnabled = isSubtitleBgEnabled
+		binding.bgOpacityToggleGroup.alpha = if (isSubtitleBgEnabled) 1.0f else 0.45f
+		binding.switchSubtitleBgEnabled.setOnCheckedChangeListener { _, isChecked ->
+			isSubtitleBgEnabled = isChecked
+			cropPrefs.edit().putBoolean("sub_bg_enabled", isChecked).apply()
+			binding.bgOpacityToggleGroup.isEnabled = isChecked
+			binding.bgOpacityToggleGroup.alpha = if (isChecked) 1.0f else 0.45f
+			applySubtitleStyles()
+		}
+
 		when (currentSubBgOpacity) {
 			0 -> binding.bgOpacityToggleGroup.check(R.id.btnOpacityTransparent)
 			40 -> binding.bgOpacityToggleGroup.check(R.id.btnOpacityGlass)
@@ -1006,17 +1024,18 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 	}
 
 	private fun applySubtitleStyles() {
-		// 1. Background drawable
-		val alphaInt = (currentSubBgOpacity * 255 / 100).coerceIn(0, 255)
+		// 1. Floating borderless translucent background drawable (auto-fits subtitle length, toggleable on/off)
+		val effectiveOpacity = if (isSubtitleBgEnabled) currentSubBgOpacity else 0
+		val alphaInt = (effectiveOpacity * 255 / 100).coerceIn(0, 255)
 		val bgDrawable = GradientDrawable().apply {
 			shape = GradientDrawable.RECTANGLE
-			cornerRadius = dpToPx(18).toFloat()
-			setColor(Color.argb(alphaInt, 12, 18, 32))
-			if (alphaInt > 0) {
-				setStroke(dpToPx(1), Color.argb(85, 255, 255, 255))
-			}
+			cornerRadius = dpToPx(12).toFloat()
+			setColor(if (alphaInt > 0) Color.argb(alphaInt, 16, 18, 26) else Color.TRANSPARENT)
 		}
 		binding.subtitleOverlayContainer.background = bgDrawable
+		val padH = if (alphaInt > 0) dpToPx(16) else dpToPx(6)
+		val padV = if (alphaInt > 0) dpToPx(8) else dpToPx(2)
+		binding.subtitleOverlayContainer.setPadding(padH, padV, padH, padV)
 
 		// 2. Vertical Position (0% = Bottom .. 100% = Top)
 		applySubtitleVerticalPosition()
@@ -1351,11 +1370,14 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 			fontSizeSp = currentSubFontSize,
 			textColorInt = currentSubTextColor,
 			bgOpacityPercent = currentSubBgOpacity,
+			subBgEnabled = isSubtitleBgEnabled,
 			position = currentSubPosition,
 			verticalPercent = currentSubVerticalPercent,
 			isSubtitleEnabled = isSubtitleEnabled,
 			popupLeftText = if (showLeft) lastPopupLeftThai else null,
 			popupRightText = if (showRight) lastPopupRightThai else null,
+			popupLeftVerticalPercent = popupLeftVerticalPercent,
+			popupRightVerticalPercent = popupRightVerticalPercent,
 			noteText = if (showNote) lastNoteThai else null
 		)
 	}
@@ -2397,12 +2419,54 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 			setPopupTtsEnabled(isChecked)
 		}
 
+		// Left & Right Popup Vertical Position Sliders (0% = Top .. 100% = Bottom)
+		binding.popupLeftVerticalSeekBar.progress = popupLeftVerticalPercent
+		binding.tvPopupLeftPosLabel.text = "ตำแหน่งกล่องซ้าย (ขึ้น–ลง): $popupLeftVerticalPercent%"
+		binding.popupLeftVerticalSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+			override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+				if (!fromUser) return
+				popupLeftVerticalPercent = progress.coerceIn(0, 100)
+				binding.tvPopupLeftPosLabel.text = "ตำแหน่งกล่องซ้าย (ขึ้น–ลง): $popupLeftVerticalPercent%"
+				applyPopupVerticalPositions()
+				syncTvOverlayState()
+			}
+			override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+			override fun onStopTrackingTouch(seekBar: SeekBar?) {
+				cropPrefs.edit().putInt("popup_left_vertical_percent", popupLeftVerticalPercent).apply()
+			}
+		})
+
+		binding.popupRightVerticalSeekBar.progress = popupRightVerticalPercent
+		binding.tvPopupRightPosLabel.text = "ตำแหน่งกล่องขวา (ขึ้น–ลง): $popupRightVerticalPercent%"
+		binding.popupRightVerticalSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+			override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+				if (!fromUser) return
+				popupRightVerticalPercent = progress.coerceIn(0, 100)
+				binding.tvPopupRightPosLabel.text = "ตำแหน่งกล่องขวา (ขึ้น–ลง): $popupRightVerticalPercent%"
+				applyPopupVerticalPositions()
+				syncTvOverlayState()
+			}
+			override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+			override fun onStopTrackingTouch(seekBar: SeekBar?) {
+				cropPrefs.edit().putInt("popup_right_vertical_percent", popupRightVerticalPercent).apply()
+			}
+		})
+		applyPopupVerticalPositions()
+
 		// Tap-to-read & Close buttons on both Normal & Pure Black popup cards
 		binding.popupLeftCard.setOnClickListener {
 			if (lastPopupLeftThai.isNotEmpty()) speakPopupNow(PopupSide.LEFT, lastPopupLeftThai)
 		}
+		binding.popupLeftCard.setOnLongClickListener {
+			hidePopupCard(PopupSide.LEFT)
+			true
+		}
 		binding.purePopupLeftCard.setOnClickListener {
 			if (lastPopupLeftThai.isNotEmpty()) speakPopupNow(PopupSide.LEFT, lastPopupLeftThai)
+		}
+		binding.purePopupLeftCard.setOnLongClickListener {
+			hidePopupCard(PopupSide.LEFT)
+			true
 		}
 		binding.popupRightCard.setOnClickListener {
 			if (lastPopupRightThai.isNotEmpty()) speakPopupNow(PopupSide.RIGHT, lastPopupRightThai)
@@ -2411,12 +2475,29 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 			if (lastPopupRightThai.isNotEmpty()) speakPopupNow(PopupSide.RIGHT, lastPopupRightThai)
 		}
 
-		binding.btnClosePopupLeft.setOnClickListener { hidePopupCard(PopupSide.LEFT) }
-		binding.btnClosePurePopupLeft.setOnClickListener { hidePopupCard(PopupSide.LEFT) }
 		binding.btnClosePopupRight.setOnClickListener { hidePopupCard(PopupSide.RIGHT) }
 		binding.btnClosePurePopupRight.setOnClickListener { hidePopupCard(PopupSide.RIGHT) }
 
 		binding.popupZonesConfigContainer.isVisible = isPopupZonesMode
+	}
+
+	private fun applyPopupVerticalPositions() {
+		val screenH = (binding.root.height.takeIf { it > 0 } ?: resources.displayMetrics.heightPixels).toFloat()
+		val leftTopPx = ((0.04f + (popupLeftVerticalPercent / 100f) * 0.72f) * screenH).toInt().coerceAtLeast(dpToPx(8))
+		val rightTopPx = ((0.04f + (popupRightVerticalPercent / 100f) * 0.72f) * screenH).toInt().coerceAtLeast(dpToPx(8))
+
+		fun applyTop(view: View, gravityH: Int, topMarginPx: Int) {
+			val lp = view.layoutParams as? FrameLayout.LayoutParams ?: return
+			lp.gravity = gravityH or Gravity.TOP
+			lp.topMargin = topMarginPx
+			lp.bottomMargin = 0
+			view.layoutParams = lp
+		}
+
+		applyTop(binding.popupLeftCard, Gravity.START, leftTopPx)
+		applyTop(binding.purePopupLeftCard, Gravity.START, leftTopPx)
+		applyTop(binding.popupRightCard, Gravity.END, rightTopPx)
+		applyTop(binding.purePopupRightCard, Gravity.END, rightTopPx)
 	}
 
 	private fun setupPopupAudioControls() {
@@ -2650,10 +2731,11 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		}
 		if (mergedRows.isEmpty()) return ""
 
-		// If first row is a short sender/title header (e.g. "Jason", "Mandy", "Lucia") and followed by message lines, format as "Header: Body"
+		// Only RIGHT chat popups have a sender header (e.g. "Jason", "Mandy"); LEFT tutorial boxes are plain body text
 		val first = mergedRows[0]
 		val firstWords = first.split(" ").filter { it.isNotEmpty() }
-		val isSenderHeader = mergedRows.size >= 2 &&
+		val isSenderHeader = side == PopupSide.RIGHT &&
+			mergedRows.size >= 2 &&
 			firstWords.size in 1..2 &&
 			first.length in 2..20 &&
 			!first.endsWith(".") &&
@@ -2693,9 +2775,29 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		return lastToken.length == 1 && lastToken[0] in 'b'..'z' && lastToken != "i" && lastToken != "a"
 	}
 
+	private fun preparePopupBitmapForOcr(src: Bitmap): Bitmap {
+		// Upscale small HUD/tutorial text by 2x and add dark padding so ML Kit never clips edge words (e.g. "Vehicles in ... be stolen.")
+		val scale = if (src.width < 900) 2 else 1
+		val scaledW = (src.width * scale).coerceAtLeast(1)
+		val scaledH = (src.height * scale).coerceAtLeast(1)
+		val pad = 24
+		val out = Bitmap.createBitmap(scaledW + pad * 2, scaledH + pad * 2, Bitmap.Config.ARGB_8888)
+		val canvas = android.graphics.Canvas(out)
+		canvas.drawColor(Color.rgb(24, 26, 32))
+		val paint = android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG)
+		val dstRect = Rect(pad, pad, pad + scaledW, pad + scaledH)
+		canvas.drawBitmap(src, null, dstRect, paint)
+		return out
+	}
+
 	private fun processPopupZoneBitmap(side: PopupSide, ocrBitmap: Bitmap) {
-		val cropW = ocrBitmap.width
-		val image = InputImage.fromBitmap(ocrBitmap, 0)
+		val enhancedBitmap = try {
+			preparePopupBitmapForOcr(ocrBitmap)
+		} catch (_: Exception) {
+			ocrBitmap
+		}
+		val cropW = enhancedBitmap.width
+		val image = InputImage.fromBitmap(enhancedBitmap, 0)
 		textRecognizer.process(image)
 			.addOnSuccessListener { visionText ->
 				if (!isPopupZonesMode) return@addOnSuccessListener
@@ -2933,14 +3035,8 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 	private fun showPopupCard(side: PopupSide, thaiText: String) {
 		if (side == PopupSide.LEFT) {
 			isPopupLeftVisible = true
-			val (sender, body) = parsePopupSenderAndBody(PopupSide.LEFT, lastPopupLeftEnglish, thaiText)
-			val avatarChar = sender.firstOrNull()?.uppercaseChar()?.toString() ?: "!"
-			binding.tvPopupLeftAvatar.text = avatarChar
-			binding.tvPurePopupLeftAvatar.text = avatarChar
-			binding.tvPopupLeftSender.text = sender
-			binding.tvPurePopupLeftSender.text = sender
-			binding.tvPopupLeftText.text = body
-			binding.tvPurePopupLeftText.text = body
+			binding.tvPopupLeftText.text = thaiText
+			binding.tvPurePopupLeftText.text = thaiText
 			uiVisibilityHandler.removeCallbacks(hidePopupLeftRunnable)
 			uiVisibilityHandler.postDelayed(hidePopupLeftRunnable, popupHoldDurationMs)
 		} else {

@@ -119,11 +119,14 @@ class TvOverlayServer(
 		fontSizeSp: Int,
 		textColorInt: Int,
 		bgOpacityPercent: Int,
+		subBgEnabled: Boolean,
 		position: String,
 		verticalPercent: Int,
 		isSubtitleEnabled: Boolean,
 		popupLeftText: String?,
 		popupRightText: String?,
+		popupLeftVerticalPercent: Int,
+		popupRightVerticalPercent: Int,
 		noteText: String?
 	) {
 		val seq = ++stateSeq
@@ -146,12 +149,15 @@ class TvOverlayServer(
 			put("fontSizeSp", fontSizeSp)
 			put("textColor", colorHex)
 			put("bgOpacity", bgOpacityPercent)
+			put("subBgEnabled", subBgEnabled)
 			put("position", position)
 			put("verticalPercent", verticalPercent.coerceIn(0, 100))
 			put("maxLines", maxHistoryLines)
 			put("subtitles", subsArray)
 			put("popupLeft", popupLeftText ?: "")
 			put("popupRight", popupRightText ?: "")
+			put("popupLeftVerticalPercent", popupLeftVerticalPercent.coerceIn(0, 100))
+			put("popupRightVerticalPercent", popupRightVerticalPercent.coerceIn(0, 100))
 			put("noteText", noteText ?: "")
 		}
 		stateJsonString = obj.toString()
@@ -335,60 +341,71 @@ private const val TV_OVERLAY_HTML = """<!DOCTYPE html>
     height: 100%;
     pointer-events: none;
   }
-  /* Main Subtitle Box */
+  /* Main Subtitle Box — floating borderless, auto-fits subtitle length */
   #sub-box {
     position: absolute;
     left: 50%;
     transform: translateX(-50%);
-    max-width: 82%;
-    min-width: 340px;
-    padding: 18px 34px;
-    border-radius: 24px;
+    width: fit-content;
+    max-width: 88%;
+    min-width: 0;
+    padding: 12px 26px;
+    border-radius: 14px;
+    border: none;
+    box-shadow: none;
     text-align: center;
-    transition: opacity 0.16s ease;
+    transition: opacity 0.14s ease;
     display: none;
   }
   .sub-line {
-    font-weight: 600;
-    line-height: 1.34;
-    text-shadow: 0 3px 8px rgba(0,0,0,0.95), 0 0 4px rgba(0,0,0,0.95);
+    font-weight: 700;
+    line-height: 1.32;
+    /* Crisp GTA 6 style solid black text outline — NO fuzzy drop shadow */
+    -webkit-text-stroke: 3px #000000;
+    paint-order: stroke fill;
+    text-shadow:
+      -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000,
+      0 -2px 0 #000, 0 2px 0 #000, -2px 0 0 #000, 2px 0 0 #000;
     word-wrap: break-word;
   }
   .sub-line + .sub-line {
-    margin-top: 8px;
+    margin-top: 6px;
   }
-  /* Left & Right Auto Popup Cards — GTA 6 Chat Bubble Style */
-  .popup-card {
+  /* Left Auto Popup Card — Authentic GTA 6 Dark Charcoal Tutorial Box (No Header / No Ticks) */
+  #popup-left {
     position: absolute;
     top: 64px;
+    left: 44px;
+    width: fit-content;
+    max-width: 36%;
+    min-width: 240px;
+    padding: 16px 24px;
+    border-radius: 6px;
+    background: rgba(30, 32, 40, 0.90);
+    border: none;
+    box-shadow: none;
+    color: #FFFFFF;
+    font-size: 27px;
+    font-weight: 600;
+    line-height: 1.34;
+    word-wrap: break-word;
+    display: none;
+  }
+  /* Right Auto Popup Card — GTA 6 Chat Bubble Style */
+  #popup-right {
+    position: absolute;
+    top: 64px;
+    right: 44px;
     max-width: 34%;
     min-width: 310px;
     padding: 16px 22px 18px;
     border-radius: 18px;
+    border-bottom-right-radius: 4px;
     background: linear-gradient(180deg, rgba(242, 248, 253, 0.96) 0%, rgba(221, 235, 248, 0.95) 100%);
     border: 1.5px solid rgba(186, 208, 230, 0.90);
-    box-shadow: 0 14px 36px rgba(0, 0, 0, 0.55);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.48);
     color: #243546;
     display: none;
-  }
-  #popup-left {
-    left: 44px;
-    border-bottom-left-radius: 4px;
-  }
-  #popup-left::after {
-    content: '';
-    position: absolute;
-    bottom: -1px;
-    left: -10px;
-    width: 0;
-    height: 0;
-    border-style: solid;
-    border-width: 0 0 14px 12px;
-    border-color: transparent transparent rgba(221, 235, 248, 0.95) transparent;
-  }
-  #popup-right {
-    right: 44px;
-    border-bottom-right-radius: 4px;
   }
   #popup-right::after {
     content: '';
@@ -469,15 +486,8 @@ private const val TV_OVERLAY_HTML = """<!DOCTYPE html>
 </head>
 <body>
 <div id="stage">
-  <div id="popup-left" class="popup-card">
-    <div class="chat-header">
-      <div id="pop-l-avatar" class="chat-avatar">!</div>
-      <div id="pop-l-sender" class="chat-sender">คำแนะนำ</div>
-      <div class="chat-ticks">✓✓</div>
-    </div>
-    <div id="pop-l-body" class="chat-body"></div>
-  </div>
-  <div id="popup-right" class="popup-card">
+  <div id="popup-left"></div>
+  <div id="popup-right">
     <div class="chat-header">
       <div id="pop-r-avatar" class="chat-avatar">M</div>
       <div id="pop-r-sender" class="chat-sender">ข้อความ</div>
@@ -500,9 +510,6 @@ private const val TV_OVERLAY_HTML = """<!DOCTYPE html>
   var sub1 = document.getElementById('sub-1');
   var sub2 = document.getElementById('sub-2');
   var popL = document.getElementById('popup-left');
-  var popLAvatar = document.getElementById('pop-l-avatar');
-  var popLSender = document.getElementById('pop-l-sender');
-  var popLBody = document.getElementById('pop-l-body');
   var popR = document.getElementById('popup-right');
   var popRAvatar = document.getElementById('pop-r-avatar');
   var popRSender = document.getElementById('pop-r-sender');
@@ -555,7 +562,8 @@ private const val TV_OVERLAY_HTML = """<!DOCTYPE html>
     // Scale mobile sp to 1080p TV px nicely (e.g. 26sp -> ~40px on TV)
     var basePx = Math.round((s.fontSizeSp || 26) * 1.55);
     var color = s.textColor || '#00FF88';
-    var alpha = Math.max(0, Math.min(100, s.bgOpacity !== undefined ? s.bgOpacity : 80)) / 100.0;
+    var bgEnabled = (s.subBgEnabled !== undefined) ? !!s.subBgEnabled : true;
+    var alpha = bgEnabled ? (Math.max(0, Math.min(100, s.bgOpacity !== undefined ? s.bgOpacity : 80)) / 100.0) : 0;
 
     var vPct = (s.verticalPercent !== undefined) ? Math.max(0, Math.min(100, s.verticalPercent)) : ((s.position === 'CENTER') ? 50 : 15);
     var bottomPct = 3.5 + (vPct * 0.80);
@@ -563,17 +571,16 @@ private const val TV_OVERLAY_HTML = """<!DOCTYPE html>
     subBox.style.top = 'auto';
     subBox.style.bottom = bottomPct.toFixed(1) + '%';
     subBox.style.transform = 'translateX(-50%)';
-    subBox.style.background = alpha > 0
-      ? ('linear-gradient(180deg, rgba(26, 36, 56, ' + alpha.toFixed(2) + ') 0%, rgba(16, 24, 40, ' + alpha.toFixed(2) + ') 55%, rgba(10, 16, 27, ' + Math.min(1, alpha + 0.05).toFixed(2) + ') 100%)')
-      : 'transparent';
-    subBox.style.border = alpha > 0 ? '1.5px solid rgba(255, 255, 255, 0.33)' : 'none';
-    subBox.style.boxShadow = alpha > 0 ? '0 14px 36px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.24)' : 'none';
+    subBox.style.background = alpha > 0 ? ('rgba(16, 18, 26, ' + alpha.toFixed(2) + ')') : 'transparent';
+    subBox.style.border = 'none';
+    subBox.style.boxShadow = 'none';
+    subBox.style.padding = alpha > 0 ? '12px 26px' : '4px 10px';
 
     var subs = s.subtitles || [];
     if (subs.length === 0) {
       subBox.style.display = 'none';
     } else {
-      subBox.style.display = 'block';
+      subBox.style.display = 'inline-block';
       sub0.textContent = subs[0].th || '';
       sub0.style.color = color;
       sub0.style.fontSize = basePx + 'px';
@@ -598,13 +605,13 @@ private const val TV_OVERLAY_HTML = """<!DOCTYPE html>
     }
 
     var popPx = Math.max(22, Math.round(basePx * 0.68));
+    var popLeftPct = (s.popupLeftVerticalPercent !== undefined) ? Math.max(0, Math.min(100, s.popupLeftVerticalPercent)) : 8;
+    var popRightPct = (s.popupRightVerticalPercent !== undefined) ? Math.max(0, Math.min(100, s.popupRightVerticalPercent)) : 8;
+
     if (s.popupLeft && s.popupLeft.length > 0) {
-      var parsedL = splitSenderBody(s.popupLeft, 'คำแนะนำ');
-      popLAvatar.textContent = (parsedL.sender.charAt(0) || '!').toUpperCase();
-      popLSender.textContent = parsedL.sender;
-      popLSender.style.fontSize = Math.max(21, Math.round(popPx * 0.92)) + 'px';
-      popLBody.textContent = parsedL.body;
-      popLBody.style.fontSize = popPx + 'px';
+      popL.textContent = s.popupLeft;
+      popL.style.fontSize = popPx + 'px';
+      popL.style.top = (4 + popLeftPct * 0.76).toFixed(1) + '%';
       popL.style.display = 'block';
     } else {
       popL.style.display = 'none';
@@ -617,6 +624,7 @@ private const val TV_OVERLAY_HTML = """<!DOCTYPE html>
       popRSender.style.fontSize = Math.max(21, Math.round(popPx * 0.92)) + 'px';
       popRBody.textContent = parsedR.body;
       popRBody.style.fontSize = popPx + 'px';
+      popR.style.top = (4 + popRightPct * 0.76).toFixed(1) + '%';
       popR.style.display = 'block';
     } else {
       popR.style.display = 'none';

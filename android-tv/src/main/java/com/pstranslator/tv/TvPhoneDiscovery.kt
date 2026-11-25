@@ -86,20 +86,20 @@ object TvPhoneDiscovery {
         val myLastOctet = myIp.substringAfterLast('.').toIntOrNull() ?: -1
 
         val sem = Semaphore(48)
-        @Volatile var found: PhoneServerInfo? = null
+        val found = java.util.concurrent.atomic.AtomicReference<PhoneServerInfo?>(null)
         val jobs = (1..254).filter { it != myLastOctet }.map { last ->
             async(Dispatchers.IO) {
-                if (found != null) return@async null
+                if (found.get() != null) return@async null
                 sem.withPermit {
-                    if (found != null) return@withPermit null
+                    if (found.get() != null) return@withPermit null
                     val res = tryOfferHost("$prefix.$last", timeoutMs = 600)
-                    if (res != null) found = res
+                    if (res != null) found.compareAndSet(null, res)
                     res
                 }
             }
         }
         jobs.awaitAll()
-        found
+        found.get()
     }
 
     suspend fun sendForget(ip: String) = withContext(Dispatchers.IO) {

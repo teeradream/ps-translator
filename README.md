@@ -35,16 +35,18 @@
 
 **PS Translator** ได้รับการพัฒนาขึ้นโดยดัดแปลงจากแกนหลักของ Chiaki สตรีมมิ่งไคลเอนต์โอเพนซอร์สยอดนิยม โดยฝังระบบประมวลผลภาพ **OCR (Optical Character Recognition)**, **ระบบแปลภาษาไทย**, **ระบบส่งซับลอยขึ้นทีวี Samsung (`.wgt`)** และ **ระบบพากย์เสียงไทยอัตโนมัติ** เข้าไปในตัวแอปพลิเคชัน ทำให้เกมเมอร์ชาวไทยสามารถเล่นเกมภาษาอังกฤษบนเครื่อง PS5 / PS4 ได้อย่างเพลิดเพลิน เข้าใจบทสนทนาและเนื้อเรื่องของเกมได้ 100% โดยไม่ต้องพึ่งพาโปรแกรมเสริมภายนอก
 
-### 🖼️ คู่มือแบบมีรูปทีละขั้น (แยกฝั่งทีวี Samsung vs ฝั่งแอปมือถือ APK)
+### 🖼️ คู่มือแบบมีรูปทีละขั้น (แยกฝั่งทีวี Samsung · Android TV · แอปมือถือ APK)
 
 | คู่มือแยกตามอุปกรณ์ | รายละเอียด |
 |---|---|
 | 📺 **[คู่มือติดตั้งและใช้งานบนทีวี Samsung (7 ภาพทีละขั้นตอน)](docs/tv/samsung.md)** | วิธีโหลดไฟล์ `.wgt`, ดูเลข IP มือถือ, เปิดโหมดนักพัฒนาบนทีวี `1 2 3 4 5`, ลงแอปผ่าน `Apps2Samsung` และเชื่อมต่ออัตโนมัติ |
+| 📺 **[คู่มือติดตั้งและใช้งานบนทีวี Android TV / Google TV (7 ภาพทีละขั้นตอน)](docs/tv/android-tv.md)** | วิธีส่งไฟล์ `PS-Translator-Android-TV.apk` เข้าทีวี Sony/TCL/Hisense/Xiaomi/Box, เชื่อมต่ออัตโนมัติใน 2 วิ, เปิดโหมด **✨ ลอยทับ HDMI 4K 120Hz** และ **📺 เปิดช่อง HDMI ในแอป** |
 | 📱 **[คู่มือวิธีใช้แอป PS Translator บนมือถือ APK (8 ภาพครบทุกส่วน)](docs/phone/how-to-use.md)** | รู้จักปุ่มบนหน้าจอหลัก, ปุ่ม `📺 โหมดทีวี` (ปิดจอดำสนิท 100%), แถบสไลด์เลื่อนตำแหน่งซับขึ้น-ลง, ลากกรอบอ่านซับ, เสียงพากย์ไทย & คลังซับ `0ms` |
 
 <p align="center">
-  <a href="docs/tv/samsung.md"><img src="docs/tv/img/s1.jpg" width="48%" alt="คู่มือติดตั้งทีวี Samsung" /></a>
-  <a href="docs/phone/how-to-use.md"><img src="docs/phone/img/u1.jpg" width="48%" alt="คู่มือวิธีใช้แอปมือถือ APK" /></a>
+  <a href="docs/tv/samsung.md"><img src="docs/tv/img/s1.jpg" width="32%" alt="คู่มือติดตั้งทีวี Samsung" /></a>
+  <a href="docs/tv/android-tv.md"><img src="docs/tv/img/a1.jpg" width="32%" alt="คู่มือติดตั้งทีวี Android TV" /></a>
+  <a href="docs/phone/how-to-use.md"><img src="docs/phone/img/u1.jpg" width="32%" alt="คู่มือวิธีใช้แอปมือถือ APK" /></a>
 </p>
 
 ---

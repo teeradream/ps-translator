@@ -2686,16 +2686,19 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		data class OcrLineItem(val text: String, val top: Int, val left: Int, val right: Int)
 
 		val rawLines = mutableListOf<OcrLineItem>()
+		val psButtonTokenRegex = Regex("^(?:[LR][123IilSZ]|[XO]|OPTION[S]?|TOUCH\\s*PAD|[→←↑↓△□○✕])$", RegexOption.IGNORE_CASE)
 		for (block in visionText.textBlocks) {
 			for (line in block.lines) {
 				val box = line.boundingBox ?: block.boundingBox
 				val cleaned = fixOcrText(line.text.trim())
-					.replace(Regex("^(?:->|→|»|//|vv|✓+)\\s*", RegexOption.IGNORE_CASE), "")
+					.replace(Regex("[©®™•■◆★☆§¶¢£¥€¦¬]"), " ")
+					.replace(Regex("^(?:->|»|//|vv|✓+)\\s*", RegexOption.IGNORE_CASE), "")
 					.replace(Regex("\\s+(?://|vv|✓+)$", RegexOption.IGNORE_CASE), "")
 					.replace(Regex("\\s+"), " ")
 					.trim()
 				val letters = cleaned.count { it.isLetter() }
-				if (letters < 2) continue
+				val isPsBtn = psButtonTokenRegex.matches(cleaned)
+				if (letters < 2 && !isPsBtn) continue
 				rawLines.add(
 					OcrLineItem(
 						text = cleaned,
@@ -2708,9 +2711,10 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		}
 		if (rawLines.isEmpty()) return ""
 
-		// Sort top-to-bottom (group lines on the same visual row within 14px, then left-to-right)
+		// Scale horizontal row tolerance for 2x-upscaled popup bitmaps so inline button icons stay on the same row
+		val rowTol = (cropW / 40).coerceIn(18, 38)
 		val sorted = rawLines.sortedWith { a, b ->
-			if (kotlin.math.abs(a.top - b.top) <= 14) {
+			if (kotlin.math.abs(a.top - b.top) <= rowTol) {
 				a.left.compareTo(b.left)
 			} else {
 				a.top.compareTo(b.top)
@@ -2730,10 +2734,10 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		val mergedRows = mutableListOf<String>()
 		var prevTop = -9999
 		for (item in sorted) {
-			if (mergedRows.isNotEmpty() && kotlin.math.abs(item.top - prevTop) <= 14) {
+			if (mergedRows.isNotEmpty() && kotlin.math.abs(item.top - prevTop) <= rowTol) {
 				val prev = mergedRows.removeAt(mergedRows.size - 1)
-				// Ignore trailing 2-char read-receipt artifact on the same row as sender name
-				if (item.text.length <= 2 && !item.text.any { it.isDigit() }) {
+				// Ignore trailing 2-char read-receipt artifact on the same row as sender name (RIGHT chat only)
+				if (side == PopupSide.RIGHT && item.text.length <= 2 && !item.text.any { it.isDigit() }) {
 					mergedRows.add(prev)
 				} else {
 					mergedRows.add("$prev ${item.text}")
@@ -2966,6 +2970,57 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		return true
 	}
 
+	private fun normalizeLeftPopupButtons(raw: String): String {
+		var s = raw
+		// Strip emoji / pictograph / stray icon OCR noise so translator never turns icons into weird Thai words
+		s = s.replace(Regex("[\\u2600-\\u27BF&&[^→←↑↓△□○✕]]"), " ")
+		s = s.replace(Regex("[©®™•■◆★☆§¶¢£¥€¦¬|~^`_]"), " ")
+
+		// Normalize D-Pad / directional arrow prompts to crisp arrows (→ ← ↑ ↓)
+		s = s.replace(Regex("\\b(?:d-?pad\\s+right|right\\s+on\\s+(?:the\\s+)?d-?pad)\\b", RegexOption.IGNORE_CASE), "→")
+		s = s.replace(Regex("\\b(?:d-?pad\\s+left|left\\s+on\\s+(?:the\\s+)?d-?pad)\\b", RegexOption.IGNORE_CASE), "←")
+		s = s.replace(Regex("\\b(?:d-?pad\\s+up|up\\s+on\\s+(?:the\\s+)?d-?pad)\\b", RegexOption.IGNORE_CASE), "↑")
+		s = s.replace(Regex("\\b(?:d-?pad\\s+down|down\\s+on\\s+(?:the\\s+)?d-?pad)\\b", RegexOption.IGNORE_CASE), "↓")
+		s = s.replace(Regex("\\b(Press|Hold|Tap|Use)\\s+(?:>|->|»)\\s+", RegexOption.IGNORE_CASE), "$1 → ")
+		s = s.replace(Regex("\\b(Press|Hold|Tap|Use)\\s+(?:<|<-|«)\\s+", RegexOption.IGNORE_CASE), "$1 ← ")
+		s = s.replace(Regex("\\b(Press|Hold|Tap|Use)\\s+\\^\\s+", RegexOption.IGNORE_CASE), "$1 ↑ ")
+
+		// Normalize PS5 DualSense button OCR misreads (LI->L1, LS->L3, RI->R1, RS->R3, OPTIONS/≡->OPTION)
+		s = s.replace(Regex("\\b(Press|Hold|Tap|Use|Release|Click)\\s+(?:LI|Ll|l1|L1)\\b", RegexOption.IGNORE_CASE), "$1 L1")
+		s = s.replace(Regex("\\b(Press|Hold|Tap|Use|Release|Click)\\s+(?:L2|12|LZ)\\b", RegexOption.IGNORE_CASE), "$1 L2")
+		s = s.replace(Regex("\\b(Press|Hold|Tap|Use|Release|Click)\\s+(?:L3|LS|L\\s*3)\\b", RegexOption.IGNORE_CASE), "$1 L3")
+		s = s.replace(Regex("\\b(Press|Hold|Tap|Use|Release|Click)\\s+(?:RI|Rl|r1|R1)\\b", RegexOption.IGNORE_CASE), "$1 R1")
+		s = s.replace(Regex("\\b(Press|Hold|Tap|Use|Release|Click)\\s+(?:R2|RZ)\\b", RegexOption.IGNORE_CASE), "$1 R2")
+		s = s.replace(Regex("\\b(Press|Hold|Tap|Use|Release|Click)\\s+(?:R3|RS|R\\s*3)\\b", RegexOption.IGNORE_CASE), "$1 R3")
+		s = s.replace(Regex("\\b(Press|Hold|Tap|Use)\\s+(?:OPTIONS?|OPT|≡|===|==)\\b", RegexOption.IGNORE_CASE), "$1 OPTION")
+		s = s.replace(Regex("\\b(?:OPTIONS\\s+button|OPTION\\s+button)\\b", RegexOption.IGNORE_CASE), "OPTION")
+		s = s.replace(Regex("\\bTOUCH\\s*PAD\\b", RegexOption.IGNORE_CASE), "TOUCHPAD")
+		s = s.replace(Regex("\\b(?:L1|L2|L3|R1|R2|R3)\\b", RegexOption.IGNORE_CASE)) { it.value.uppercase() }
+
+		// Remove stray garbage 1-2 char OCR artifacts from unrecognized icons right after Press/Hold/Tap (e.g. "Press @ to" -> "Press to")
+		s = s.replace(Regex("\\b(Press|Hold|Tap|Use)\\s+[^A-Za-z0-9→←↑↓△□○✕\\s]{1,3}\\s+(to|for|while|and|or|the|your|in|on|at)\\b", RegexOption.IGNORE_CASE), "$1 $2")
+		return s.replace(Regex("\\s+"), " ").trim()
+	}
+
+	private fun protectPsButtonsForTranslation(text: String): Pair<String, List<String>> {
+		val tokens = mutableListOf<String>()
+		val btnPattern = Regex("(?:\\b(?:L1|L2|L3|R1|R2|R3|OPTION|TOUCHPAD)\\b|[→←↑↓△□○✕])")
+		val protected = btnPattern.replace(text) { m ->
+			val idx = tokens.size
+			tokens.add(m.value)
+			"PSBTN${idx}X"
+		}
+		return protected to tokens
+	}
+
+	private fun restorePsButtonsAfterTranslation(thai: String, tokens: List<String>): String {
+		var out = thai
+		for ((idx, tok) in tokens.withIndex()) {
+			out = out.replace(Regex("PSBTN${idx}X", RegexOption.IGNORE_CASE), " $tok ")
+		}
+		return out.replace(Regex("\\s+"), " ").trim()
+	}
+
 	private fun translateAndShowPopup(side: PopupSide, englishText: String) {
 		if (side == PopupSide.LEFT) {
 			isTranslatingPopupLeft = true
@@ -2975,7 +3030,14 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 
 		ocrScope.launch {
 			try {
-				val thai = translateToThai(englishText, isPopup = true).trim()
+				val thai = if (side == PopupSide.LEFT) {
+					val normalized = normalizeLeftPopupButtons(englishText)
+					val (protectedEn, btnTokens) = protectPsButtonsForTranslation(normalized)
+					val rawThai = translateToThai(protectedEn, isPopup = true).trim()
+					restorePsButtonsAfterTranslation(rawThai, btnTokens)
+				} else {
+					translateToThai(englishText, isPopup = true).trim()
+				}
 				if (thai.isEmpty() || !isPopupZonesMode) return@launch
 
 				if (side == PopupSide.LEFT) {
@@ -3638,7 +3700,7 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 
 	private fun buildTranslationPrompt(englishText: String, isPopup: Boolean): String {
 		return if (isPopup) {
-			"Translate this in-game tutorial box or phone text message from English into complete, accurate, natural modern Thai (casual American texting/slang tone when it's a chat message). Do NOT summarize, shorten, or omit any words or sentences. If it begins with 'Name: message', keep the format 'ชื่อ: ข้อความ'. Return ONLY the Thai translation:\n$englishText"
+			"Translate this in-game tutorial box or phone text message from English into complete, accurate, natural modern Thai (casual American texting/slang tone when it's a chat message). Do NOT summarize, shorten, or omit any words or sentences. Keep PlayStation button labels exactly as L1, L2, L3, R1, R2, R3, OPTION, TOUCHPAD, or arrows → ← ↑ ↓ (and keep any PSBTN0X placeholders untouched). Ignore stray garbled icon/emoji artifacts. If it begins with 'Name: message', keep the format 'ชื่อ: ข้อความ'. Return ONLY the Thai translation:\n$englishText"
 		} else {
 			"Translate this American video game subtitle (GTA style) from English into raw, realistic, modern spoken Thai. Use authentic modern Thai slang, street pronouns (กู/มึง/แก/เพื่อน/พวก), uncensored profanity (แม่ง/เชี่ย/เหี้ย/ฉิบหาย/โคตร), and natural exclamations (เฮ้ย/โห/จริงดิ/เก็ตป่ะ/ว่ะ) matching the speaker's American attitude—never stiff textbook Thai or polite ครับ/ค่ะ unless explicitly formal. Return ONLY the Thai translation:\n$englishText"
 		}

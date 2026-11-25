@@ -66,7 +66,7 @@ jobs:
           cp "$APK_FILE" dist/PS-Translator.apk
           TV_APK_FILE=$(find android-tv/build/outputs/apk/ -name "*.apk" | head -n 1)
           echo "Found Android TV APK at: $TV_APK_FILE"
-          cp "$TV_APK_FILE" dist/PS-Translator-Android-TV.apk
+          cp "$TV_APK_FILE" dist/TV-PS-Translator-Android.apk
           cp tizen-tv/PS-Translator-Samsung-TV.wgt dist/PS-Translator-Samsung-TV.wgt
           ls -la dist/
 
@@ -100,7 +100,7 @@ jobs:
             ---
 
             #### 🌟 ไฮไลต์ฟีเจอร์ล่าสุดในเวอร์ชัน ${{ steps.ver.outputs.version }}:
-            - **ใหม่! แอปเสริมสำหรับ Android TV / Google TV (`PS-Translator-Android-TV.apk`):**
+            - **ใหม่! แอปเสริมสำหรับ Android TV / Google TV (`TV-PS-Translator-Android.apk`):**
               - แอปแยกอิสระสำหรับทีวี Android TV / Google TV (Sony Bravia, TCL, Hisense, Xiaomi TV, Nvidia Shield, Android TV Box) โดยไม่กระทบฟังก์ชันอื่น
               - รองรับทั้ง **โหมดลอยทับ HDMI / ทุกแอป (`✨ ลอยทับ HDMI`)** ให้สลับรีโมตไปช่อง PS5 ภาพ 4K 120Hz Game Mode ได้เต็มที่ และ **โหมดเปิดช่อง HDMI ในแอป (`📺 เลือกช่อง HDMI`)**
               - ค้นหามือถือในวง Wi-Fi / LAN อัตโนมัติ พร้อมปุ่มใส่ IP เอง และควบคุมด้วยรีโมตทีวี (D-Pad) ธีม Vice City
@@ -120,7 +120,7 @@ jobs:
 
             ### 📦 ไฟล์ติดตั้งในรีลีสนี้
             - สำหรับมือถือ/แท็บเล็ต Android: **`PS-Translator.apk`**
-            - สำหรับทีวี Android TV / Google TV (Sony, TCL, Hisense, Xiaomi, Box): **`PS-Translator-Android-TV.apk`**
+            - สำหรับทีวี Android TV / Google TV (Sony, TCL, Hisense, Xiaomi, Box): **`TV-PS-Translator-Android.apk`**
             - สำหรับทีวี Samsung (Tizen 2018+ ลงผ่านแอป Apps2Samsung): **`PS-Translator-Samsung-TV.wgt`**
           files: |
             dist/*.apk

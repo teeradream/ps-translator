@@ -56,14 +56,22 @@ object AppUpdater {
 			var apkUrl = DIRECT_APK_DOWNLOAD_URL
 			val assets = json.optJSONArray("assets")
 			if (assets != null) {
+				var fallbackPhoneApk: String? = null
 				for (i in 0 until assets.length()) {
 					val a = assets.getJSONObject(i)
 					val aName = a.optString("name", "")
 					val url = a.optString("browser_download_url", "")
-					if (aName.endsWith(".apk", ignoreCase = true) && url.isNotEmpty()) {
+					if (url.isEmpty() || !aName.endsWith(".apk", ignoreCase = true)) continue
+					if (aName.equals("PS-Translator.apk", ignoreCase = true)) {
 						apkUrl = url
 						break
 					}
+					if (!aName.contains("tv", ignoreCase = true) && fallbackPhoneApk == null) {
+						fallbackPhoneApk = url
+					}
+				}
+				if (apkUrl == DIRECT_APK_DOWNLOAD_URL && fallbackPhoneApk != null) {
+					apkUrl = fallbackPhoneApk
 				}
 			}
 			if (tag.isEmpty()) null else ReleaseInfo(tag, name, apkUrl, published)

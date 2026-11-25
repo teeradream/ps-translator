@@ -10,22 +10,22 @@
 
 **ไฟล์ที่ต้องโหลด**
 1. แอปมือถือ **PS Translator**: [หน้าดาวน์โหลด](https://github.com/teeradream/ps-translator/releases/latest) เลือกไฟล์ **`PS-Translator.apk`**
-2. แอปทีวี **PS Translator สำหรับ Android TV**: [หน้าดาวน์โหลด](https://github.com/teeradream/ps-translator/releases/latest) เลือกไฟล์ **`PS-Translator-Android-TV.apk`** *(ขนาด ~2.9 MB)*
+2. แอปทีวี **PS Translator สำหรับ Android TV**: [หน้าดาวน์โหลด](https://github.com/teeradream/ps-translator/releases/latest) เลือกไฟล์ **`TV-PS-Translator-Android.apk`** *(ขนาด ~2.9 MB)*
 
 ---
 
 ![หน้าปก Android TV](img/a1.jpg)
 
-## ขั้นที่ 1: โหลดไฟล์ `PS-Translator-Android-TV.apk` ส่งเข้าทีวี
+## ขั้นที่ 1: โหลดไฟล์ `TV-PS-Translator-Android.apk` ส่งเข้าทีวี
 เลือกวิธีส่งไฟล์เข้าทีวีที่สะดวกที่สุด:
-- **วิธี A — แอป `Send Files to TV` (แนะนำ):** โหลดแอปฟรีจาก Play Store ทั้งบนมือถือและทีวี แล้วกด **Send** ส่งไฟล์ `PS-Translator-Android-TV.apk` จากมือถือเข้าทีวีทันที
+- **วิธี A — แอป `Send Files to TV` (แนะนำ):** โหลดแอปฟรีจาก Play Store ทั้งบนมือถือและทีวี แล้วกด **Send** ส่งไฟล์ `TV-PS-Translator-Android.apk` จากมือถือเข้าทีวีทันที
 - **วิธี B — แอป `Downloader` บนทีวี:** เปิดแอป Downloader บนทีวีแล้วโหลดจากหน้า [GitHub Releases](https://github.com/teeradream/ps-translator/releases/latest) โดยตรง
 - **วิธี C — แฟลชไดรฟ์ USB:** ก๊อปไฟล์ใส่ USB เสียบหลังทีวีแล้วเปิดผ่าน File Manager
 
 ![ขั้นที่ 1](img/a2.jpg)
 
 ## ขั้นที่ 2: อนุญาตติดตั้ง APK และติดตั้งลงทีวี
-1. บนทีวี: เปิดไฟล์ **`PS-Translator-Android-TV.apk`** ที่ส่งเข้ามา
+1. บนทีวี: เปิดไฟล์ **`TV-PS-Translator-Android.apk`** ที่ส่งเข้ามา
 2. หากทีวีถามสิทธิ์ติดตั้งแอปที่ไม่รู้จัก ให้กด **ตั้งค่า → เปิดอนุญาต** ให้แอปจัดการไฟล์ / `Send Files to TV` แล้วกดย้อนกลับ
 3. กด **ติดตั้ง (Install)** เมื่อเสร็จจะเห็นแบนเนอร์ **`PS TRANSLATOR ANDROID TV`** บนหน้า Home ของทีวี
 

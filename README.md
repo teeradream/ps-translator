@@ -40,7 +40,7 @@
 | คู่มือแยกตามอุปกรณ์ | รายละเอียด |
 |---|---|
 | 📺 **[คู่มือติดตั้งและใช้งานบนทีวี Samsung (7 ภาพทีละขั้นตอน)](docs/tv/samsung.md)** | วิธีโหลดไฟล์ `.wgt`, ดูเลข IP มือถือ, เปิดโหมดนักพัฒนาบนทีวี `1 2 3 4 5`, ลงแอปผ่าน `Apps2Samsung` และเชื่อมต่ออัตโนมัติ |
-| 📺 **[คู่มือติดตั้งและใช้งานบนทีวี Android TV / Google TV (7 ภาพทีละขั้นตอน)](docs/tv/android-tv.md)** | วิธีส่งไฟล์ `PS-Translator-Android-TV.apk` เข้าทีวี Sony/TCL/Hisense/Xiaomi/Box, เชื่อมต่ออัตโนมัติใน 2 วิ, เปิดโหมด **✨ ลอยทับ HDMI 4K 120Hz** และ **📺 เปิดช่อง HDMI ในแอป** |
+| 📺 **[คู่มือติดตั้งและใช้งานบนทีวี Android TV / Google TV (7 ภาพทีละขั้นตอน)](docs/tv/android-tv.md)** | วิธีส่งไฟล์ `TV-PS-Translator-Android.apk` เข้าทีวี Sony/TCL/Hisense/Xiaomi/Box, เชื่อมต่ออัตโนมัติใน 2 วิ, เปิดโหมด **✨ ลอยทับ HDMI 4K 120Hz** และ **📺 เปิดช่อง HDMI ในแอป** |
 | 📱 **[คู่มือวิธีใช้แอป PS Translator บนมือถือ APK (8 ภาพครบทุกส่วน)](docs/phone/how-to-use.md)** | รู้จักปุ่มบนหน้าจอหลัก, ปุ่ม `📺 โหมดทีวี` (ปิดจอดำสนิท 100%), แถบสไลด์เลื่อนตำแหน่งซับขึ้น-ลง, ลากกรอบอ่านซับ, เสียงพากย์ไทย & คลังซับ `0ms` |
 
 <p align="center">
@@ -115,7 +115,7 @@
 
 ### 12. ส่งซับลอยขึ้นทีวี Samsung (`.wgt`) & Android TV / Google TV (`.apk`) + อัปเดตแอปในตัว
 - **ส่งซับขึ้นทีวี Samsung (Tizen 2018+) (`PS-Translator-Samsung-TV.wgt`):** ติดตั้งผ่าน `Apps2Samsung` เพื่อเปิดภาพ HDMI ของ PS5 เป็นพื้นหลังและวางซับไทย + ป๊อปอัพซ้าย/ขวา + โน้ตแปลเฉพาะจุดลอยทับบนจอทีวีอัตโนมัติในวง Wi-Fi บ้าน (จับคู่อัตโนมัติใน 2 วินาที)
-- **ส่งซับขึ้นทีวี Android TV / Google TV (`PS-Translator-Android-TV.apk`) — ใหม่ใน `v2.3.0`:** แอปเสริมสำหรับทีวี Sony Bravia, TCL, Hisense, Xiaomi TV, Nvidia Shield และ Android TV Box รองรับทั้ง **โหมดลอยทับ HDMI / ทุกแอป (`SYSTEM_ALERT_WINDOW`)** เพื่อเล่น PS5 ภาพ 4K 120Hz Game Mode เต็มประสิทธิภาพ และ **โหมดเปิดช่อง HDMI ในแอป (`TvView`)** พร้อมค้นหามือถืออัตโนมัติในวง LAN และควบคุมด้วยรีโมตทีวี (D-Pad) ธีม Vice City
+- **ส่งซับขึ้นทีวี Android TV / Google TV (`TV-PS-Translator-Android.apk`) — ใหม่ใน `v2.3.0`:** แอปเสริมสำหรับทีวี Sony Bravia, TCL, Hisense, Xiaomi TV, Nvidia Shield และ Android TV Box รองรับทั้ง **โหมดลอยทับ HDMI / ทุกแอป (`SYSTEM_ALERT_WINDOW`)** เพื่อเล่น PS5 ภาพ 4K 120Hz Game Mode เต็มประสิทธิภาพ และ **โหมดเปิดช่อง HDMI ในแอป (`TvView`)** พร้อมค้นหามือถืออัตโนมัติในวง LAN และควบคุมด้วยรีโมตทีวี (D-Pad) ธีม Vice City
 - **ระบบอัปเดตแอปในตัว (`อัปเดตแอปในตัว`) & ซิงค์ซับจากคลาวด์ (`ซิงค์ซับล่าสุด`):** กดซิงค์คลังซับพาร์ทใหม่จากคลาวด์หรือกดอัปเดตตัวแอปเป็นเวอร์ชันล่าสุดได้จากในแอปโดยตรง ไม่ต้องเปิดเว็บไปโหลดไฟล์ใหม่เอง
 
 ### 13. รองรับ Samsung DeX & Multi-Window เต็มรูปแบบ
@@ -127,7 +127,7 @@
 ## 📲 ดาวน์โหลดและติดตั้ง (Download & Installation)
 
 1. เข้าไปที่หน้าดาวน์โหลดเวอร์ชันล่าสุดบน GitHub:  
-   👉 **[ดาวน์โหลด PS-Translator.apk, PS-Translator-Android-TV.apk & PS-Translator-Samsung-TV.wgt (v2.3.1)](https://github.com/teeradream/ps-translator/releases/latest)**
+   👉 **[ดาวน์โหลด PS-Translator.apk, TV-PS-Translator-Android.apk & PS-Translator-Samsung-TV.wgt (v2.3.2)](https://github.com/teeradream/ps-translator/releases/latest)**
 2. แตะดาวน์โหลดไฟล์ **`PS-Translator.apk`**
 3. แตะที่ไฟล์เพื่อทำการติดตั้ง:
    - หากระบบแจ้งเตือนความปลอดภัย ให้เลือก **"อนุญาตการติดตั้งจากแหล่งนี้" (Allow install from unknown apps)**

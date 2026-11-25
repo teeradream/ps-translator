@@ -111,8 +111,9 @@
 - รองรับค่ายแปลภาษาได้หลากหลาย: **Google Translate (ฟรี พร้อมเซิร์ฟเวอร์สำรองอัตโนมัติ)**, **Gemini AI (`flash-lite`)**, **Groq (เร็วสุดในสาย AI)**, **Cerebras**, **OpenAI**, **OpenRouter**, และ **Custom OpenAI-Compatible URL**
 - **สวิตช์เปิด/ปิดเสียงพากย์ (Master Dubbing Toggle):** ปิดเสียงพากย์เพื่อแปลเฉพาะตัวหนังสืออย่างเดียว หรือเปิดพากย์ด้วย **TTS ในเครื่อง** / **Gemini AI TTS** ได้อิสระ
 
-### 12. ส่งซับลอยขึ้นทีวี Samsung โดยตรง (`PS-Translator-Samsung-TV.wgt`) & อัปเดตแอปในตัว
-- **ส่งซับขึ้นทีวี Samsung (Tizen 2018+) แบบไร้สาย:** ติดตั้งไฟล์ **`PS-Translator-Samsung-TV.wgt`** บนทีวี Samsung (ผ่านแอป `Apps2Samsung`) เพื่อเปิดภาพ HDMI ของ PS5 เป็นพื้นหลังในแอปทีวี และให้มือถือส่งซับไทย + ป๊อปอัพซ้าย/ขวา + โน้ตแปลเฉพาะจุดขึ้นไปลอยทับบนจอทีวีอัตโนมัติในวง Wi-Fi บ้าน (จับคู่อัตโนมัติใน 2 วินาที ไม่ต้องกรอกรหัส 6 หลัก และไม่ต้องตั้งกล้องส่องทีวี)
+### 12. ส่งซับลอยขึ้นทีวี Samsung (`.wgt`) & Android TV / Google TV (`.apk`) + อัปเดตแอปในตัว
+- **ส่งซับขึ้นทีวี Samsung (Tizen 2018+) (`PS-Translator-Samsung-TV.wgt`):** ติดตั้งผ่าน `Apps2Samsung` เพื่อเปิดภาพ HDMI ของ PS5 เป็นพื้นหลังและวางซับไทย + ป๊อปอัพซ้าย/ขวา + โน้ตแปลเฉพาะจุดลอยทับบนจอทีวีอัตโนมัติในวง Wi-Fi บ้าน (จับคู่อัตโนมัติใน 2 วินาที)
+- **ส่งซับขึ้นทีวี Android TV / Google TV (`PS-Translator-Android-TV.apk`) — ใหม่ใน `v2.3.0`:** แอปเสริมสำหรับทีวี Sony Bravia, TCL, Hisense, Xiaomi TV, Nvidia Shield และ Android TV Box รองรับทั้ง **โหมดลอยทับ HDMI / ทุกแอป (`SYSTEM_ALERT_WINDOW`)** เพื่อเล่น PS5 ภาพ 4K 120Hz Game Mode เต็มประสิทธิภาพ และ **โหมดเปิดช่อง HDMI ในแอป (`TvView`)** พร้อมค้นหามือถืออัตโนมัติในวง LAN และควบคุมด้วยรีโมตทีวี (D-Pad) ธีม Vice City
 - **ระบบอัปเดตแอปในตัว (`อัปเดตแอปในตัว`) & ซิงค์ซับจากคลาวด์ (`ซิงค์ซับล่าสุด`):** กดซิงค์คลังซับพาร์ทใหม่จากคลาวด์หรือกดอัปเดตตัวแอปเป็นเวอร์ชันล่าสุดได้จากในแอปโดยตรง ไม่ต้องเปิดเว็บไปโหลดไฟล์ใหม่เอง
 
 ### 13. รองรับ Samsung DeX & Multi-Window เต็มรูปแบบ
@@ -124,7 +125,7 @@
 ## 📲 ดาวน์โหลดและติดตั้ง (Download & Installation)
 
 1. เข้าไปที่หน้าดาวน์โหลดเวอร์ชันล่าสุดบน GitHub:  
-   👉 **[ดาวน์โหลด PS-Translator.apk & PS-Translator-Samsung-TV.wgt (v2.2.11)](https://github.com/teeradream/ps-translator/releases/latest)**
+   👉 **[ดาวน์โหลด PS-Translator.apk, PS-Translator-Android-TV.apk & PS-Translator-Samsung-TV.wgt (v2.3.0)](https://github.com/teeradream/ps-translator/releases/latest)**
 2. แตะดาวน์โหลดไฟล์ **`PS-Translator.apk`**
 3. แตะที่ไฟล์เพื่อทำการติดตั้ง:
    - หากระบบแจ้งเตือนความปลอดภัย ให้เลือก **"อนุญาตการติดตั้งจากแหล่งนี้" (Allow install from unknown apps)**

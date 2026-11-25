@@ -58,12 +58,15 @@ jobs:
       - name: Build Android APK (assembleDebug)
         run: ./gradlew assembleDebug --stacktrace
 
-      - name: Locate and rename APK & Samsung TV WGT
+      - name: Locate and rename APKs & Samsung TV WGT
         run: |
           mkdir -p dist
           APK_FILE=$(find app/build/outputs/apk/ -name "*.apk" | head -n 1)
-          echo "Found APK at: $APK_FILE"
+          echo "Found Phone APK at: $APK_FILE"
           cp "$APK_FILE" dist/PS-Translator.apk
+          TV_APK_FILE=$(find android-tv/build/outputs/apk/ -name "*.apk" | head -n 1)
+          echo "Found Android TV APK at: $TV_APK_FILE"
+          cp "$TV_APK_FILE" dist/PS-Translator-Android-TV.apk
           cp tizen-tv/PS-Translator-Samsung-TV.wgt dist/PS-Translator-Samsung-TV.wgt
           ls -la dist/
 
@@ -88,17 +91,21 @@ jobs:
         if: startsWith(github.ref, 'refs/heads/main')
         with:
           tag_name: ${{ steps.ver.outputs.tag }}
-          name: "PS Translator ${{ steps.ver.outputs.tag }} (Clean Bold Main Subtitle Font, Fit-Content Borderless Sub Box, Dark Left Tutorial Box & Popup Position Sliders)"
+          name: "PS Translator ${{ steps.ver.outputs.tag }} (NEW Android TV / Google TV App + Samsung TV .wgt + GTA 6 Part 1–4 15,868 Subtitles)"
           body: |
-            ### 🎮 PS Translator ${{ steps.ver.outputs.tag }} (Android APK, Samsung TV `.wgt` & Samsung DeX)
+            ### 🎮 PS Translator ${{ steps.ver.outputs.tag }} (Android APK, Android TV APK, Samsung TV `.wgt` & Samsung DeX)
 
-            แอปพลิเคชันสตรีมเกม PlayStation 5 (PS5) และ PS4 พร้อมระบบตรวจจับซับไตเติล แปลข้อความป๊อปอัพซ้าย/ขวา เอกสารเฉพาะจุด ส่งซับลอยขึ้นทีวี Samsung และพากย์เสียงไทยแบบเรียลไทม์ในดีไซน์ **Vice City & GTA 6 Authentic UI**
+            แอปพลิเคชันสตรีมเกม PlayStation 5 (PS5) และ PS4 พร้อมระบบตรวจจับซับไตเติล แปลข้อความป๊อปอัพซ้าย/ขวา เอกสารเฉพาะจุด ส่งซับลอยขึ้นทีวี Samsung & Android TV และพากย์เสียงไทยแบบเรียลไทม์ในดีไซน์ **Vice City & GTA 6 Authentic UI**
 
             ---
 
             #### 🌟 ไฮไลต์ฟีเจอร์ล่าสุดในเวอร์ชัน ${{ steps.ver.outputs.version }}:
-            - **ฟอนต์ซับหลักหนาคลีนพร้อมเงาหลังตัวหนังสือ (ไม่มีขอบดำซ้อน):**
-              - แยกใช้ฟอนต์ **`GTA Art Deco + Prompt SemiBold`** เฉพาะตัวหนังสือซับที่แปลหลักให้น้ำหนักหนาอ่านชัดขึ้นทั้งบนมือถือและทีวี Samsung พร้อมเงาหลังตัวหนังสือแบบเดิม (ส่วนหน้าแรกและเมนูยังคงฟอนต์เดิมคมชัด)
+            - **ใหม่! แอปเสริมสำหรับ Android TV / Google TV (`PS-Translator-Android-TV.apk`):**
+              - แอปแยกอิสระสำหรับทีวี Android TV / Google TV (Sony Bravia, TCL, Hisense, Xiaomi TV, Nvidia Shield, Android TV Box) โดยไม่กระทบฟังก์ชันอื่น
+              - รองรับทั้ง **โหมดลอยทับ HDMI / ทุกแอป (`✨ ลอยทับ HDMI`)** ให้สลับรีโมตไปช่อง PS5 ภาพ 4K 120Hz Game Mode ได้เต็มที่ และ **โหมดเปิดช่อง HDMI ในแอป (`📺 เลือกช่อง HDMI`)**
+              - ค้นหามือถือในวง Wi-Fi / LAN อัตโนมัติ พร้อมปุ่มใส่ IP เอง และควบคุมด้วยรีโมตทีวี (D-Pad) ธีม Vice City
+            - **ฟอนต์ซับหลักหนาคลีนพร้อมเงาหลังตัวหนังสือ & คมชัดไร้เบลอ sub-pixel:**
+              - แยกใช้ฟอนต์ **`GTA Art Deco + Prompt SemiBold`** เฉพาะตัวหนังสือซับที่แปลหลักพร้อมเงาหลังซับคมชัด (หน้าแรกและเมนูยังคงฟอนต์เดิมคมชัด)
             - **กรอบพื้นหลังซับลอย ไม่มีขอบ ย่อ-ขยายตามความยาวซับ + เปิด/ปิดได้:**
               - ลบเส้นขอบรอบกรอบซับออก ให้เป็นกล่องโปร่งแสงลอยตัวที่ **ย่อ-ขยายพอดีความยาวข้อความซับอัตโนมัติ** พร้อมสวิตช์ **เปิด/ปิดกรอบพื้นหลังซับ** และปรับระดับความโปร่งแสงได้อิสระ
             - **อัปเกรดกล่องป๊อปอัพซ้าย-ขวา (OCR แม่นขึ้น 2x + ดีไซน์แยก + เลื่อนขึ้น-ลงอิสระ):**
@@ -113,6 +120,7 @@ jobs:
 
             ### 📦 ไฟล์ติดตั้งในรีลีสนี้
             - สำหรับมือถือ/แท็บเล็ต Android: **`PS-Translator.apk`**
+            - สำหรับทีวี Android TV / Google TV (Sony, TCL, Hisense, Xiaomi, Box): **`PS-Translator-Android-TV.apk`**
             - สำหรับทีวี Samsung (Tizen 2018+ ลงผ่านแอป Apps2Samsung): **`PS-Translator-Samsung-TV.wgt`**
           files: |
             dist/*.apk

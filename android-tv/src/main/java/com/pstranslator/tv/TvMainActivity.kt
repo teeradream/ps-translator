@@ -50,6 +50,7 @@ class TvMainActivity : AppCompatActivity() {
     private lateinit var btnSelectHdmi: Button
     private lateinit var btnManualIp: Button
     private lateinit var btnDisconnect: Button
+    private lateinit var btnCheckUpdate: Button
 
     private var connectedPhone: PhoneServerInfo? = null
     private var hdmiInputs: List<TvInputInfo> = emptyList()
@@ -70,6 +71,7 @@ class TvMainActivity : AppCompatActivity() {
         btnSelectHdmi = findViewById(R.id.btnSelectHdmi)
         btnManualIp = findViewById(R.id.btnManualIp)
         btnDisconnect = findViewById(R.id.btnDisconnect)
+        btnCheckUpdate = findViewById(R.id.btnCheckUpdate)
 
         setupWebView()
         loadHdmiInputs()
@@ -78,6 +80,7 @@ class TvMainActivity : AppCompatActivity() {
 
         btnFloatingOverlay.requestFocus()
         startAutoDiscoveryLoop()
+        checkForTvUpdate(silentIfUpToDate = true)
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -166,6 +169,59 @@ class TvMainActivity : AppCompatActivity() {
 
         btnDisconnect.setOnClickListener {
             disconnectPhone()
+        }
+
+        btnCheckUpdate.setOnClickListener {
+            checkForTvUpdate(silentIfUpToDate = false)
+        }
+    }
+
+    private fun checkForTvUpdate(silentIfUpToDate: Boolean) {
+        uiScope.launch {
+            if (!silentIfUpToDate) {
+                Toast.makeText(this@TvMainActivity, "กำลังตรวจสอบเวอร์ชันล่าสุด...", Toast.LENGTH_SHORT).show()
+            }
+            val info = TvAppUpdater.fetchLatestTvReleaseInfo()
+            if (isFinishing || isDestroyed) return@launch
+            if (info == null) {
+                if (!silentIfUpToDate) {
+                    Toast.makeText(this@TvMainActivity, "ตรวจสอบอัปเดตไม่สำเร็จ กรุณาเช็กอินเทอร์เน็ต", Toast.LENGTH_LONG).show()
+                }
+                return@launch
+            }
+            if (TvAppUpdater.isRemoteVersionNewer(info.tagName, BuildConfig.VERSION_NAME)) {
+                AlertDialog.Builder(this@TvMainActivity)
+                    .setTitle("พบอัปเดต PS Translator TV (${info.tagName})")
+                    .setMessage("เวอร์ชันปัจจุบัน: v${BuildConfig.VERSION_NAME}\nเวอร์ชันใหม่: ${info.tagName}\n\nต้องการดาวน์โหลดและติดตั้งอัปเดตบนทีวีทันทีหรือไม่?")
+                    .setPositiveButton("อัปเดตทันที") { _, _ ->
+                        startTvApkUpdate(info.apkUrl)
+                    }
+                    .setNegativeButton("ไว้ทีหลัง", null)
+                    .show()
+            } else if (!silentIfUpToDate) {
+                Toast.makeText(this@TvMainActivity, "แอปทีวีเป็นเวอร์ชันล่าสุดแล้ว (v${BuildConfig.VERSION_NAME})", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    private fun startTvApkUpdate(apkUrl: String) {
+        val progressDialog = AlertDialog.Builder(this)
+            .setTitle("กำลังดาวน์โหลดอัปเดต...")
+            .setMessage("กำลังดาวน์โหลด 0%")
+            .setCancelable(false)
+            .show()
+        uiScope.launch {
+            val ok = TvAppUpdater.downloadAndInstallTvApk(this@TvMainActivity, apkUrl) { pct ->
+                if (progressDialog.isShowing) {
+                    progressDialog.setMessage("กำลังดาวน์โหลด $pct% ...")
+                }
+            }
+            if (progressDialog.isShowing) {
+                try { progressDialog.dismiss() } catch (_: Exception) {}
+            }
+            if (!ok && !isFinishing && !isDestroyed) {
+                Toast.makeText(this@TvMainActivity, "ดาวน์โหลดอัปเดตไม่สำเร็จ กรุณาลองใหม่", Toast.LENGTH_LONG).show()
+            }
         }
     }
 

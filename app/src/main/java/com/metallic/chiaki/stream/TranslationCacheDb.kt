@@ -36,7 +36,7 @@ class TranslationCacheDb(private val appContext: Context) : SQLiteOpenHelper(
 		const val PRELOAD_KEY = "preload_sub"
 		private const val ASSET_PRELOAD_FILE = "preload_gta6_cache.tsv"
 		private const val PRELOAD_PREFS = "ps_translator_cache_meta"
-		private const val PREF_PRELOAD_COUNT = "seeded_asset_line_count_v5"
+		private const val PREF_PRELOAD_COUNT = "seeded_asset_line_count_v6"
 		private const val MAX_ROWS = 60000
 		private const val MAX_SKELETON_BUCKET = 260
 
@@ -70,6 +70,30 @@ class TranslationCacheDb(private val appContext: Context) : SQLiteOpenHelper(
 			"tyrone" to "ไทโรน",
 			"roscoe" to "รอสโค",
 			"dook" to "ดุ๊ก",
+			"karim" to "คาริม",
+			"mia" to "มีอา",
+			"nicole" to "นิโคล",
+			"andrea" to "แอนเดรีย",
+			"pete" to "พีท",
+			"halifax" to "ฮาลิแฟกซ์",
+			"valentina" to "วาเลนตินา",
+			"monty" to "มอนตี",
+			"felipe" to "เฟลิเป",
+			"terro" to "เทอร์โร",
+			"monterossa" to "มอนเตโรสซา",
+			"evelyn" to "เอเวอลีน",
+			"raymond" to "เรย์มอนด์",
+			"ernesto" to "เออร์เนสโต",
+			"santino" to "ซานติโน",
+			"rodney" to "ร็อดนีย์",
+			"lex" to "เล็กซ์",
+			"viper" to "ไวเปอร์",
+			"guardia brother" to "พี่น้องกัวร์เดีย",
+			"guardia" to "กัวร์เดีย",
+			"passenger" to "ผู้โดยสาร",
+			"director" to "ผู้กำกับ",
+			"gang member" to "สมาชิกแก๊ง",
+			"thief" to "โจร",
 			"buyer" to "คนซื้อ",
 			"tourist" to "นักท่องเที่ยว",
 			"sam" to "แซม",
